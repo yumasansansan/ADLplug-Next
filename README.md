@@ -56,19 +56,22 @@ You can find automatic builds of the development branch [here](https://github.co
 ## Build instructions
 
 Install required dependencies:
-- the CMake build system
-- a C++11 compiler
-- development packages for Linux: Jack, ALSA, Freetype, X11
+- CMake 3.25 or newer, and Ninja
+- a C23 / C++23 compiler (Clang 19+ or GCC 14+ recommended)
+- development packages for Linux: ALSA, Freetype, Fontconfig, X11
 
 ### Compiling
 
 ```
 git clone --recursive https://github.com/jpcima/ADLplug.git
-mkdir ADLplug/build
-cd ADLplug/build
-cmake -DCMAKE_BUILD_TYPE=Release ..  #<more build options...>
-cmake --build .
+cd ADLplug
+cmake --preset adl-release     # or: opn-release, adl-debug, opn-debug
+cmake --build --preset adl-release
 ```
+
+The presets in `CMakePresets.json` pin the toolchain (Clang + LLD + Ninja,
+C23 / C++23). To configure by hand instead, pass the options below to `cmake`
+directly.
 
 This package is able to build several plugins from a single source:
 - to build the OPL3 variant, define the option `ADLplug_CHIP` to `OPL3`;
@@ -76,11 +79,12 @@ This package is able to build several plugins from a single source:
 
 | Build option                                  | Description                                                     |
 | --------------------------------------------- | --------------------------------------------------------------- |
-| -DADLplug_VST2=ON/OFF                         | Build a VST2 plugin                                             |
 | -DADLplug_VST3=ON/OFF                         | Build a VST3 plugin                                             |
 | -DADLplug_LV2=ON/OFF                          | Build a LV2 plugin                                              |
+| -DADLplug_AU=ON/OFF                           | Build an Audio Unit (macOS only)                                |
+| -DADLplug_AAX=ON/OFF                          | Build an AAX plugin (needs PACE signing to load in Pro Tools)   |
 | -DADLplug_Standalone=ON/OFF                   | Build a standalone program                                      |
-| -DADLplug_Jack=ON/OFF                         | Build a standalone program for Jack with better features        |
+| -DADLplug_ASIO=ON/OFF                         | Enable ASIO in the standalone (Windows; uses JUCE's bundled SDK)|
 | -DADLplug_CHIP=OPL3/OPN2                      | Build a variant for the given chip type (default: OPL3)         |
 | -DADLplug_PCH=ON/OFF                          | Use precompiled headers, on a compiler which supports it        |
 | -DADLplug_ASSERTIONS=ON/OFF                   | Force building with assertions regardless of build type         |
@@ -191,23 +195,40 @@ sudo cmake --build . --target install
 
 ## License
 
-ADLplug consists of various parts distributed under different free software licenses.
-The parts developed exclusively for this project are Boost licensed.
-The other parts and respective licenses are indicated here below.
+ADLplug as a whole is distributed under the **GNU General Public License v3**
+(see `LICENSE`). It combines parts under several different free software
+licenses; the strongest of those governs the combined work.
 
-| Files                                      | License                                               |
-| ------------------------------------------ | ----------------------------------------------------- |
-| `thirdparty/fmt`                           | 3-Clause BSD                                          |
-| `thirdparty/JUCE`                          | GNU GPL v3                                            |
-| `thirdparty/libADLMIDI`                    | GNU LGPL v3, GNU LGPL v2.1, GNU GPL v3, Public Domain |
-| `thirdparty/libOPNMIDI`                    | GNU LGPL v3, GNU LGPL v2.1, GNU GPL v3                |
-| `thirdparty/simpleini`                     | MIT                                                   |
-| `thirdparty/vst3sdk`                       | GNU GPL v3                                            |
-| `thirdparty/nonlib`                        | ISC                                                   |
-| `thirdparty/wopl`                          | GNU LGPL v3                                           |
-| `thirdparty/wopn`                          | GNU LGPL v3                                           |
-| `sources/opl3/adl/measurer`                | GNU GPL v3                                            |
-| `sources/opl3/adl/measurer/chips/dosbox`   | GNU GPL v2+                                           |
-| `sources/opn2/adl/measurer`                | GNU GPL v3                                            |
-| `sources/opn2/adl/measurer/chips/mame`     | GNU GPL v2+                                           |
-| `sources/opl3/ui/components/opl3_waves.cc` | GNU LGPL v2.1                                         |
+The parts developed exclusively for this project remain available from their
+authors under the **Boost Software License 1.0** (see `LICENSE.BSL-1.0.txt`),
+which is what the per-file notices in `sources/` refer to. Boost is
+GPL-compatible, so those files may be redistributed as part of this GPLv3 work
+with their notices intact.
+
+Note that JUCE is used under the **AGPLv3** option of its dual licence. GPLv3
+§13 explicitly permits combining a GPLv3 work with an AGPLv3 work; the AGPL's
+network-interaction clause then applies to the combination. For an audio plugin
+this has no practical effect, but it is why the binary cannot be described as
+"GPLv3 only".
+
+| Files                                      | License                                                    |
+| ------------------------------------------ | ---------------------------------------------------------- |
+| `sources/` (except as noted below)         | Boost Software License 1.0                                 |
+| `thirdparty/JUCE`                          | GNU AGPL v3 (or commercial)                                |
+| `thirdparty/JUCE` — bundled ASIO SDK       | Steinberg ASIO License **or GNU GPL v3**                   |
+| `thirdparty/JUCE` — bundled AAX SDK        | Avid AAX SDK License **or GNU GPL v3**                     |
+| `thirdparty/JUCE` — bundled VST3 SDK       | Steinberg VST3 License or GNU GPL v3                       |
+| `thirdparty/fmt`                           | MIT                                                        |
+| `thirdparty/libADLMIDI`                    | GNU LGPL v2.1+, GNU GPL v2+, GNU GPL v3+, MIT, BSD, Boost  |
+| `thirdparty/libOPNMIDI`                    | GNU LGPL v2.1+, GNU GPL v2+, GNU GPL v3+, MIT              |
+| `thirdparty/simpleini`                     | MIT                                                        |
+| `sources/opl3/adl/measurer`                | GNU GPL v3                                                 |
+| `sources/opl3/adl/measurer/chips/dosbox`   | GNU GPL v2+                                                |
+| `sources/opn2/adl/measurer`                | GNU GPL v3                                                 |
+| `sources/opn2/adl/measurer/chips/mame`     | GNU GPL v2+                                                |
+| `sources/opl3/ui/components/opl3_waves.cc` | GNU LGPL v2.1                                              |
+| `resources/ui/fonts`                       | SIL Open Font License 1.1 (Liberation)                     |
+| `resources/ui/noto-emoji`                  | Apache License 2.0                                         |
+
+ASIO is a trademark and software of Steinberg Media Technologies GmbH.
+AAX is a trademark of Avid Technology, Inc.

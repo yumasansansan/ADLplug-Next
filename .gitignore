@@ -1,2 +1,9 @@
 /build/
 /.cache/
+
+# Staging area for the dependency refresh; folly is parked here pending the
+# AtomicBitSet replacement (P1). Remove this entry once resolved.
+/thirdparty_new/
+
+# Commit message drafts handed over for manual signing
+/COMMIT_MSG.txt

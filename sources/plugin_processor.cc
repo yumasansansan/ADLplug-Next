@@ -8,7 +8,6 @@
 #include "utility/midi.h"
 #include "utility/simple_fifo.h"
 #include "utility/pak.h"
-#include "utility/rt_checker.h"
 #include "bank_manager.h"
 #include "parameter_block.h"
 #include "messages.h"
@@ -288,10 +287,6 @@ struct AdlplugAudioProcessor::Message_Handler_Context
 
 void AdlplugAudioProcessor::process(float *outputs[], unsigned nframes, Midi_Input_Source &midi)
 {
-#ifdef ADLplug_RT_CHECKER
-    rt_checker_init();
-#endif
-
     Player *pl = player_.get();
     float *left = outputs[0];
     float *right = outputs[1];

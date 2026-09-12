@@ -33,41 +33,20 @@ else()
   target_link_libraries(juce_gui_basics PUBLIC juce_gui_extra)
 endif()
 
-if(ADLplug_VST2 AND NOT DEFINED ADLplug_VST2_SDK)
-  if(IS_DIRECTORY "${PROJECT_SOURCE_DIR}/thirdparty/vstsdk2.4")
-    set(ADLplug_VST2_SDK "${PROJECT_SOURCE_DIR}/thirdparty/vstsdk2.4" CACHE STRING "VST2 SDK location")
-  else()
-    set(ADLplug_VST2_SDK "ADLplug_VST2_SDK-NOTFOUND" CACHE STRING "VST2 SDK location")
-  endif()
-  if(NOT ADLplug_VST2_SDK)
-    message("VST2 SDK: VeSTige")
-  else()
-    message("VST2 SDK: Steinberg located at ${ADLplug_VST2_SDK}")
-  endif()
-endif()
-
-if(ADLplug_VST2 AND ADLplug_VST2_SDK)
-  target_compile_definitions(juce_audio_processors PUBLIC "JucePlugin_VST2SDK=1")
-  target_include_directories(juce_audio_processors PUBLIC "${ADLplug_VST2_SDK}")
-endif()
-
-include(LinkHelpers)
-target_link_static_threads(juce_core)
-
-add_library(vst3sdk INTERFACE)
-target_include_directories(vst3sdk INTERFACE "${PROJECT_SOURCE_DIR}/thirdparty/vst3sdk")
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+find_package(Threads REQUIRED)
+target_link_libraries(juce_core PRIVATE Threads::Threads)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   # Windows
   target_link_libraries(juce_core PRIVATE winmm wininet ws2_32 shlwapi version)
   target_link_libraries(juce_gui_basics PRIVATE imm32)
   #
-  set(ADLplug_ASIO_SDK "${PROJECT_SOURCE_DIR}/thirdparty/ASIOSDK2.3" CACHE STRING "ASIO SDK location")
-  if(NOT EXISTS "${ADLplug_ASIO_SDK}/common/iasiodrv.h")
-    message(WARNING "ASIO SDK not found in directory ${ADLplug_ASIO_SDK}. ASIO support disabled.")
-    add_definitions("-DADLplug_ASIO=0")
+  # JUCE 9 bundles the ASIO SDK headers (2025, dual Steinberg/GPLv3).
+  if(ADLplug_ASIO)
+    add_definitions("-DADLplug_ASIO=1")
   else()
-    target_include_directories(juce_audio_devices PRIVATE "${ADLplug_ASIO_SDK}/common")
+    add_definitions("-DADLplug_ASIO=0")
   endif()
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   # Mac
@@ -126,21 +105,6 @@ else()
   endif()
 endif()
 
-if(ADLplug_VST2)
-  set(VST2_SOURCES
-    "${JUCE_PROJECT_DIR}/JuceLibraryCode/include_juce_audio_plugin_client_utils.cpp"
-    "${JUCE_PROJECT_DIR}/JuceLibraryCode/include_juce_audio_plugin_client_VST2.cpp")
-  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    list(APPEND VST2_SOURCES "${JUCE_PROJECT_DIR}/JuceLibraryCode/include_juce_audio_plugin_client_VST_utils.mm")
-  endif()
-  add_juce_module(juce_audio_plugin_client_VST2 ${VST2_SOURCES})
-  target_link_libraries(juce_audio_plugin_client_VST2 PUBLIC juce_gui_basics juce_audio_basics juce_audio_processors)
-  if(ADLplug_VST2 AND ADLplug_VST2_SDK)
-    target_compile_definitions(juce_audio_plugin_client_VST2 PUBLIC "JucePlugin_VST2SDK=1")
-    target_include_directories(juce_audio_plugin_client_VST2 PUBLIC "${ADLplug_VST2_SDK}")
-  endif()
-endif()
-
 if(ADLplug_VST3)
   set(VST3_SOURCES
     "${JUCE_PROJECT_DIR}/JuceLibraryCode/include_juce_audio_plugin_client_utils.cpp"
@@ -149,7 +113,7 @@ if(ADLplug_VST3)
     list(APPEND VST3_SOURCES "${JUCE_PROJECT_DIR}/JuceLibraryCode/include_juce_audio_plugin_client_VST_utils.mm")
   endif()
   add_juce_module(juce_audio_plugin_client_VST3 ${VST3_SOURCES})
-  target_link_libraries(juce_audio_plugin_client_VST3 PUBLIC vst3sdk juce_gui_basics juce_audio_basics juce_audio_processors)
+  target_link_libraries(juce_audio_plugin_client_VST3 PUBLIC juce_gui_basics juce_audio_basics juce_audio_processors)
 endif()
 
 if(ADLplug_LV2)
@@ -177,11 +141,3 @@ if(ADLplug_Standalone)
   target_link_libraries(juce_audio_plugin_client_Standalone PUBLIC juce_gui_basics juce_audio_basics juce_audio_processors)
 endif()
 
-if(ADLplug_Jack)
-  set(StandaloneCustom_SOURCES
-    "${JUCE_PROJECT_DIR}/JuceLibraryCode/include_juce_audio_plugin_client_utils.cpp"
-    "${JUCE_PROJECT_DIR}/JuceLibraryCode/include_juce_audio_plugin_client_Standalone.cpp")
-  add_juce_module(juce_audio_plugin_client_StandaloneCustom ${StandaloneCustom_SOURCES})
-  target_compile_definitions(juce_audio_plugin_client_StandaloneCustom PUBLIC "JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1")
-  target_link_libraries(juce_audio_plugin_client_StandaloneCustom PUBLIC juce_gui_basics juce_audio_basics juce_audio_processors)
-endif()

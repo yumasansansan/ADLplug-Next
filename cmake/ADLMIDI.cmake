@@ -1,18 +1,31 @@
-# ADLMIDI
+# libADLMIDI / libOPNMIDI
+#
+# Both libraries declare `cmake_minimum_required(VERSION 3.2...4.0)`. CMake 4.x
+# refuses a <min> below 3.5, so raise the floor for the duration of the two
+# add_subdirectory() calls and restore it afterwards.
 
-set(WITH_MIDI_SEQUENCER OFF CACHE STRING "" FORCE)
-set(WITH_MUS_SUPPORT OFF CACHE STRING "" FORCE)
-set(WITH_XMI_SUPPORT OFF CACHE STRING "" FORCE)
-set(WITH_EMBEDDED_BANKS OFF CACHE STRING "" FORCE)
+set(_ADLplug_saved_policy_min "${CMAKE_POLICY_VERSION_MINIMUM}")
+set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 
-set(libADLMIDI_STATIC ON CACHE STRING "" FORCE)
-set(libADLMIDI_SHARED OFF CACHE STRING "" FORCE)
+# Real-time plugin use: no file loading, no sequencer, no embedded banks
+# (ADLplug ships its own bank set in sources/resources.cc).
+set(WITH_MIDI_SEQUENCER OFF CACHE BOOL "" FORCE)
+set(WITH_XMI_SUPPORT OFF CACHE BOOL "" FORCE)
+set(WITH_EMBEDDED_BANKS OFF CACHE BOOL "" FORCE)
+set(WITH_HQ_RESAMPLER OFF CACHE BOOL "" FORCE)
+
+set(libADLMIDI_STATIC ON CACHE BOOL "" FORCE)
+set(libADLMIDI_SHARED OFF CACHE BOOL "" FORCE)
 add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/libADLMIDI" EXCLUDE_FROM_ALL)
 target_compile_definitions(ADLMIDI_static PRIVATE "ADLMIDI_EXPORT=")
 target_compile_definitions(ADLMIDI_static PUBLIC "ADLMIDI_UNSTABLE_API=")
 
-set(libOPNMIDI_STATIC ON CACHE STRING "" FORCE)
-set(libOPNMIDI_SHARED OFF CACHE STRING "" FORCE)
+set(libOPNMIDI_STATIC ON CACHE BOOL "" FORCE)
+set(libOPNMIDI_SHARED OFF CACHE BOOL "" FORCE)
+set(USE_VGM_FILE_DUMPER OFF CACHE BOOL "" FORCE)
 add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/libOPNMIDI" EXCLUDE_FROM_ALL)
 target_compile_definitions(OPNMIDI_static PRIVATE "OPNMIDI_EXPORT=")
 target_compile_definitions(OPNMIDI_static PUBLIC "OPNMIDI_UNSTABLE_API=")
+
+set(CMAKE_POLICY_VERSION_MINIMUM "${_ADLplug_saved_policy_min}")
+unset(_ADLplug_saved_policy_min)

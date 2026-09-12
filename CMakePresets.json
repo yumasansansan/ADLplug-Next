@@ -1,0 +1,89 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_C_STANDARD": "23",
+        "CMAKE_C_STANDARD_REQUIRED": "ON",
+        "CMAKE_CXX_STANDARD": "23",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+
+    {
+      "name": "windows",
+      "hidden": true,
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld",
+        "ADLplug_ASIO": "ON"
+      }
+    },
+
+    {
+      "name": "adl",
+      "hidden": true,
+      "cacheVariables": { "ADLplug_CHIP": "OPL3" }
+    },
+    {
+      "name": "opn",
+      "hidden": true,
+      "cacheVariables": { "ADLplug_CHIP": "OPN2" }
+    },
+
+    {
+      "name": "debug",
+      "hidden": true,
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "release",
+      "hidden": true,
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
+    },
+
+    {
+      "name": "adl-debug",
+      "displayName": "ADLplug (OPL3) — Debug",
+      "inherits": ["windows", "adl", "debug"]
+    },
+    {
+      "name": "adl-release",
+      "displayName": "ADLplug (OPL3) — RelWithDebInfo",
+      "inherits": ["windows", "adl", "release"]
+    },
+    {
+      "name": "opn-debug",
+      "displayName": "OPNplug (OPN2) — Debug",
+      "inherits": ["windows", "opn", "debug"]
+    },
+    {
+      "name": "opn-release",
+      "displayName": "OPNplug (OPN2) — RelWithDebInfo",
+      "inherits": ["windows", "opn", "release"]
+    }
+  ],
+
+  "buildPresets": [
+    { "name": "adl-debug",   "configurePreset": "adl-debug" },
+    { "name": "adl-release", "configurePreset": "adl-release" },
+    { "name": "opn-debug",   "configurePreset": "opn-debug" },
+    { "name": "opn-release", "configurePreset": "opn-release" }
+  ]
+}
