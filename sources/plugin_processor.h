@@ -11,7 +11,7 @@
 #include "adl/chip_settings.h"
 #include "utility/processor_ex.h"
 #include "JuceHeader.h"
-#include <folly/AtomicBitSet.h>
+#include "utility/atomic_bit_set.h"
 #include <bitset>
 #include <memory>
 #include <mutex>
@@ -163,8 +163,8 @@ private:
     double lv_current_[2] {};
     double cpu_load_ = 0;
 
-    folly::AtomicBitSet<Cb_Count> pr_changed_;
-    folly::AtomicBitSet<Cb_Count> to_notify_;
+    Atomic_Bit_Set<Cb_Count> pr_changed_;
+    Atomic_Bit_Set<Cb_Count> to_notify_;
 
     std::unique_ptr<Parameter_Block> parameter_block_;
 

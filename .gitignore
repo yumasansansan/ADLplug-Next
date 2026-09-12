@@ -1,8 +1,9 @@
 /build/
 /.cache/
 
-# Staging area for the dependency refresh; folly is parked here pending the
-# AtomicBitSet replacement (P1). Remove this entry once resolved.
+# Leftover staging area from the dependency refresh. folly is no longer a
+# dependency (see sources/utility/atomic_bit_set.h); the directory can be
+# deleted whenever convenient.
 /thirdparty_new/
 
 # Commit message drafts handed over for manual signing
