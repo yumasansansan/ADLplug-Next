@@ -1,18 +1,11 @@
 /*
   ==============================================================================
 
-  This is an automatically generated GUI class created by the Projucer!
+  Originally emitted by the Projucer GUI editor (JUCE 5.x, (c) 2017 ROLI Ltd.).
 
-  Be careful when adding custom code to these files, as only the code within
-  the "//[xyz]" and "//[/xyz]" sections will be retained when the file is loaded
-  and re-saved.
-
-  Created with Projucer version: 5.4.1
-
-  ------------------------------------------------------------------------------
-
-  The Projucer is part of the JUCE library.
-  Copyright (c) 2017 - ROLI Ltd.
+  The .jucer project was retired during the JUCE 9 migration, so this file is
+  now maintained by hand. The "//[...]" markers left behind are ordinary
+  section comments and no longer carry any special meaning -- edit anywhere.
 
   ==============================================================================
 */
@@ -171,52 +164,6 @@ void About_Component::resized()
 
 
 //==============================================================================
-#if 0
-/*  -- Projucer information section --
-
-    This is where the Projucer stores the metadata that describe this GUI layout, so
-    make changes in here at your peril!
-
-BEGIN_JUCER_METADATA
-
-<JUCER_COMPONENT documentType="Component" className="About_Component" componentName=""
-                 parentClasses="public Component" constructorParams="" variableInitialisers=""
-                 snapPixels="8" snapActive="1" snapShown="1" overlayOpacity="0.33"
-                 fixedSize="1" initialWidth="500" initialHeight="240">
-  <BACKGROUND backgroundColour="ff323e44"/>
-  <HYPERLINKBUTTON name="new hyperlink" id="ab6eab2236ebdf3d" memberName="hyperlinkButton"
-                   virtualName="" explicitFocusOrder="0" pos="8 56 88 24" tooltip="https://github.com/jpcima/ADLplug"
-                   buttonText="Home page" connectedEdges="0" needsCallback="0" radioGroupId="0"
-                   url="https://github.com/jpcima/ADLplug"/>
-  <LABEL name="new label" id="e558d7bffe2fa0ac" memberName="label" virtualName=""
-         explicitFocusOrder="0" pos="8 88 488 40" textCol="fff0f8ff" edTextCol="ff000000"
-         edBkgCol="0" labelText="This program is free software developed by Jean Pierre Cimalando. &#169; 2018&#10;Many thanks to people who make this program possible."
-         editableSingleClick="0" editableDoubleClick="0" focusDiscardsChanges="0"
-         fontname="Default font" fontsize="15.0" kerning="0.0" bold="0"
-         italic="0" justification="33"/>
-  <LABEL name="new label" id="5ed4be24f6c40a04" memberName="label2" virtualName=""
-         explicitFocusOrder="0" pos="8 136 488 96" textCol="fff0f8ff"
-         edTextCol="ff000000" edBkgCol="0" labelText="Vitaly Novichkov for the ADLMIDI library&#10;Joel Yliluoma for the original ADLMIDI software&#10;Alexey Khokholov for Nuked OPL3&#10;The DOSBox Team for DOSBox OPL&#10;Reality for Opal OPL3&#10;Robson Cozendey for Java OPL3"
-         editableSingleClick="0" editableDoubleClick="0" focusDiscardsChanges="0"
-         fontname="Default font" fontsize="15.0" kerning="0.0" bold="0"
-         italic="0" justification="33"/>
-  <LABEL name="new label" id="368ceb7955ceaf95" memberName="lbl_prog_version"
-         virtualName="" explicitFocusOrder="0" pos="8 8 150 20" textCol="fff0f8ff"
-         edTextCol="ff000000" edBkgCol="0" labelText="Foobar 1.0" editableSingleClick="0"
-         editableDoubleClick="0" focusDiscardsChanges="0" fontname="Default font"
-         fontsize="15.0" kerning="0.0" bold="1" italic="0" justification="33"
-         typefaceStyle="Bold"/>
-  <LABEL name="new label" id="2220fa22c7ad951b" memberName="lbl_prog_version_extra"
-         virtualName="" explicitFocusOrder="0" pos="8 32 150 20" textCol="ffffff00"
-         edTextCol="ff000000" edBkgCol="0" labelText="Final" editableSingleClick="0"
-         editableDoubleClick="0" focusDiscardsChanges="0" fontname="Default font"
-         fontsize="15.0" kerning="0.0" bold="1" italic="0" justification="33"
-         typefaceStyle="Bold"/>
-</JUCER_COMPONENT>
-
-END_JUCER_METADATA
-*/
-#endif
 
 
 //[EndFile] You can add extra defines here...

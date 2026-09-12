@@ -4,7 +4,9 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 #pragma once
-#include "AppConfig.h"
+// JucePlugin_VersionString arrives as a compile definition from
+// juce_add_plugin(); the Projucer AppConfig.h it used to come from is gone.
+#include <JuceHeader.h>
 
 #define ADLplug_Version JucePlugin_VersionString
 #define ADLplug_VersionFinal 1

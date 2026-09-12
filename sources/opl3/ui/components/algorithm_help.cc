@@ -1,18 +1,11 @@
 /*
   ==============================================================================
 
-  This is an automatically generated GUI class created by the Projucer!
+  Originally emitted by the Projucer GUI editor (JUCE 5.x, (c) 2017 ROLI Ltd.).
 
-  Be careful when adding custom code to these files, as only the code within
-  the "//[xyz]" and "//[/xyz]" sections will be retained when the file is loaded
-  and re-saved.
-
-  Created with Projucer version: 5.3.2
-
-  ------------------------------------------------------------------------------
-
-  The Projucer is part of the JUCE library.
-  Copyright (c) 2017 - ROLI Ltd.
+  The .jucer project was retired during the JUCE 9 migration, so this file is
+  now maintained by hand. The "//[...]" markers left behind are ordinary
+  section comments and no longer carry any special meaning -- edit anywhere.
 
   ==============================================================================
 */
@@ -196,61 +189,6 @@ void Algorithm_Help::resized()
 
 
 //==============================================================================
-#if 0
-/*  -- Projucer information section --
-
-    This is where the Projucer stores the metadata that describe this GUI layout, so
-    make changes in here at your peril!
-
-BEGIN_JUCER_METADATA
-
-<JUCER_COMPONENT documentType="Component" className="Algorithm_Help" componentName=""
-                 parentClasses="public Component" constructorParams="" variableInitialisers=""
-                 snapPixels="8" snapActive="1" snapShown="1" overlayOpacity="0.33"
-                 fixedSize="0" initialWidth="650" initialHeight="380">
-  <BACKGROUND backgroundColour="efefef">
-    <TEXT pos="16 4 120 30" fill="solid: fff0f8ff" hasStroke="0" text="FM"
-          fontname="Default font" fontsize="20.0" kerning="0.0" bold="1"
-          italic="1" justification="36" typefaceStyle="Bold Italic"/>
-    <TEXT pos="168 4 120 30" fill="solid: fff0f8ff" hasStroke="0" text="AM"
-          fontname="Default font" fontsize="20.0" kerning="0.0" bold="1"
-          italic="1" justification="36" typefaceStyle="Bold Italic"/>
-    <TEXT pos="16 140 120 30" fill="solid: fff0f8ff" hasStroke="0" text="FM-FM"
-          fontname="Default font" fontsize="20.0" kerning="0.0" bold="1"
-          italic="1" justification="36" typefaceStyle="Bold Italic"/>
-    <TEXT pos="168 140 120 30" fill="solid: fff0f8ff" hasStroke="0" text="AM-FM"
-          fontname="Default font" fontsize="20.0" kerning="0.0" bold="1"
-          italic="1" justification="36" typefaceStyle="Bold Italic"/>
-    <TEXT pos="320 140 120 30" fill="solid: fff0f8ff" hasStroke="0" text="FM-AM"
-          fontname="Default font" fontsize="20.0" kerning="0.0" bold="1"
-          italic="1" justification="36" typefaceStyle="Bold Italic"/>
-    <TEXT pos="472 140 160 30" fill="solid: fff0f8ff" hasStroke="0" text="AM-AM"
-          fontname="Default font" fontsize="20.0" kerning="0.0" bold="1"
-          italic="1" justification="36" typefaceStyle="Bold Italic"/>
-  </BACKGROUND>
-  <GENERICCOMPONENT name="new component" id="37c053abaff9d7b0" memberName="component"
-                    virtualName="" explicitFocusOrder="0" pos="16 32 120 104" class="Algorithm_Component"
-                    params="Algorithms::algorithm_2fm"/>
-  <GENERICCOMPONENT name="new component" id="7f9d025602565aac" memberName="component2"
-                    virtualName="" explicitFocusOrder="0" pos="168 32 120 104" class="Algorithm_Component"
-                    params="Algorithms::algorithm_2am"/>
-  <GENERICCOMPONENT name="new component" id="e4ade658ba500512" memberName="component3"
-                    virtualName="" explicitFocusOrder="0" pos="16 168 120 200" class="Algorithm_Component"
-                    params="Algorithms::algorithm_4fmfm"/>
-  <GENERICCOMPONENT name="new component" id="b1c4bbd60b0c7e2" memberName="component4"
-                    virtualName="" explicitFocusOrder="0" pos="168 168 120 200" class="Algorithm_Component"
-                    params="Algorithms::algorithm_4amfm"/>
-  <GENERICCOMPONENT name="new component" id="1360d6b770abf706" memberName="component5"
-                    virtualName="" explicitFocusOrder="0" pos="320 168 120 200" class="Algorithm_Component"
-                    params="Algorithms::algorithm_4fmam"/>
-  <GENERICCOMPONENT name="new component" id="61b55ee2f50f9421" memberName="component6"
-                    virtualName="" explicitFocusOrder="0" pos="472 168 160 200" class="Algorithm_Component"
-                    params="Algorithms::algorithm_4amam"/>
-</JUCER_COMPONENT>
-
-END_JUCER_METADATA
-*/
-#endif
 
 
 //[EndFile] You can add extra defines here...

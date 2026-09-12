@@ -1,18 +1,11 @@
 /*
   ==============================================================================
 
-  This is an automatically generated GUI class created by the Projucer!
+  Originally emitted by the Projucer GUI editor (JUCE 5.x, (c) 2017 ROLI Ltd.).
 
-  Be careful when adding custom code to these files, as only the code within
-  the "//[xyz]" and "//[/xyz]" sections will be retained when the file is loaded
-  and re-saved.
-
-  Created with Projucer version: 5.3.2
-
-  ------------------------------------------------------------------------------
-
-  The Projucer is part of the JUCE library.
-  Copyright (c) 2017 - ROLI Ltd.
+  The .jucer project was retired during the JUCE 9 migration, so this file is
+  now maintained by hand. The "//[...]" markers left behind are ordinary
+  section comments and no longer carry any special meaning -- edit anywhere.
 
   ==============================================================================
 */
@@ -241,56 +234,6 @@ void Program_Name_Editor::set_program(
 
 
 //==============================================================================
-#if 0
-/*  -- Projucer information section --
-
-    This is where the Projucer stores the metadata that describe this GUI layout, so
-    make changes in here at your peril!
-
-BEGIN_JUCER_METADATA
-
-<JUCER_COMPONENT documentType="Component" className="Program_Name_Editor" componentName=""
-                 parentClasses="public Component" constructorParams="" variableInitialisers=""
-                 snapPixels="8" snapActive="1" snapShown="1" overlayOpacity="0.33"
-                 fixedSize="1" initialWidth="300" initialHeight="182">
-  <BACKGROUND backgroundColour="ff323e44"/>
-  <TEXTEDITOR name="new text editor" id="79f3e8a0d408b06a" memberName="edt_pgm_name"
-              virtualName="" explicitFocusOrder="0" pos="88 106 200 24" initialText=""
-              multiline="0" retKeyStartsLine="0" readonly="0" scrollbars="1"
-              caret="1" popupmenu="1"/>
-  <TEXTEDITOR name="new text editor" id="f55e80ae90a127d0" memberName="edt_bank_name"
-              virtualName="" explicitFocusOrder="0" pos="88 34 200 24" initialText=""
-              multiline="0" retKeyStartsLine="0" readonly="0" scrollbars="1"
-              caret="1" popupmenu="1"/>
-  <LABEL name="new label" id="160fefc52427eaeb" memberName="label" virtualName=""
-         explicitFocusOrder="0" pos="8 80 64 24" textCol="fff0f8ff" edTextCol="ff000000"
-         edBkgCol="0" labelText="Program" editableSingleClick="0" editableDoubleClick="0"
-         focusDiscardsChanges="0" fontname="Default font" fontsize="15.0"
-         kerning="0.0" bold="0" italic="0" justification="33"/>
-  <LABEL name="new label" id="3165a7da9bc7b3e" memberName="label2" virtualName=""
-         explicitFocusOrder="0" pos="8 8 64 24" textCol="fff0f8ff" edTextCol="ff000000"
-         edBkgCol="0" labelText="Bank" editableSingleClick="0" editableDoubleClick="0"
-         focusDiscardsChanges="0" fontname="Default font" fontsize="15.0"
-         kerning="0.0" bold="0" italic="0" justification="33"/>
-  <TEXTEDITOR name="new text editor" id="3d833d75a4895d3e" memberName="edt_pgm_id"
-              virtualName="" explicitFocusOrder="0" pos="88 80 60 24" initialText="M000"
-              multiline="0" retKeyStartsLine="0" readonly="1" scrollbars="1"
-              caret="0" popupmenu="1"/>
-  <TEXTEDITOR name="new text editor" id="c4c24f09e14b3d01" memberName="edt_bank_id"
-              virtualName="" explicitFocusOrder="0" pos="88 8 60 24" initialText="000:000"
-              multiline="0" retKeyStartsLine="0" readonly="1" scrollbars="1"
-              caret="0" popupmenu="1"/>
-  <TEXTBUTTON name="new button" id="a00526bae3e43a6a" memberName="btn_ok" virtualName=""
-              explicitFocusOrder="0" pos="130 150 70 24" buttonText="OK" connectedEdges="0"
-              needsCallback="1" radioGroupId="0"/>
-  <TEXTBUTTON name="new button" id="d5f3c6d4a0271367" memberName="btn_cancel"
-              virtualName="" explicitFocusOrder="0" pos="218 150 70 24" buttonText="Cancel"
-              connectedEdges="0" needsCallback="1" radioGroupId="0"/>
-</JUCER_COMPONENT>
-
-END_JUCER_METADATA
-*/
-#endif
 
 
 //[EndFile] You can add extra defines here...

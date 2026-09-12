@@ -1,18 +1,11 @@
 /*
   ==============================================================================
 
-  This is an automatically generated GUI class created by the Projucer!
+  Originally emitted by the Projucer GUI editor (JUCE 5.x, (c) 2017 ROLI Ltd.).
 
-  Be careful when adding custom code to these files, as only the code within
-  the "//[xyz]" and "//[/xyz]" sections will be retained when the file is loaded
-  and re-saved.
-
-  Created with Projucer version: 5.4.1
-
-  ------------------------------------------------------------------------------
-
-  The Projucer is part of the JUCE library.
-  Copyright (c) 2017 - ROLI Ltd.
+  The .jucer project was retired during the JUCE 9 migration, so this file is
+  now maintained by hand. The "//[...]" markers left behind are ordinary
+  section comments and no longer carry any special meaning -- edit anywhere.
 
   ==============================================================================
 */
@@ -683,120 +676,6 @@ bool Operator_Editor::display_info_for_component(Component *c)
 
 
 //==============================================================================
-#if 0
-/*  -- Projucer information section --
-
-    This is where the Projucer stores the metadata that describe this GUI layout, so
-    make changes in here at your peril!
-
-BEGIN_JUCER_METADATA
-
-<JUCER_COMPONENT documentType="Component" className="Operator_Editor" componentName=""
-                 parentClasses="public Component, public Knob::Listener" constructorParams="unsigned op_id, Parameter_Block &amp;pb"
-                 variableInitialisers="" snapPixels="8" snapActive="1" snapShown="1"
-                 overlayOpacity="0.33" fixedSize="0" initialWidth="264" initialHeight="128">
-  <BACKGROUND backgroundColour="323e44">
-    <RECT pos="104 96 108 24" fill="solid: 0" hasStroke="1" stroke="1, mitered, butt"
-          strokeColour="solid: ff8e989b"/>
-    <ROUNDRECT pos="0 0 264 128" cornerSize="5.0" fill="solid: 662e4c4d" hasStroke="0"/>
-  </BACKGROUND>
-  <GENERICCOMPONENT name="new component" id="7c54ff103d9f5d" memberName="kn_attack"
-                    virtualName="" explicitFocusOrder="0" pos="16 3 40 40" class="Styled_Knob_Default"
-                    params=""/>
-  <GENERICCOMPONENT name="new component" id="be39ad00dcf6efe1" memberName="kn_decay"
-                    virtualName="" explicitFocusOrder="0" pos="64 3 40 40" class="Styled_Knob_Default"
-                    params=""/>
-  <GENERICCOMPONENT name="new component" id="8d88729c124c7b16" memberName="kn_sustain"
-                    virtualName="" explicitFocusOrder="0" pos="16 48 40 40" class="Styled_Knob_Default"
-                    params=""/>
-  <GENERICCOMPONENT name="new component" id="7d576b68e9b588f" memberName="kn_release"
-                    virtualName="" explicitFocusOrder="0" pos="64 48 40 40" class="Styled_Knob_Default"
-                    params=""/>
-  <TEXTBUTTON name="new button" id="f60e70ed4f10ef32" memberName="btn_ssgenable"
-              virtualName="" explicitFocusOrder="0" pos="4 100 15 15" bgColOn="ff42a2c8"
-              buttonText="" connectedEdges="0" needsCallback="1" radioGroupId="0"/>
-  <LABEL name="new label" id="ce54b68fc1a1f1e1" memberName="lbl_level"
-         virtualName="" explicitFocusOrder="0" pos="163 0 28 16" textCol="fff0f8ff"
-         edTextCol="ff000000" edBkgCol="0" labelText="Lv" editableSingleClick="0"
-         editableDoubleClick="0" focusDiscardsChanges="0" fontname="Default font"
-         fontsize="14.0" kerning="0.0" bold="0" italic="0" justification="33"/>
-  <LABEL name="new label" id="664ae98bd7a6b3a5" memberName="label" virtualName=""
-         explicitFocusOrder="0" pos="4 0 20 16" textCol="fff0f8ff" edTextCol="ff000000"
-         edBkgCol="0" labelText="A" editableSingleClick="0" editableDoubleClick="0"
-         focusDiscardsChanges="0" fontname="Default font" fontsize="15.0"
-         kerning="0.0" bold="0" italic="0" justification="12"/>
-  <LABEL name="new label" id="360efe252ecea296" memberName="label2" virtualName=""
-         explicitFocusOrder="0" pos="52 0 20 16" textCol="fff0f8ff" edTextCol="ff000000"
-         edBkgCol="0" labelText="D" editableSingleClick="0" editableDoubleClick="0"
-         focusDiscardsChanges="0" fontname="Default font" fontsize="15.0"
-         kerning="0.0" bold="0" italic="0" justification="12"/>
-  <LABEL name="new label" id="d276bb335fab1f40" memberName="label3" virtualName=""
-         explicitFocusOrder="0" pos="4 48 20 16" textCol="fff0f8ff" edTextCol="ff000000"
-         edBkgCol="0" labelText="S" editableSingleClick="0" editableDoubleClick="0"
-         focusDiscardsChanges="0" fontname="Default font" fontsize="15.0"
-         kerning="0.0" bold="0" italic="0" justification="12"/>
-  <LABEL name="new label" id="2ad02ec8c7135a27" memberName="label4" virtualName=""
-         explicitFocusOrder="0" pos="52 48 20 16" textCol="fff0f8ff" edTextCol="ff000000"
-         edBkgCol="0" labelText="R" editableSingleClick="0" editableDoubleClick="0"
-         focusDiscardsChanges="0" fontname="Default font" fontsize="15.0"
-         kerning="0.0" bold="0" italic="0" justification="12"/>
-  <LABEL name="new label" id="e77fa8c6c00316b7" memberName="lbl_fmul"
-         virtualName="" explicitFocusOrder="0" pos="163 16 28 16" textCol="fff0f8ff"
-         edTextCol="ff000000" edBkgCol="0" labelText="F*" editableSingleClick="0"
-         editableDoubleClick="0" focusDiscardsChanges="0" fontname="Default font"
-         fontsize="14.0" kerning="0.0" bold="0" italic="0" justification="33"/>
-  <LABEL name="new label" id="dbcb4d45f32ea3e9" memberName="lbl_rsl" virtualName=""
-         explicitFocusOrder="0" pos="163 32 28 16" textCol="fff0f8ff"
-         edTextCol="ff000000" edBkgCol="0" labelText="Rsl" editableSingleClick="0"
-         editableDoubleClick="0" focusDiscardsChanges="0" fontname="Default font"
-         fontsize="14.0" kerning="0.0" bold="0" italic="0" justification="33"/>
-  <GENERICCOMPONENT name="new component" id="d3ebb26d44d99705" memberName="kn_decay2"
-                    virtualName="" explicitFocusOrder="0" pos="112 3 40 40" class="Styled_Knob_Default"
-                    params=""/>
-  <LABEL name="new label" id="739d50c231ea95f4" memberName="label9" virtualName=""
-         explicitFocusOrder="0" pos="100 0 20 16" textCol="fff0f8ff" edTextCol="ff000000"
-         edBkgCol="0" labelText="D" editableSingleClick="0" editableDoubleClick="0"
-         focusDiscardsChanges="0" fontname="Default font" fontsize="15.0"
-         kerning="0.0" bold="0" italic="0" justification="12"/>
-  <TEXTBUTTON name="new button" id="17b8bc55dead908d" memberName="btn_am" virtualName=""
-              explicitFocusOrder="0" pos="112 55 40 24" bgColOn="ff42a2c8"
-              buttonText="AM" connectedEdges="0" needsCallback="1" radioGroupId="0"/>
-  <LABEL name="new label" id="13046618f23c99f6" memberName="lbl_tune"
-         virtualName="" explicitFocusOrder="0" pos="163 48 96 16" textCol="fff0f8ff"
-         edTextCol="ff000000" edBkgCol="0" labelText="Detune" editableSingleClick="0"
-         editableDoubleClick="0" focusDiscardsChanges="0" fontname="Default font"
-         fontsize="14.0" kerning="0.0" bold="0" italic="0" justification="36"/>
-  <LABEL name="new label" id="1e3f006eb3ae12a5" memberName="label5" virtualName=""
-         explicitFocusOrder="0" pos="20 99 56 16" textCol="fff0f8ff" edTextCol="ff000000"
-         edBkgCol="0" labelText="SSG-EG" editableSingleClick="0" editableDoubleClick="0"
-         focusDiscardsChanges="0" fontname="Default font" fontsize="14.0"
-         kerning="0.0" bold="0" italic="0" justification="33"/>
-  <TEXTBUTTON name="new button" id="cbf65c7349d1d293" memberName="btn_prev_ssgwave"
-              virtualName="" explicitFocusOrder="0" pos="82 96 23 24" buttonText="&lt;"
-              connectedEdges="2" needsCallback="1" radioGroupId="0"/>
-  <TEXTBUTTON name="new button" id="6fc5dc04c6c5d6b9" memberName="btn_next_ssgwave"
-              virtualName="" explicitFocusOrder="0" pos="211 96 23 24" buttonText="&gt;"
-              connectedEdges="1" needsCallback="1" radioGroupId="0"/>
-  <GENERICCOMPONENT name="new component" id="dd16fb8d4c488877" memberName="lbl_ssgwave"
-                    virtualName="" explicitFocusOrder="0" pos="105 96 106 24" class="Wave_Label"
-                    params="ssgeg_waves_"/>
-  <COMBOBOX name="new combo box" id="53eb24e86e9015c0" memberName="cb_detune"
-            virtualName="" explicitFocusOrder="0" pos="163 65 96 24" editable="0"
-            layout="33" items="" textWhenNonSelected="" textWhenNoItems="(no choices)"/>
-  <GENERICCOMPONENT name="new component" id="d7383c8ec7f64dfc" memberName="sl_level"
-                    virtualName="" explicitFocusOrder="0" pos="195 -2 64 20" class="Styled_Slider_DefaultSmall"
-                    params=""/>
-  <GENERICCOMPONENT name="new component" id="a54ced31a407c9a2" memberName="sl_fmul"
-                    virtualName="" explicitFocusOrder="0" pos="195 14 64 20" class="Styled_Slider_DefaultSmall"
-                    params=""/>
-  <GENERICCOMPONENT name="new component" id="b3eb1a9c8b111b7c" memberName="sl_rsl"
-                    virtualName="" explicitFocusOrder="0" pos="195 30 64 20" class="Styled_Slider_DefaultSmall"
-                    params=""/>
-</JUCER_COMPONENT>
-
-END_JUCER_METADATA
-*/
-#endif
 
 
 //[EndFile] You can add extra defines here...
