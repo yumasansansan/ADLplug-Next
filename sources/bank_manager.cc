@@ -122,11 +122,10 @@ void Bank_Manager::send_measurement_requests()
         counting_bitset<128> &measure_mask = info.to_measure;
         if (measure_mask.count() == 0)
             continue;
-        const counting_bitset<128> &used_mask = info.used;
         for (unsigned p_i = 0; p_i < 128; ++p_i) {
             if (!measure_mask.test(p_i))
                 continue;
-            assert(used_mask.test(p_i));
+            assert(info.used.test(p_i));
             if (!emit_measurement_request(info, p_i))
                 return;
             measure_mask.reset(p_i);

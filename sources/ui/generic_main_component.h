@@ -134,6 +134,7 @@ protected:
     std::map<uint32_t, Editor_Bank> instrument_map_;
     Instrument_Global_Parameters instrument_gparam_;
     Chip_Settings chip_settings_;
+    SharedResourcePointer<Emulator_Icons> emulator_icons_;
 
     std::map<String, std::unique_ptr<Timer>> parameters_delayed_;
 

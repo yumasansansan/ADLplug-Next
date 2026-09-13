@@ -19,10 +19,11 @@ system_option(ADLplug_AAX "Build AAX" OFF "Windows" ON "Darwin" ON)
 system_option(ADLplug_Standalone "Build Standalone" ON)
 system_option(ADLplug_ASIO "Enable ASIO support (Windows, GPLv3)" OFF "Windows" ON)
 
-option(ADLplug_PCH "Enable precompiled headers" OFF)
 option(ADLplug_ASSERTIONS "Enable assertions" OFF)
 option(ADLplug_USE_SYSTEM_FMT "Use fmt libraries from system" OFF)
 option(ADLplug_WERROR "Treat warnings in ADLplug's own sources as errors" OFF)
+option(ADLplug_LTO "Use link-time optimisation (ThinLTO with Clang) in Release builds" ON)
+option(ADLplug_BUILD_TOOLS "Build developer tools (tools/render: offline VST3 renderer)" OFF)
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
 
@@ -41,6 +42,24 @@ set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 
 if(ADLplug_ASSERTIONS)
   add_definitions("-UNDEBUG")
+endif()
+
+# --------------------------------------------------------------------------
+# Link-time optimisation
+#
+# Enabled before any dependency is added, so CMAKE_INTERPROCEDURAL_OPTIMIZATION_
+# RELEASE initialises every target below -- JUCE, libADLMIDI and libOPNMIDI
+# included -- and the synthesis code can be inlined across library boundaries.
+# With Clang, CMake's IPO support means ThinLTO (-flto=thin).
+
+if(ADLplug_LTO)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT ADLplug_LTO_SUPPORTED OUTPUT ADLplug_LTO_ERROR LANGUAGES C CXX)
+  if(ADLplug_LTO_SUPPORTED)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+  else()
+    message(WARNING "ADLplug_LTO is on but LTO is not supported here: ${ADLplug_LTO_ERROR}")
+  endif()
 endif()
 
 # --------------------------------------------------------------------------
@@ -181,9 +200,9 @@ target_link_libraries(ADLplug PUBLIC
   juce::juce_events
   juce::juce_core)
 
-target_link_libraries(ADLplug PRIVATE
-  juce::juce_recommended_config_flags
-  juce::juce_recommended_lto_flags)
+# LTO comes from ADLplug_LTO above rather than juce_recommended_lto_flags,
+# which would add full -flto to this target alone.
+target_link_libraries(ADLplug PRIVATE juce::juce_recommended_config_flags)
 
 # --------------------------------------------------------------------------
 # Chip-specific sources
@@ -269,8 +288,29 @@ target_include_directories(simple-ini SYSTEM INTERFACE "thirdparty/simpleini")
 
 target_link_libraries(ADLplug PUBLIC ADLplug_fmt simple-ini)
 
-if(ADLplug_PCH)
-  target_precompile_headers(ADLplug PRIVATE "sources/pch/ADLplug_core.h")
+# --------------------------------------------------------------------------
+# Developer tools
+
+if(ADLplug_BUILD_TOOLS)
+  # tools/render plays a fixed MIDI sequence through a VST3 build of the plugin
+  # and dumps the output, so two builds (Debug against Release/ThinLTO, say)
+  # can be compared sample for sample.
+  juce_add_console_app(ADLplug_render)
+  adlplug_set_language_standard(ADLplug_render)
+  target_sources(ADLplug_render PRIVATE "tools/render/render.cc")
+  # A console host has to pump the message loop itself; JUCE only offers that
+  # with modal loops enabled. Fine for a tool, never for the plugin.
+  target_compile_definitions(ADLplug_render PRIVATE
+    JUCE_MODAL_LOOPS_PERMITTED=1
+    JUCE_PLUGINHOST_VST3=1
+    JUCE_PLUGINHOST_AU=0
+    JUCE_PLUGINHOST_LV2=0
+    JUCE_PLUGINHOST_LADSPA=0
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0)
+  target_link_libraries(ADLplug_render PRIVATE
+    juce::juce_audio_processors
+    juce::juce_recommended_config_flags)
 endif()
 
 # --------------------------------------------------------------------------
@@ -284,6 +324,9 @@ endif()
 
 get_target_property(ADLplug_OWN_SOURCES ADLplug SOURCES)
 list(FILTER ADLplug_OWN_SOURCES INCLUDE REGEX "^sources/")
+if(TARGET ADLplug_render)
+  list(APPEND ADLplug_OWN_SOURCES "tools/render/render.cc")
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   # NOMINMAX / WIN32_LEAN_AND_MEAN keep <windows.h> from defining min/max macros

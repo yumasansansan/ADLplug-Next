@@ -5,14 +5,23 @@
 
 #pragma once
 #include "JuceHeader.h"
+#include <vector>
 
 struct Emulator_Defaults;
-Emulator_Defaults &get_emulator_defaults();
+const Emulator_Defaults &get_emulator_defaults();
 
 struct Emulator_Defaults {
     StringArray choices;
-    std::unique_ptr<Image[]> images;
     unsigned default_index = 0;
+};
+
+// Icons for the emulator choices, by index. Only the editor shows them, and it
+// holds them through a SharedResourcePointer, so they go away with the last
+// editor. Keep them out of static storage: on Windows an image is a Direct2D
+// resource, and releasing one while the module is being unloaded deadlocks.
+struct Emulator_Icons {
+    Emulator_Icons();
+    std::vector<Image> images;
 };
 
 struct Chip_Settings {

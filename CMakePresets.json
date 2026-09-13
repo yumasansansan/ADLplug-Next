@@ -50,9 +50,14 @@
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
     },
     {
-      "name": "release",
+      "name": "relwithdebinfo",
       "hidden": true,
       "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
+    },
+    {
+      "name": "release",
+      "hidden": true,
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "ADLplug_LTO": "ON" }
     },
 
     {
@@ -61,8 +66,13 @@
       "inherits": ["windows", "adl", "debug"]
     },
     {
-      "name": "adl-release",
+      "name": "adl-relwithdebinfo",
       "displayName": "ADLplug (OPL3) — RelWithDebInfo",
+      "inherits": ["windows", "adl", "relwithdebinfo"]
+    },
+    {
+      "name": "adl-release",
+      "displayName": "ADLplug (OPL3) — Release (distribution: ThinLTO, no debug info)",
       "inherits": ["windows", "adl", "release"]
     },
     {
@@ -71,16 +81,23 @@
       "inherits": ["windows", "opn", "debug"]
     },
     {
-      "name": "opn-release",
+      "name": "opn-relwithdebinfo",
       "displayName": "OPNplug (OPN2) — RelWithDebInfo",
+      "inherits": ["windows", "opn", "relwithdebinfo"]
+    },
+    {
+      "name": "opn-release",
+      "displayName": "OPNplug (OPN2) — Release (distribution: ThinLTO, no debug info)",
       "inherits": ["windows", "opn", "release"]
     }
   ],
 
   "buildPresets": [
-    { "name": "adl-debug",   "configurePreset": "adl-debug" },
-    { "name": "adl-release", "configurePreset": "adl-release" },
-    { "name": "opn-debug",   "configurePreset": "opn-debug" },
-    { "name": "opn-release", "configurePreset": "opn-release" }
+    { "name": "adl-debug",          "configurePreset": "adl-debug" },
+    { "name": "adl-relwithdebinfo", "configurePreset": "adl-relwithdebinfo" },
+    { "name": "adl-release",        "configurePreset": "adl-release" },
+    { "name": "opn-debug",          "configurePreset": "opn-debug" },
+    { "name": "opn-relwithdebinfo", "configurePreset": "opn-relwithdebinfo" },
+    { "name": "opn-release",        "configurePreset": "opn-release" }
   ]
 }

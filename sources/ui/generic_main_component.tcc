@@ -734,7 +734,7 @@ void Generic_Main_Component<T>::update_emulator_icon()
 
     self()->btn_emulator->setImages(
         false, true, true,
-        defaults.images[emulator], 1, Colour(),
+        emulator_icons_->images[emulator], 1, Colour(),
         Image(), 1, Colour(),
         Image(), 1, Colour());
     self()->btn_emulator->setTooltip(defaults.choices[emulator]);
@@ -750,7 +750,7 @@ void Generic_Main_Component<T>::build_emulator_menu(PopupMenu &menu)
     for (size_t i = 0; i < count; ++i) {
         const String &name = defaults.choices[i];
         if (!name.isEmpty())
-            menu.addItem(i + 1, name, true, false, defaults.images[i]);
+            menu.addItem(i + 1, name, true, false, emulator_icons_->images[i]);
     }
 }
 

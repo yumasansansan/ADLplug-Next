@@ -63,9 +63,9 @@ Install required dependencies:
 ### Compiling
 
 ```
-git clone --recursive https://github.com/jpcima/ADLplug.git
-cd ADLplug
-cmake --preset adl-release     # or: opn-release, adl-debug, opn-debug
+git clone --recursive https://github.com/yumasansansan/ADLplug-Next.git
+cd ADLplug-Next
+cmake --preset adl-release     # or opn-release; *-relwithdebinfo, *-debug for development
 cmake --build --preset adl-release
 ```
 
@@ -86,9 +86,10 @@ This package is able to build several plugins from a single source:
 | -DADLplug_Standalone=ON/OFF                   | Build a standalone program                                      |
 | -DADLplug_ASIO=ON/OFF                         | Enable ASIO in the standalone (Windows; uses JUCE's bundled SDK)|
 | -DADLplug_CHIP=OPL3/OPN2                      | Build a variant for the given chip type (default: OPL3)         |
-| -DADLplug_PCH=ON/OFF                          | Use precompiled headers, on a compiler which supports it        |
+| -DADLplug_LTO=ON/OFF                          | Link-time optimisation (ThinLTO) in Release builds (default ON) |
 | -DADLplug_ASSERTIONS=ON/OFF                   | Force building with assertions regardless of build type         |
 | -DADLplug_WERROR=ON/OFF                       | Treat warnings in ADLplug's own code as errors (presets: ON)    |
+| -DADLplug_BUILD_TOOLS=ON/OFF                  | Build developer tools (offline VST3 renderer)                   |
 
 ### Installing
 
