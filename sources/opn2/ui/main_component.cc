@@ -620,14 +620,14 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     cb_lfofreq->setScrollWheelEnabled(true);
 
     const char *algorithms[8] = {
-        u8"1→2→3→4",
-        u8"(1+2)→3→4",
-        u8"(1+(2→3))→4",
-        u8"((1→2)+3)→4",
-        u8"(1→2)+(3→4)",
-        u8"(1→2)+(1→3)+(1→4)",
-        u8"(1→2)+3+4",
-        u8"1+2+3+4",
+        "1→2→3→4",
+        "(1+2)→3→4",
+        "(1+(2→3))→4",
+        "((1→2)+3)→4",
+        "(1→2)+(3→4)",
+        "(1→2)+(1→3)+(1→4)",
+        "(1→2)+3+4",
+        "1+2+3+4",
     };
     unsigned num_algorithms = sizeof(algorithms) / sizeof(algorithms[0]);
     for (unsigned i = 0; i < num_algorithms; ++i) {
@@ -1034,13 +1034,17 @@ void Main_Component::buttonClicked (Button* buttonThatWasClicked)
     else if (buttonThatWasClicked == btn_emulator.get())
     {
         //[UserButtonCode_btn_emulator] -- add your button handler code here..
-        int selection = select_emulator_by_menu();
-        if (selection != 0 && (unsigned)(selection - 1) != chip_settings_.emulator) {
+        Component::SafePointer<Main_Component> safe(this);
+        select_emulator_by_menu([safe, &pb](int selection) mutable {
+            if (safe == nullptr || selection == 0)
+                return;
+            if ((unsigned)(selection - 1) == safe->chip_settings_.emulator)
+                return;
             AudioParameterChoice &p = *pb.p_emulator;
             p.beginChangeGesture();
             p = selection - 1;
             p.endChangeGesture();
-        }
+        });
         //[/UserButtonCode_btn_emulator]
     }
     else if (buttonThatWasClicked == btn_algo_help.get())

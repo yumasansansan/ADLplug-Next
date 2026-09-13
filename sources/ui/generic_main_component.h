@@ -14,6 +14,7 @@
 #include <array>
 #include <map>
 #include <memory>
+#include <functional>
 class AdlplugAudioProcessor;
 struct Parameter_Block;
 class Configuration;
@@ -55,6 +56,7 @@ public:
     void handle_selected_program(int selection);
     void handle_edit_program();
     void handle_add_program();
+    void finish_add_program(int selection);
 
     void create_image_overlay(Component &component, Image image, float ratio);
 
@@ -68,10 +70,13 @@ public:
 
     void update_emulator_icon();
     void build_emulator_menu(PopupMenu &menu);
-    int select_emulator_by_menu();
+    void select_emulator_by_menu(std::function<void(int)> on_selected);
 
     void handle_load_bank(Component *clicked);
+    void finish_load_bank(int selection);
     void handle_save_bank(Component *clicked);
+    void finish_save_bank(int selection);
+    void confirm_overwrite(const File &file, std::function<void()> on_confirmed);
     void load_bank(const File &file, int format);
     void load_single_instrument(uint32_t program, const File &file, int format);
     void load_bank_mem(const uint8_t *mem, size_t length, const String &bank_name, int format);
@@ -80,6 +85,7 @@ public:
     void save_single_instrument(uint32_t program, const File &file);
 
     void handle_change_keymap();
+    void finish_change_keymap(int selection);
     void handle_change_octave(int diff);
 
     void set_int_parameter_with_delay(unsigned delay, AudioParameterInt &p, int v);
@@ -146,6 +152,9 @@ protected:
     std::vector<std::unique_ptr<ImageComponent>> image_overlays_;
 
     Component::SafePointer<DialogWindow> dlg_new_program_;
+    // FileChooser::launchAsync returns immediately, so the chooser has to
+    // outlive the call that opened it.
+    std::unique_ptr<FileChooser> file_chooser_;
     Component::SafePointer<DialogWindow> dlg_edit_program_;
     Component::SafePointer<DialogWindow> dlg_about_;
 

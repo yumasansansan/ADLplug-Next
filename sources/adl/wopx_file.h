@@ -4,11 +4,27 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 #pragma once
+#include <memory>
 
 #if defined(ADLPLUG_OPL3)
 #include <wopl/wopl_file.h>
+
+// wopl_file.h carried these until it moved inside libADLMIDI; upstream
+// dropped them there, so they live here now.
+struct WOPLFile_Deleter {
+    void operator()(WOPLFile *file) const { WOPL_Free(file); }
+};
+typedef std::unique_ptr<WOPLFile, WOPLFile_Deleter> WOPLFile_Ptr;
+
 #elif defined(ADLPLUG_OPN2)
 #include <wopn/wopn_file.h>
+
+// Likewise for wopn_file.h inside libOPNMIDI.
+struct WOPNFile_Deleter {
+    void operator()(WOPNFile *file) const { WOPN_Free(file); }
+};
+typedef std::unique_ptr<WOPNFile, WOPNFile_Deleter> WOPNFile_Ptr;
+
 #endif
 
 struct WOPx {

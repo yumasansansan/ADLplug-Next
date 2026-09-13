@@ -26,10 +26,14 @@ option(ADLplug_USE_SYSTEM_FMT "Use fmt libraries from system" OFF)
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
 
-set(CMAKE_C_STANDARD 23)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Applied per-target rather than globally: these variables are inherited by
+# add_subdirectory() dependencies, and libADLMIDI/libOPNMIDI build their own
+# sources as C90 + GNU extensions.
+function(adlplug_set_language_standard target)
+  set_target_properties("${target}" PROPERTIES
+    C_STANDARD 23 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF
+    CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+endfunction()
 
 set(CMAKE_C_VISIBILITY_PRESET "hidden")
 set(CMAKE_CXX_VISIBILITY_PRESET "hidden")
@@ -123,6 +127,7 @@ juce_add_plugin(ADLplug
   ICON_SMALL "resources/application/${ADLplug_NAME}-32.png")
 
 juce_generate_juce_header(ADLplug)
+adlplug_set_language_standard(ADLplug)
 
 target_sources(ADLplug PRIVATE
   "sources/utility/midi.cc"
@@ -155,6 +160,8 @@ target_sources(ADLplug PRIVATE
 target_include_directories(ADLplug PUBLIC "sources")
 
 target_compile_definitions(ADLplug PUBLIC
+  $<$<PLATFORM_ID:Windows>:NOMINMAX>
+  $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
   JUCE_DISPLAY_SPLASH_SCREEN=0
   JUCE_REPORT_APP_USAGE=0
   JUCE_STRICT_REFCOUNTEDPOINTER=1
@@ -200,8 +207,6 @@ if(ADLplug_CHIP STREQUAL "OPL3")
     "sources/opl3/adl/instrument_properties.cc"
     "sources/opl3/adl/player.cc"
     "sources/opl3/adl/measurer/measurer.cpp"
-    "sources/opl3/adl/measurer/chips/dosbox/dbopl.cpp"
-    "sources/opl3/adl/measurer/chips/dosbox_opl3.cpp"
     "sources/opl3/ui/operator_editor.cc"
     "sources/opl3/ui/about_component.cc"
     "sources/opl3/ui/main_component.cc"
@@ -209,9 +214,13 @@ if(ADLplug_CHIP STREQUAL "OPL3")
     "sources/opl3/ui/components/opl3_waves.cc")
 
   add_library(wopl STATIC "thirdparty/libADLMIDI/src/wopl/wopl_file.c")
+  adlplug_set_language_standard(wopl)
   target_include_directories(wopl PUBLIC "thirdparty/libADLMIDI/src")
   set_property(TARGET wopl PROPERTY POSITION_INDEPENDENT_CODE ON)
 
+  # measurer.cpp drives libADLMIDI's own DosBoxOPL3 emulator, which lives in
+  # the library's private src/ tree rather than its public headers.
+  target_include_directories(ADLplug PRIVATE "thirdparty/libADLMIDI/src")
   target_link_libraries(ADLplug PUBLIC wopl ADLMIDI_static)
 
 elseif(ADLplug_CHIP STREQUAL "OPN2")
@@ -224,8 +233,6 @@ elseif(ADLplug_CHIP STREQUAL "OPN2")
     "sources/opn2/adl/instrument_properties.cc"
     "sources/opn2/adl/player.cc"
     "sources/opn2/adl/measurer/measurer.cpp"
-    "sources/opn2/adl/measurer/chips/mame/mame_ym2612fm.cpp"
-    "sources/opn2/adl/measurer/chips/mame_opn2.cpp"
     "sources/opn2/ui/operator_editor.cc"
     "sources/opn2/ui/about_component.cc"
     "sources/opn2/ui/main_component.cc"
@@ -233,9 +240,13 @@ elseif(ADLplug_CHIP STREQUAL "OPN2")
     "sources/opn2/ui/components/ssgeg_waves.cc")
 
   add_library(wopn STATIC "thirdparty/libOPNMIDI/src/wopn/wopn_file.c")
+  adlplug_set_language_standard(wopn)
   target_include_directories(wopn PUBLIC "thirdparty/libOPNMIDI/src")
   set_property(TARGET wopn PROPERTY POSITION_INDEPENDENT_CODE ON)
 
+  # measurer.cpp drives libOPNMIDI's own MameOPN2 emulator, which lives in
+  # the library's private src/ tree rather than its public headers.
+  target_include_directories(ADLplug PRIVATE "thirdparty/libOPNMIDI/src")
   target_link_libraries(ADLplug PUBLIC wopn OPNMIDI_static)
 endif()
 
@@ -254,6 +265,7 @@ else()
     "thirdparty/fmt/src/format.cc"
     "thirdparty/fmt/src/os.cc")
   target_include_directories(ADLplug_fmt PUBLIC "thirdparty/fmt/include")
+  adlplug_set_language_standard(ADLplug_fmt)
   set_property(TARGET ADLplug_fmt PROPERTY POSITION_INDEPENDENT_CODE ON)
 endif()
 

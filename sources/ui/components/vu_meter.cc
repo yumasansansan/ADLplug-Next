@@ -106,6 +106,6 @@ void Vu_Meter::update_gradient()
     for (unsigned s = 0; s < num_stops; ++s) {
         double r = s / (double)(num_stops - 1);
         double hue = hue_start + r * hue_range;
-        gradient.addColour(r, Colour::fromHSV(hue, 0.75, 0.75, 0xff));
+        gradient.addColour(r, Colour::fromHSV((float)hue, 0.75f, 0.75f, (uint8)0xff));
     }
 }

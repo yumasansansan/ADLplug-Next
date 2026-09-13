@@ -30,10 +30,12 @@
 #endif
 
 //Measurer is always needs for emulator
-#include "chips/opn_chip_base.h"
-#include "chips/mame_opn2.h"
+// Chip emulators come from the libOPNMIDI submodule; ADLplug used to carry
+// its own copy of these, forked from libOPNMIDI 1.4.
+#include <chips/opn_chip_base.h>
+#include <chips/mame_opn2.h>
 
-typedef OPN::MameOPN2 DefaultOPN2;
+typedef MameOPN2 DefaultOPN2;
 
 template <class T>
 class AudioHistory
@@ -105,7 +107,7 @@ static const unsigned g_outputRate = 53267;
 struct TinySynth
 {
     //! Context of the chip emulator
-    OPN::OPNChipBase *m_chip;
+    OPNChipBase *m_chip;
     //! Count of playing notes
     unsigned m_notesNum;
     //! MIDI note to play
@@ -211,7 +213,7 @@ namespace Measurer {
 
 void ComputeDurations(const Instrument &in, DurationInfo &result)
 {
-    DefaultOPN2 chip;
+    DefaultOPN2 chip(OPNChip_OPN2);
     AudioHistory<double> audioHistory;
 
     const unsigned interval             = 150;

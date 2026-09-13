@@ -4,7 +4,7 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 #pragma once
-#include <math.h>
+#include <numbers>
 
 struct Dc_Filter {
     void cutoff(double f);
@@ -17,7 +17,7 @@ struct Dc_Filter {
 
 inline void Dc_Filter::cutoff(double f)
 {
-    double wn = M_PI * f;
+    double wn = std::numbers::pi_v<double> * f;
     double b0 = b0_ = 1.0 / (1.0 + wn);
     p_ = (1.0 - wn) * b0;
 }

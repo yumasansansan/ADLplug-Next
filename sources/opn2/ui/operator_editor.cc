@@ -287,14 +287,14 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     kn_release->set_range(0, 15);
 
     const char *detunes[8] = {
-        u8"×1",
-        u8"×(1+ε)",
-        u8"×(1+2ε)",
-        u8"×(1+3ε)",
-        u8"×1",
-        u8"×(1-ε)",
-        u8"×(1-2ε)",
-        u8"×(1-3ε)",
+        "×1",
+        "×(1+ε)",
+        "×(1+2ε)",
+        "×(1+3ε)",
+        "×1",
+        "×(1-ε)",
+        "×(1-2ε)",
+        "×(1-3ε)",
     };
 
     for (unsigned i = 0; i < 8; ++i) {

@@ -30,10 +30,12 @@
 #endif
 
 //Measurer needs an emulator
-#include "chips/opl_chip_base.h"
-#include "chips/dosbox_opl3.h"
+// Chip emulators come from the libADLMIDI submodule; ADLplug used to carry
+// its own copy of these, forked from libADLMIDI 1.4.
+#include <chips/opl_chip_base.h>
+#include <chips/dosbox_opl3.h>
 
-typedef ADL::DosBoxOPL3 DefaultOPL3;
+typedef DosBoxOPL3 DefaultOPL3;
 
 template <class T>
 class AudioHistory
@@ -104,14 +106,14 @@ static const unsigned g_outputRate = 49716;
 
 struct TinySynth
 {
-    ADL::OPLChipBase *m_chip;
+    OPLChipBase *m_chip;
     unsigned m_notesNum;
     int m_notenum;
     int8_t m_fineTune;
     int16_t m_noteOffsets[2];
     unsigned m_x[2];
 
-    explicit TinySynth(ADL::OPLChipBase &chip)
+    explicit TinySynth(OPLChipBase &chip)
         : m_chip(&chip)
     {
         resetChip();

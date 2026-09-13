@@ -211,7 +211,7 @@ void New_Program_Editor::buttonClicked (Button* buttonThatWasClicked)
             unsigned pgm = to_uint7(edt_pgm_num->getText().toRawUTF8());
 
             if (msb == ~0u || lsb == ~0u || pgm == ~0u)
-                AlertWindow::showMessageBox(
+                AlertWindow::showMessageBoxAsync(
                     AlertWindow::WarningIcon,
                     "Invalid value", "Identifiers must be integers between 0 and 127.");
             else {

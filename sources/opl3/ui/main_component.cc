@@ -1206,13 +1206,17 @@ void Main_Component::buttonClicked (Button* buttonThatWasClicked)
     else if (buttonThatWasClicked == btn_emulator.get())
     {
         //[UserButtonCode_btn_emulator] -- add your button handler code here..
-        int selection = select_emulator_by_menu();
-        if (selection != 0 && (unsigned)(selection - 1) != chip_settings_.emulator) {
+        Component::SafePointer<Main_Component> safe(this);
+        select_emulator_by_menu([safe, &pb](int selection) mutable {
+            if (safe == nullptr || selection == 0)
+                return;
+            if ((unsigned)(selection - 1) == safe->chip_settings_.emulator)
+                return;
             AudioParameterChoice &p = *pb.p_emulator;
             p.beginChangeGesture();
             p = selection - 1;
             p.endChangeGesture();
-        }
+        });
         //[/UserButtonCode_btn_emulator]
     }
     else if (buttonThatWasClicked == btn_deep_tremolo.get())

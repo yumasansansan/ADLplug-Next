@@ -7,6 +7,7 @@
 
 #include "ui/utility/knobman_skin.h"
 #include "JuceHeader.h"
+#include <numbers>
 
 class Knob : public Component,
              public AsyncUpdater,
@@ -68,7 +69,7 @@ private:
     float max_increment_ = 0;
     ListenerList<Listener> listeners_;
     bool in_drag_ = false;
-    float min_angle_ = M_PI * -3.0 / 4.0;
-    float max_angle_ = M_PI * +3.0 / 4.0;
+    float min_angle_ = std::numbers::pi_v<double> * -3.0 / 4.0;
+    float max_angle_ = std::numbers::pi_v<double> * +3.0 / 4.0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Knob);
 };

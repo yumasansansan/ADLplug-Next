@@ -136,7 +136,7 @@ void About_Component::paint (Graphics& g)
 #if ADLplug_VersionFinal
     Label *lbl = lbl_prog_version_extra.get();
     Rectangle<float> bounds = lbl->getBounds().toFloat();
-    float textw = lbl->getFont().getStringWidthFloat(lbl->getText());
+    float textw = GlyphArrangement::getStringWidth(lbl->getFont(), lbl->getText());
     Rectangle<float> rect =
         bounds.withWidth(textw + lbl->getBorderSize().getLeftAndRight());
     g.setColour(Colour(0x52, 0x94, 0x58));
