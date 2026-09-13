@@ -16,6 +16,7 @@
 #include "adl/instrument.h"
 #include "parameter_block.h"
 #include <cmath>
+#include "ui/utility/legacy_font.h"
 //[/Headers]
 
 #include "operator_editor.h"
@@ -107,7 +108,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     lbl_level.reset (new Label ("new label",
                                 TRANS("Lv")));
     addAndMakeVisible (lbl_level.get());
-    lbl_level->setFont (Font (14.0f, Font::plain).withTypefaceStyle ("Regular"));
+    lbl_level->setFont (legacy_font (14.0f).withStyle ("Regular"));
     lbl_level->setJustificationType (Justification::centredLeft);
     lbl_level->setEditable (false, false, false);
     lbl_level->setColour (Label::textColourId, Colours::aliceblue);
@@ -125,7 +126,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label.reset (new Label ("new label",
                             TRANS("A")));
     addAndMakeVisible (label.get());
-    label->setFont (Font (15.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label->setJustificationType (Justification::centredTop);
     label->setEditable (false, false, false);
     label->setColour (Label::textColourId, Colours::aliceblue);
@@ -137,7 +138,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label2.reset (new Label ("new label",
                              TRANS("D")));
     addAndMakeVisible (label2.get());
-    label2->setFont (Font (15.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centredTop);
     label2->setEditable (false, false, false);
     label2->setColour (Label::textColourId, Colours::aliceblue);
@@ -149,7 +150,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label3.reset (new Label ("new label",
                              TRANS("S")));
     addAndMakeVisible (label3.get());
-    label3->setFont (Font (15.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label3->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label3->setJustificationType (Justification::centredTop);
     label3->setEditable (false, false, false);
     label3->setColour (Label::textColourId, Colours::aliceblue);
@@ -161,7 +162,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label4.reset (new Label ("new label",
                              TRANS("R")));
     addAndMakeVisible (label4.get());
-    label4->setFont (Font (15.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label4->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label4->setJustificationType (Justification::centredTop);
     label4->setEditable (false, false, false);
     label4->setColour (Label::textColourId, Colours::aliceblue);
@@ -173,7 +174,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label5.reset (new Label ("new label",
                              TRANS("Tremolo")));
     addAndMakeVisible (label5.get());
-    label5->setFont (Font (14.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label5->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label5->setJustificationType (Justification::centredLeft);
     label5->setEditable (false, false, false);
     label5->setColour (Label::textColourId, Colours::aliceblue);
@@ -185,7 +186,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label6.reset (new Label ("new label",
                              TRANS("Vibrato")));
     addAndMakeVisible (label6.get());
-    label6->setFont (Font (14.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label6->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label6->setJustificationType (Justification::centredLeft);
     label6->setEditable (false, false, false);
     label6->setColour (Label::textColourId, Colours::aliceblue);
@@ -197,7 +198,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label7.reset (new Label ("new label",
                              TRANS("Sustain")));
     addAndMakeVisible (label7.get());
-    label7->setFont (Font (14.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label7->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label7->setJustificationType (Justification::centredLeft);
     label7->setEditable (false, false, false);
     label7->setColour (Label::textColourId, Colours::aliceblue);
@@ -209,7 +210,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label8.reset (new Label ("new label",
                              TRANS("Key scaling")));
     addAndMakeVisible (label8.get());
-    label8->setFont (Font (14.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label8->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label8->setJustificationType (Justification::centredLeft);
     label8->setEditable (false, false, false);
     label8->setColour (Label::textColourId, Colours::aliceblue);
@@ -221,7 +222,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     lbl_fmul.reset (new Label ("new label",
                                TRANS("F*")));
     addAndMakeVisible (lbl_fmul.get());
-    lbl_fmul->setFont (Font (14.0f, Font::plain).withTypefaceStyle ("Regular"));
+    lbl_fmul->setFont (legacy_font (14.0f).withStyle ("Regular"));
     lbl_fmul->setJustificationType (Justification::centredLeft);
     lbl_fmul->setEditable (false, false, false);
     lbl_fmul->setColour (Label::textColourId, Colours::aliceblue);
@@ -233,7 +234,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     lbl_ksl.reset (new Label ("new label",
                               TRANS("Ksl")));
     addAndMakeVisible (lbl_ksl.get());
-    lbl_ksl->setFont (Font (14.0f, Font::plain).withTypefaceStyle ("Regular"));
+    lbl_ksl->setFont (legacy_font (14.0f).withStyle ("Regular"));
     lbl_ksl->setJustificationType (Justification::centredLeft);
     lbl_ksl->setEditable (false, false, false);
     lbl_ksl->setColour (Label::textColourId, Colours::aliceblue);

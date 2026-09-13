@@ -10,7 +10,7 @@
 #if 1
 #   define trace(fmt, ...)
 #else
-#   define trace(fmt, ...) fprintf(stderr, "[Configuration] " fmt "\n", ##__VA_ARGS__)
+#   define trace(fmt, ...) fprintf(stderr, "[Configuration] " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 #endif
 
 static constexpr long config_version = 1;

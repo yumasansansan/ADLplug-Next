@@ -5,11 +5,12 @@
 
 #include "utility/midi.h"
 
-Midi_Input_Message Midi_Input_Source::midi_cb_for_buffer_iterator(void *cbdata)
+Midi_Input_Message Midi_Input_Source::midi_cb_for_buffer_cursor(void *cbdata)
 {
-    const uint8_t *data;
-    int size, sample_pos;
-    MidiBuffer::Iterator &it = *(MidiBuffer::Iterator *)cbdata;
-    return it.getNextEvent(data, size, sample_pos) ?
-        Midi_Input_Message(data, size, sample_pos) : Midi_Input_Message();
+    Buffer_Cursor &cursor = *(Buffer_Cursor *)cbdata;
+    if (cursor.current == cursor.end)
+        return Midi_Input_Message();
+    const MidiMessageMetadata event = *cursor.current;
+    ++cursor.current;
+    return Midi_Input_Message(event.data, (unsigned)event.numBytes, event.samplePosition);
 }

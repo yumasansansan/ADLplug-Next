@@ -56,17 +56,17 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
     typedef AudioParameterType Pt;
     typedef NormalisableRange<float> Rf;
 
-    p_mastervol = add_automatable_parameter<Pt::Float>(p, 0, "mastervol", "Master volume", Rf{0.0f, 10.0f}, 1.0f, String());
+    p_mastervol = add_automatable_parameter<Pt::Float>(p, 0, "mastervol", "Master volume", Rf{0.0f, 10.0f}, 1.0f);
 
     StringArray emu_choices = get_emulator_defaults().choices;
     for (unsigned i = 0, n = emu_choices.size(); i < n; ++i) {
         if (emu_choices[i].isEmpty())
             emu_choices.set(i, "<Reserved " + String(i) + ">");
     }
-    p_emulator = add_parameter<Pt::Choice>(p, 'chip', "emulator", "Emulator", emu_choices, cs.emulator, String());
-    p_nchip = add_parameter<Pt::Int>(p, 'chip', "nchip", "Chip count", 1, 100, cs.chip_count, String());
+    p_emulator = add_parameter<Pt::Choice>(p, 'chip', "emulator", "Emulator", emu_choices, cs.emulator);
+    p_nchip = add_parameter<Pt::Int>(p, 'chip', "nchip", "Chip count", 1, 100, cs.chip_count);
     StringArray chiptype_choices = {"OPN2 53 kHz", "OPNA 55 kHz"};
-    p_chiptype = add_parameter<Pt::Choice>(p, 'chip', "chiptype", "Chip type", chiptype_choices, cs.chip_type, String());
+    p_chiptype = add_parameter<Pt::Choice>(p, 'chip', "chiptype", "Chip type", chiptype_choices, cs.chip_type);
 
     WOPNFile_Ptr wopn = default_wopn();
     Instrument ins = default_instrument(*wopn);
@@ -82,42 +82,42 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
             auto id = [idprefix](const char *x) -> String { return idprefix + x; };
             auto name = [nameprefix](const char *x) -> String { return nameprefix + x; };
 
-            // part.p_ps8op = add_internal_parameter<Pt::Bool>(p, tag, id("ps8op"), name("Pseudo 8op"), ins.pseudo_eight_op(), String());
-            part.p_blank = add_internal_parameter<Pt::Bool>(p, tag, id("blank"), name("Blank"), ins.blank(), String());
-            part.p_tune = add_internal_parameter<Pt::Int>(p, tag, id("tune"), name("Note offset"), -127, +127, ins.note_offset, String());
-            // part.p_tune34 = add_internal_parameter<Pt::Int>(p, tag, id("tune34"), name("Note offset 3-4"), -127, +127, ins.note_offset2, String());
-            part.p_feedback = add_internal_parameter<Pt::Int>(p, tag, id("feedback"), name("Feedback"), 0, 7, ins.feedback(), String());
-            part.p_algorithm = add_internal_parameter<Pt::Int>(p, tag, id("algorithm"), name("Algorithm"), 0, 7, ins.algorithm(), String());
-            part.p_ams = add_internal_parameter<Pt::Int>(p, tag, id("ams"), name("AM sensitivity"), 0, 3, ins.ams(), String());
-            part.p_fms = add_internal_parameter<Pt::Int>(p, tag, id("fms"), name("FM sensitivity"), 0, 7, ins.fms(), String());
-            part.p_veloffset = add_internal_parameter<Pt::Int>(p, tag, id("veloffset"), name("Velocity offset"), -127, +127, ins.midi_velocity_offset, String());
-            // part.p_voice2ft = add_internal_parameter<Pt::Int>(p, tag, id("voice2ft"), name("Voice 2 fine tune"), -127, +127, ins.second_voice_detune, String());
-            part.p_drumnote = add_internal_parameter<Pt::Int>(p, tag, id("drumnote"), name("Percussion note"), 0, 127, ins.percussion_key_number, String());
+            // part.p_ps8op = add_internal_parameter<Pt::Bool>(p, tag, id("ps8op"), name("Pseudo 8op"), ins.pseudo_eight_op());
+            part.p_blank = add_internal_parameter<Pt::Bool>(p, tag, id("blank"), name("Blank"), ins.blank());
+            part.p_tune = add_internal_parameter<Pt::Int>(p, tag, id("tune"), name("Note offset"), -127, +127, ins.note_offset);
+            // part.p_tune34 = add_internal_parameter<Pt::Int>(p, tag, id("tune34"), name("Note offset 3-4"), -127, +127, ins.note_offset2);
+            part.p_feedback = add_internal_parameter<Pt::Int>(p, tag, id("feedback"), name("Feedback"), 0, 7, ins.feedback());
+            part.p_algorithm = add_internal_parameter<Pt::Int>(p, tag, id("algorithm"), name("Algorithm"), 0, 7, ins.algorithm());
+            part.p_ams = add_internal_parameter<Pt::Int>(p, tag, id("ams"), name("AM sensitivity"), 0, 3, ins.ams());
+            part.p_fms = add_internal_parameter<Pt::Int>(p, tag, id("fms"), name("FM sensitivity"), 0, 7, ins.fms());
+            part.p_veloffset = add_internal_parameter<Pt::Int>(p, tag, id("veloffset"), name("Velocity offset"), -127, +127, ins.midi_velocity_offset);
+            // part.p_voice2ft = add_internal_parameter<Pt::Int>(p, tag, id("voice2ft"), name("Voice 2 fine tune"), -127, +127, ins.second_voice_detune);
+            part.p_drumnote = add_internal_parameter<Pt::Int>(p, tag, id("drumnote"), name("Percussion note"), 0, 127, ins.percussion_key_number);
         }
 
+        static constexpr const char *op_id_suffix[4] = { "op1", "op3", "op2", "op4" };
+        static constexpr const char *op_name_prefix[4] = { "Operator 1", "Operator 3", "Operator 2", "Operator 4" };
         for (unsigned opnum = 0; opnum < 4; ++opnum) {
             String idprefix = fmt::format(
-                "P{:d}{:s}", pn + 1,
-                ((const char *[]){ "op1", "op3", "op2", "op4" })[opnum]);
+                "P{:d}{:s}", pn + 1, op_id_suffix[opnum]);
             String nameprefix = fmt::format(
-                "[Part {:d}] {:s} ", pn + 1,
-                ((const char *[]){ "Operator 1", "Operator 3", "Operator 2", "Operator 4" })[opnum]);
+                "[Part {:d}] {:s} ", pn + 1, op_name_prefix[opnum]);
 
             auto id = [idprefix](const char *x) -> String { return idprefix + String(x); };
             auto name = [nameprefix](const char *x) -> String { return nameprefix + String(x); };
 
             Operator &op = part.nth_operator(opnum);
-            op.p_detune = add_internal_parameter<Pt::Int>(p, tag, id("detune"), name("Detune"), 0, 7, ins.detune(opnum), String());
-            op.p_fmul = add_internal_parameter<Pt::Int>(p, tag, id("fmul"), name("Frequency multiplier"), 0, 15, ins.fmul(opnum), String());
-            op.p_level = add_automatable_parameter<Pt::Int>(p, tag, id("level"), name("Level"), 0, 127, ins.level(opnum), String());
-            op.p_ratescale = add_internal_parameter<Pt::Int>(p, tag, id("ratescale"), name("Rate scaling"), 0, 3, ins.ratescale(opnum), String());
-            op.p_attack = add_internal_parameter<Pt::Int>(p, tag, id("attack"), name("Attack"), 0, 31, ins.attack(opnum), String());
-            op.p_am = add_internal_parameter<Pt::Bool>(p, tag, id("am"), name("Amplitude modulation"), ins.am(opnum), String());
-            op.p_decay1 = add_internal_parameter<Pt::Int>(p, tag, id("decay1"), name("Decay 1"), 0, 31, ins.decay1(opnum), String());
-            op.p_decay2 = add_internal_parameter<Pt::Int>(p, tag, id("decay2"), name("Decay 2"), 0, 31, ins.decay2(opnum), String());
-            op.p_sustain = add_internal_parameter<Pt::Int>(p, tag, id("sustain"), name("Sustain"), 0, 15, ins.sustain(opnum), String());
-            op.p_release = add_internal_parameter<Pt::Int>(p, tag, id("release"), name("Release"), 0, 15, ins.release(opnum), String());
-            op.p_ssgenable = add_internal_parameter<Pt::Bool>(p, tag, id("ssgenable"), name("SSG-EG enable"), ins.ssgenable(opnum), String());
+            op.p_detune = add_internal_parameter<Pt::Int>(p, tag, id("detune"), name("Detune"), 0, 7, ins.detune(opnum));
+            op.p_fmul = add_internal_parameter<Pt::Int>(p, tag, id("fmul"), name("Frequency multiplier"), 0, 15, ins.fmul(opnum));
+            op.p_level = add_automatable_parameter<Pt::Int>(p, tag, id("level"), name("Level"), 0, 127, ins.level(opnum));
+            op.p_ratescale = add_internal_parameter<Pt::Int>(p, tag, id("ratescale"), name("Rate scaling"), 0, 3, ins.ratescale(opnum));
+            op.p_attack = add_internal_parameter<Pt::Int>(p, tag, id("attack"), name("Attack"), 0, 31, ins.attack(opnum));
+            op.p_am = add_internal_parameter<Pt::Bool>(p, tag, id("am"), name("Amplitude modulation"), ins.am(opnum));
+            op.p_decay1 = add_internal_parameter<Pt::Int>(p, tag, id("decay1"), name("Decay 1"), 0, 31, ins.decay1(opnum));
+            op.p_decay2 = add_internal_parameter<Pt::Int>(p, tag, id("decay2"), name("Decay 2"), 0, 31, ins.decay2(opnum));
+            op.p_sustain = add_internal_parameter<Pt::Int>(p, tag, id("sustain"), name("Sustain"), 0, 15, ins.sustain(opnum));
+            op.p_release = add_internal_parameter<Pt::Int>(p, tag, id("release"), name("Release"), 0, 15, ins.release(opnum));
+            op.p_ssgenable = add_internal_parameter<Pt::Bool>(p, tag, id("ssgenable"), name("SSG-EG enable"), ins.ssgenable(opnum));
             StringArray ssgwaves;
             ssgwaves.ensureStorageAllocated(8);
             for (unsigned i = 0; i < 8; ++i) {
@@ -126,15 +126,15 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
                 if (i & 1) x += " - Hold";
                 ssgwaves.add(x);
             }
-            op.p_ssgwave = add_internal_parameter<Pt::Choice>(p, tag, id("ssgwave"), name("SSG-EG wave"), ssgwaves, ins.ssgwave(opnum), String());
+            op.p_ssgwave = add_internal_parameter<Pt::Choice>(p, tag, id("ssgwave"), name("SSG-EG wave"), ssgwaves, ins.ssgwave(opnum));
         }
     }
 
     StringArray volmodel_choices = {"Generic"};
-    p_volmodel = add_parameter<Pt::Choice>(p, 'glob', "volmodel", "Volume model", volmodel_choices, wopn->volume_model, String());
-    p_lfoenable = add_parameter<Pt::Bool>(p, 'glob', "lfoenable", "LFO enable", (wopn->lfo_freq & 8) != 0, String());
+    p_volmodel = add_parameter<Pt::Choice>(p, 'glob', "volmodel", "Volume model", volmodel_choices, wopn->volume_model);
+    p_lfoenable = add_parameter<Pt::Bool>(p, 'glob', "lfoenable", "LFO enable", (wopn->lfo_freq & 8) != 0);
     StringArray lfofreq_choices = {"3.98 Hz", "5.56 Hz", "6.02 Hz", "6.37 Hz", "6.88 Hz", "9.63 Hz", "48.1 Hz", "72.2 Hz"};
-    p_lfofreq = add_parameter<Pt::Choice>(p, 'glob', "lfofreq", "LFO frequency", lfofreq_choices, wopn->lfo_freq & 7, String());
+    p_lfofreq = add_parameter<Pt::Choice>(p, 'glob', "lfofreq", "LFO frequency", lfofreq_choices, wopn->lfo_freq & 7);
 }
 
 Chip_Settings Parameter_Block::chip_settings() const

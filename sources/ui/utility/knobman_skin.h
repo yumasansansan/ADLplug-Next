@@ -31,5 +31,5 @@ public:
     Km_Skin_Ptr scaled(double ratio) const;
 
 private:
-    JUCE_LEAK_DETECTOR(Km_Skin);
+    JUCE_LEAK_DETECTOR(Km_Skin)
 };

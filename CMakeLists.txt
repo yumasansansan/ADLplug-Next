@@ -8,7 +8,6 @@ set(PROJECT_HOMEPAGE "https://github.com/jpcima/ADLplug")
 
 include(GNUInstallDirs)
 include(SystemOption)
-include(GNUWarnings)
 
 # --------------------------------------------------------------------------
 # Options
@@ -23,6 +22,7 @@ system_option(ADLplug_ASIO "Enable ASIO support (Windows, GPLv3)" OFF "Windows" 
 option(ADLplug_PCH "Enable precompiled headers" OFF)
 option(ADLplug_ASSERTIONS "Enable assertions" OFF)
 option(ADLplug_USE_SYSTEM_FMT "Use fmt libraries from system" OFF)
+option(ADLplug_WERROR "Treat warnings in ADLplug's own sources as errors" OFF)
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
 
@@ -38,11 +38,6 @@ endfunction()
 set(CMAKE_C_VISIBILITY_PRESET "hidden")
 set(CMAKE_CXX_VISIBILITY_PRESET "hidden")
 set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
-
-enable_gnu_warning("all")
-disable_gnu_warning("unknown-warning-option")
-disable_gnu_warning("multichar")
-enable_gnu_warning("error=return-type")
 
 if(ADLplug_ASSERTIONS)
   add_definitions("-UNDEBUG")
@@ -72,7 +67,7 @@ endif()
 # Dependencies
 
 include(ADLMIDI)
-add_subdirectory("thirdparty/JUCE" EXCLUDE_FROM_ALL)
+add_subdirectory("thirdparty/JUCE" EXCLUDE_FROM_ALL SYSTEM)
 
 set(ADLplug_FORMATS "")
 if(ADLplug_VST3)
@@ -160,10 +155,6 @@ target_sources(ADLplug PRIVATE
 target_include_directories(ADLplug PUBLIC "sources")
 
 target_compile_definitions(ADLplug PUBLIC
-  $<$<PLATFORM_ID:Windows>:NOMINMAX>
-  $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
-  JUCE_DISPLAY_SPLASH_SCREEN=0
-  JUCE_REPORT_APP_USAGE=0
   JUCE_STRICT_REFCOUNTEDPOINTER=1
   JUCE_VST3_CAN_REPLACE_VST2=0
   JUCE_USE_FLAC=0
@@ -215,12 +206,14 @@ if(ADLplug_CHIP STREQUAL "OPL3")
 
   add_library(wopl STATIC "thirdparty/libADLMIDI/src/wopl/wopl_file.c")
   adlplug_set_language_standard(wopl)
-  target_include_directories(wopl PUBLIC "thirdparty/libADLMIDI/src")
+  target_include_directories(wopl SYSTEM PUBLIC "thirdparty/libADLMIDI/src")
   set_property(TARGET wopl PROPERTY POSITION_INDEPENDENT_CODE ON)
+  # Upstream libADLMIDI code; its strncpy calls fill fixed-width name fields.
+  target_compile_definitions(wopl PRIVATE $<$<PLATFORM_ID:Windows>:_CRT_SECURE_NO_WARNINGS>)
 
   # measurer.cpp drives libADLMIDI's own DosBoxOPL3 emulator, which lives in
   # the library's private src/ tree rather than its public headers.
-  target_include_directories(ADLplug PRIVATE "thirdparty/libADLMIDI/src")
+  target_include_directories(ADLplug SYSTEM PRIVATE "thirdparty/libADLMIDI/src")
   target_link_libraries(ADLplug PUBLIC wopl ADLMIDI_static)
 
 elseif(ADLplug_CHIP STREQUAL "OPN2")
@@ -241,12 +234,14 @@ elseif(ADLplug_CHIP STREQUAL "OPN2")
 
   add_library(wopn STATIC "thirdparty/libOPNMIDI/src/wopn/wopn_file.c")
   adlplug_set_language_standard(wopn)
-  target_include_directories(wopn PUBLIC "thirdparty/libOPNMIDI/src")
+  target_include_directories(wopn SYSTEM PUBLIC "thirdparty/libOPNMIDI/src")
   set_property(TARGET wopn PROPERTY POSITION_INDEPENDENT_CODE ON)
+  # Upstream libOPNMIDI code; its strncpy calls fill fixed-width name fields.
+  target_compile_definitions(wopn PRIVATE $<$<PLATFORM_ID:Windows>:_CRT_SECURE_NO_WARNINGS>)
 
   # measurer.cpp drives libOPNMIDI's own MameOPN2 emulator, which lives in
   # the library's private src/ tree rather than its public headers.
-  target_include_directories(ADLplug PRIVATE "thirdparty/libOPNMIDI/src")
+  target_include_directories(ADLplug SYSTEM PRIVATE "thirdparty/libOPNMIDI/src")
   target_link_libraries(ADLplug PUBLIC wopn OPNMIDI_static)
 endif()
 
@@ -264,18 +259,54 @@ else()
   add_library(ADLplug_fmt STATIC
     "thirdparty/fmt/src/format.cc"
     "thirdparty/fmt/src/os.cc")
-  target_include_directories(ADLplug_fmt PUBLIC "thirdparty/fmt/include")
+  target_include_directories(ADLplug_fmt SYSTEM PUBLIC "thirdparty/fmt/include")
   adlplug_set_language_standard(ADLplug_fmt)
   set_property(TARGET ADLplug_fmt PROPERTY POSITION_INDEPENDENT_CODE ON)
 endif()
 
 add_library(simple-ini INTERFACE)
-target_include_directories(simple-ini INTERFACE "thirdparty/simpleini")
+target_include_directories(simple-ini SYSTEM INTERFACE "thirdparty/simpleini")
 
 target_link_libraries(ADLplug PUBLIC ADLplug_fmt simple-ini)
 
 if(ADLplug_PCH)
   target_precompile_headers(ADLplug PRIVATE "sources/pch/ADLplug_core.h")
+endif()
+
+# --------------------------------------------------------------------------
+# Settings for ADLplug's own translation units only
+#
+# juce_add_plugin() compiles the JUCE module sources into this same target
+# through INTERFACE_SOURCES, so anything set target-wide lands on JUCE's code
+# too. The Windows header macros and the warning policy are therefore attached
+# to our sources individually. Headers from JUCE and the other dependencies
+# stay quiet because every third-party include directory above is SYSTEM.
+
+get_target_property(ADLplug_OWN_SOURCES ADLplug SOURCES)
+list(FILTER ADLplug_OWN_SOURCES INCLUDE REGEX "^sources/")
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  # NOMINMAX / WIN32_LEAN_AND_MEAN keep <windows.h> from defining min/max macros
+  # that break std::min and std::max. JUCE defines NOMINMAX in its own native
+  # headers, so passing it to JUCE's translation units only causes redefinition
+  # warnings there.
+  # _CRT_SECURE_NO_WARNINGS: strncpy and sscanf are used deliberately for
+  # fixed-width, zero-padded fields; the MSVC CRT flags every such call and
+  # suggests its non-portable *_s forms.
+  set_source_files_properties(${ADLplug_OWN_SOURCES}
+    PROPERTIES COMPILE_DEFINITIONS "NOMINMAX;WIN32_LEAN_AND_MEAN;_CRT_SECURE_NO_WARNINGS")
+endif()
+
+if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+  set(ADLplug_WARNING_FLAGS -Wall -Wextra -Wpedantic)
+  if(ADLplug_WERROR)
+    list(APPEND ADLplug_WARNING_FLAGS -Werror)
+  else()
+    # Falling off the end of a non-void function is undefined behaviour.
+    list(APPEND ADLplug_WARNING_FLAGS -Werror=return-type)
+  endif()
+  set_source_files_properties(${ADLplug_OWN_SOURCES}
+    PROPERTIES COMPILE_OPTIONS "${ADLplug_WARNING_FLAGS}")
 endif()
 
 # --------------------------------------------------------------------------

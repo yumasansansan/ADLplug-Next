@@ -23,8 +23,9 @@ PropertySet Instrument::to_properties() const
     set.setValue("second_voice_detune", (int)second_voice_detune);
     set.setValue("percussion_key_number", (int)percussion_key_number);
 
+    static constexpr const char *op_prefix[4] = { "c1", "m1", "c2", "m2" };
     for (unsigned opnum = 0; opnum < 4; ++opnum) {
-        const String opfx = ((const char *[]){ "c1", "m1", "c2", "m2" })[opnum];
+        const String opfx = op_prefix[opnum];
         set.setValue(opfx + "attack", (int)attack(opnum));
         set.setValue(opfx + "decay", (int)decay(opnum));
         set.setValue(opfx + "sustain", (int)sustain(opnum));
@@ -62,8 +63,9 @@ Instrument Instrument::from_properties(const juce::PropertySet &set)
     ins.second_voice_detune = set.getIntValue("second_voice_detune");
     ins.percussion_key_number = set.getIntValue("percussion_key_number");
 
+    static constexpr const char *op_prefix[4] = { "c1", "m1", "c2", "m2" };
     for (unsigned opnum = 0; opnum < 4; ++opnum) {
-        const String opfx = ((const char *[]){ "c1", "m1", "c2", "m2" })[opnum];
+        const String opfx = op_prefix[opnum];
         ins.attack(opnum, set.getIntValue(opfx + "attack"));
         ins.decay(opnum, set.getIntValue(opfx + "decay"));
         ins.sustain(opnum, set.getIntValue(opfx + "sustain"));

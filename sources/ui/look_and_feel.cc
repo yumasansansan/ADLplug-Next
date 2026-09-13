@@ -22,7 +22,7 @@ RESOURCE(Res, Serif_Regular)
 #if 1
 #   define trace(fmt, ...)
 #else
-#   define trace(fmt, ...) fprintf(stderr, "[LF] " fmt "\n", ##__VA_ARGS__)
+#   define trace(fmt, ...) fprintf(stderr, "[LF] " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 #endif
 
 //==============================================================================
@@ -140,7 +140,7 @@ void Custom_Look_And_Feel::drawButtonBackground(Graphics &g, Button &button, con
 
 Font Custom_Look_And_Feel::getComboBoxFont(ComboBox &box)
 {
-    return { jmin (15.0f, box.getHeight() * 0.85f) };
+    return withDefaultMetrics (FontOptions (jmin (15.0f, box.getHeight() * 0.85f)));
 }
 
 Label *Custom_Look_And_Feel::createSliderTextBox(Slider &slider)

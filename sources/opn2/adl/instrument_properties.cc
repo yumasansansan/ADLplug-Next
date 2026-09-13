@@ -20,8 +20,9 @@ PropertySet Instrument::to_properties() const
     set.setValue("midi_velocity_offset", (int)midi_velocity_offset);
     set.setValue("percussion_key_number", (int)percussion_key_number);
 
+    static constexpr const char *op_prefix[4] = { "op1", "op3", "op2", "op4" };
     for (unsigned opnum = 0; opnum < 4; ++opnum) {
-        const String opfx = ((const char *[]){ "op1", "op3", "op2", "op4" })[opnum];
+        const String opfx = op_prefix[opnum];
         set.setValue(opfx + "detune", (int)detune(opnum));
         set.setValue(opfx + "fmul", (int)fmul(opnum));
         set.setValue(opfx + "level", (int)level(opnum));
@@ -56,8 +57,9 @@ Instrument Instrument::from_properties(const juce::PropertySet &set)
     ins.midi_velocity_offset = set.getIntValue("midi_velocity_offset");
     ins.percussion_key_number = set.getIntValue("percussion_key_number");
 
+    static constexpr const char *op_prefix[4] = { "op1", "op3", "op2", "op4" };
     for (unsigned opnum = 0; opnum < 4; ++opnum) {
-        const String opfx = ((const char *[]){ "op1", "op3", "op2", "op4" })[opnum];
+        const String opfx = op_prefix[opnum];
         ins.detune(opnum, set.getIntValue(opfx + "detune"));
         ins.fmul(opnum, set.getIntValue(opfx + "fmul"));
         ins.level(opnum, set.getIntValue(opfx + "level"));

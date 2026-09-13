@@ -21,7 +21,7 @@ public:
     class Listener {
     public:
         virtual ~Listener() {}
-        virtual void wave_changed(Wave_Label *k) {}
+        virtual void wave_changed([[maybe_unused]] Wave_Label *k) {}
     };
 
     void add_listener(Listener *l);

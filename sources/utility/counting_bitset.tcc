@@ -106,5 +106,5 @@ template <size_t N>
 template<class CharT, class Traits, class Allocator>
 std::basic_string<CharT, Traits, Allocator> counting_bitset<N>::to_string(CharT zero, CharT one) const
 {
-    return bits_.template to_string<CharT, Traits, Allocator>();
+    return bits_.template to_string<CharT, Traits, Allocator>(zero, one);
 }

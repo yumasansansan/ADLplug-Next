@@ -14,17 +14,22 @@ set(WITH_XMI_SUPPORT OFF CACHE BOOL "" FORCE)
 set(WITH_EMBEDDED_BANKS OFF CACHE BOOL "" FORCE)
 set(WITH_HQ_RESAMPLER OFF CACHE BOOL "" FORCE)
 
+# Both libraries call the standard C string and file functions that the MSVC
+# CRT reports as "unsafe". That is upstream code behaving as intended, so keep
+# it out of this build's warning output on Windows.
+set(ADLplug_UPSTREAM_CRT_DEFS $<$<PLATFORM_ID:Windows>:_CRT_SECURE_NO_WARNINGS>)
+
 set(libADLMIDI_STATIC ON CACHE BOOL "" FORCE)
 set(libADLMIDI_SHARED OFF CACHE BOOL "" FORCE)
-add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/libADLMIDI" EXCLUDE_FROM_ALL)
-target_compile_definitions(ADLMIDI_static PRIVATE "ADLMIDI_EXPORT=")
+add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/libADLMIDI" EXCLUDE_FROM_ALL SYSTEM)
+target_compile_definitions(ADLMIDI_static PRIVATE "ADLMIDI_EXPORT=" ${ADLplug_UPSTREAM_CRT_DEFS})
 target_compile_definitions(ADLMIDI_static PUBLIC "ADLMIDI_UNSTABLE_API=")
 
 set(libOPNMIDI_STATIC ON CACHE BOOL "" FORCE)
 set(libOPNMIDI_SHARED OFF CACHE BOOL "" FORCE)
 set(USE_VGM_FILE_DUMPER OFF CACHE BOOL "" FORCE)
-add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/libOPNMIDI" EXCLUDE_FROM_ALL)
-target_compile_definitions(OPNMIDI_static PRIVATE "OPNMIDI_EXPORT=")
+add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/libOPNMIDI" EXCLUDE_FROM_ALL SYSTEM)
+target_compile_definitions(OPNMIDI_static PRIVATE "OPNMIDI_EXPORT=" ${ADLplug_UPSTREAM_CRT_DEFS})
 target_compile_definitions(OPNMIDI_static PUBLIC "OPNMIDI_UNSTABLE_API=")
 
 set(CMAKE_POLICY_VERSION_MINIMUM "${_ADLplug_saved_policy_min}")

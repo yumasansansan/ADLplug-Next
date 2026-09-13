@@ -17,7 +17,7 @@
 #   define trace(fmt, ...)
 #else
 #   pragma message("enabled debug messages which compromise hard realtime")
-#   define trace(fmt, ...) fprintf(stderr, "[Bank Manager] " fmt "\n", ##__VA_ARGS__)
+#   define trace(fmt, ...) fprintf(stderr, "[Bank Manager] " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 #endif
 
 Bank_Manager::Bank_Manager(AdlplugAudioProcessor &proc, Player &pl, const void *wopl_data, size_t wopl_size)

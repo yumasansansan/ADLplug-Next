@@ -12,6 +12,7 @@
 
 //[Headers] You can add your own extra header files here...
 #include <fmt/format.h>
+#include "ui/utility/legacy_font.h"
 //[/Headers]
 
 #include "new_program_editor.h"
@@ -29,7 +30,7 @@ New_Program_Editor::New_Program_Editor ()
     label.reset (new Label ("new label",
                             TRANS("Program")));
     addAndMakeVisible (label.get());
-    label->setFont (Font (15.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label->setJustificationType (Justification::centredLeft);
     label->setEditable (false, false, false);
     label->setColour (Label::textColourId, Colours::aliceblue);
@@ -41,7 +42,7 @@ New_Program_Editor::New_Program_Editor ()
     label2.reset (new Label ("new label",
                              TRANS("Bank")));
     addAndMakeVisible (label2.get());
-    label2->setFont (Font (15.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centredLeft);
     label2->setEditable (false, false, false);
     label2->setColour (Label::textColourId, Colours::aliceblue);
@@ -113,7 +114,7 @@ New_Program_Editor::New_Program_Editor ()
     label3.reset (new Label ("new label",
                              TRANS(":")));
     addAndMakeVisible (label3.get());
-    label3->setFont (Font (15.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label3->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label3->setJustificationType (Justification::centredLeft);
     label3->setEditable (false, false, false);
     label3->setColour (Label::textColourId, Colours::aliceblue);

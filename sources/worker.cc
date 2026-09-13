@@ -14,7 +14,7 @@ namespace stc = std::chrono;
 #if 1
 #   define trace(fmt, ...)
 #else
-#   define trace(fmt, ...) fprintf(stderr, "[Worker] " fmt "\n", ##__VA_ARGS__)
+#   define trace(fmt, ...) fprintf(stderr, "[Worker] " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 #endif
 
 Worker::Worker(AdlplugAudioProcessor &proc)

@@ -39,9 +39,9 @@ public:
     class Listener {
     public:
         virtual ~Listener() {}
-        virtual void knob_value_changed(Knob *k) {}
-        virtual void knob_drag_started(Knob *k) {}
-        virtual void knob_drag_ended(Knob *k) {}
+        virtual void knob_value_changed([[maybe_unused]] Knob *k) {}
+        virtual void knob_drag_started([[maybe_unused]] Knob *k) {}
+        virtual void knob_drag_ended([[maybe_unused]] Knob *k) {}
     };
 
     void add_listener(Listener *l);
@@ -71,5 +71,5 @@ private:
     bool in_drag_ = false;
     float min_angle_ = std::numbers::pi_v<double> * -3.0 / 4.0;
     float max_angle_ = std::numbers::pi_v<double> * +3.0 / 4.0;
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Knob);
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Knob)
 };

@@ -23,5 +23,5 @@ private:
     Colour designated_note_color_;
     bool block_colour_changed_callback_ = false; // stops excessive repaints
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Midi_Keyboard_Ex);
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Midi_Keyboard_Ex)
 };

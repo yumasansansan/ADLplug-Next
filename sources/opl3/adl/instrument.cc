@@ -159,7 +159,7 @@ Instrument Instrument::from_sbi(const uint8_t *data, size_t length) noexcept
 
 void Instrument::describe(FILE *out) const noexcept
 {
-    fprintf(stderr,
+    fprintf(out,
             "Instrument\n"
             " - 4Op %u Ps4Op %u Blank %u\n"
             " - 1-2 Feedback %u Conn %u Tune %d\n"
@@ -184,7 +184,7 @@ void Instrument::describe_operator(unsigned op, FILE *out, const char *indent) c
     case WOPL_OP_MODULATOR2: text = "Modulator 2"; break;
     case WOPL_OP_CARRIER2: text = "Carrier 2"; break;
     }
-    fprintf(stderr,
+    fprintf(out,
             "%sOperator %u: %s\n"
             "%s - ADSR %u %u %u %u\n"
             "%s - Level %u FMul %u KSL %u\n"

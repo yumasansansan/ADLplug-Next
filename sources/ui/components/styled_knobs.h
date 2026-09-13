@@ -7,11 +7,11 @@
 #include "ui/components/knob_component.h"
 #include "ui/utility/knobman_skin.h"
 
-#define EACH_STYLED_KNOB(F, ...)                \
-    F(Knob_Default, ##__VA_ARGS__)              \
-    F(Knob_DefaultSmall, ##__VA_ARGS__)         \
-    F(Slider_Default, ##__VA_ARGS__)            \
-    F(Slider_DefaultSmall, ##__VA_ARGS__)
+#define EACH_STYLED_KNOB(F, ...)                        \
+    F(Knob_Default __VA_OPT__(,) __VA_ARGS__)           \
+    F(Knob_DefaultSmall __VA_OPT__(,) __VA_ARGS__)      \
+    F(Slider_Default __VA_OPT__(,) __VA_ARGS__)         \
+    F(Slider_DefaultSmall __VA_OPT__(,) __VA_ARGS__)
 
 class Styled_Knob_Default : public Knob
 {

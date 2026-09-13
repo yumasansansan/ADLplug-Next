@@ -27,8 +27,13 @@ public:
 
     explicit Midi_Input_Source(callback_function *cb, void *cbdata = nullptr)
         : cb_(cb), cbdata_(cbdata) {}
-    explicit Midi_Input_Source(MidiBuffer::Iterator &iterator)
-        : cb_(&midi_cb_for_buffer_iterator), cbdata_(&iterator) {}
+    // Position within a MidiBuffer. Must outlive the source that reads it.
+    struct Buffer_Cursor {
+        MidiBufferIterator current;
+        MidiBufferIterator end;
+    };
+    explicit Midi_Input_Source(Buffer_Cursor &cursor)
+        : cb_(&midi_cb_for_buffer_cursor), cbdata_(&cursor) {}
 
     Midi_Input_Message get_next_event()
         {
@@ -53,5 +58,5 @@ private:
     void *cbdata_ = nullptr;
     Midi_Input_Message next_;
     bool have_next_ = false;
-    static Midi_Input_Message midi_cb_for_buffer_iterator(void *cbdata);
+    static Midi_Input_Message midi_cb_for_buffer_cursor(void *cbdata);
 };

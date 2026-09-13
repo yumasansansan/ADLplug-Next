@@ -77,10 +77,7 @@ void Vu_Meter::paint(Graphics &g)
     }
 
     bounds.reduce(1, 1);
-    int x = bounds.getX();
-    int y = bounds.getY();
     int w = bounds.getWidth();
-    int h = bounds.getHeight();
 
     if (w <= 0)
         return;

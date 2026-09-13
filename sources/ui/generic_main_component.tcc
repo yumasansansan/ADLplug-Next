@@ -37,7 +37,7 @@ RESOURCE(Res, emoji_u2795);
 #if 1
 #   define trace(fmt, ...)
 #else
-#   define trace(fmt, ...) fprintf(stderr, "[UI Main] " fmt "\n", ##__VA_ARGS__)
+#   define trace(fmt, ...) fprintf(stderr, "[UI Main] " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 #endif
 
 #if !JUCE_LINUX
@@ -769,19 +769,6 @@ void Generic_Main_Component<T>::select_emulator_by_menu(std::function<void(int)>
 template <class T>
 void Generic_Main_Component<T>::handle_load_bank(Component *clicked)
 {
-#if defined(ADLPLUG_OPL3)
-    const char *bank_file_filter =
-        "*."  WOPx_BANK_SUFFIX;
-    const char *ins_file_filter =
-        "*." WOPx_INST_SUFFIX ";"
-        "*.sbi";
-#elif defined(ADLPLUG_OPN2)
-    const char *bank_file_filter =
-        "*."  WOPx_BANK_SUFFIX;
-    const char *ins_file_filter =
-        "*." WOPx_INST_SUFFIX;
-#endif
-
     PopupMenu menu;
     int menu_index = 1;
     menu.addItem(menu_index++, "Load bank file...");
@@ -886,11 +873,6 @@ void Generic_Main_Component<T>::finish_load_bank(int selection)
 template <class T>
 void Generic_Main_Component<T>::handle_save_bank(Component *clicked)
 {
-    const char *bank_file_filter = "*." WOPx_BANK_SUFFIX;
-    const char *bank_file_extension = "." WOPx_BANK_SUFFIX;
-    const char *ins_file_filter = "*." WOPx_INST_SUFFIX;
-    const char *ins_file_extension = "." WOPx_INST_SUFFIX;
-
     PopupMenu menu;
     int menu_index = 1;
     menu.addItem(menu_index++, "Save bank file...");
@@ -902,9 +884,6 @@ void Generic_Main_Component<T>::handle_save_bank(Component *clicked)
                            if (safe != nullptr)
                                safe->finish_save_bank(selection);
                        });
-    (void)bank_file_extension;
-    (void)ins_file_filter;
-    (void)ins_file_extension;
 }
 
 // Native save dialogs warn about overwriting themselves, but the JUCE fallback
@@ -1018,8 +997,10 @@ void Generic_Main_Component<T>::load_bank(const File &file, int format)
         return;
     }
 
-    filedata.reset(new uint8_t[length]);
-    if (stream->read(filedata.get(), length) != length) {
+    // length < max_length (8 MiB) was checked above, so it fits in an int.
+    const int nbytes = (int)length;
+    filedata.reset(new uint8_t[nbytes]);
+    if (stream->read(filedata.get(), nbytes) != nbytes) {
         AlertWindow::showMessageBoxAsync(
             AlertWindow::WarningIcon, error_title, "The input operation has failed.");
         return;
@@ -1051,8 +1032,10 @@ void Generic_Main_Component<T>::load_single_instrument(uint32_t program, const F
         return;
     }
 
-    filedata.reset(new uint8_t[length]);
-    if (stream->read(filedata.get(), length) != length) {
+    // length < max_length (8 MiB) was checked above, so it fits in an int.
+    const int nbytes = (int)length;
+    filedata.reset(new uint8_t[nbytes]);
+    if (stream->read(filedata.get(), nbytes) != nbytes) {
         AlertWindow::showMessageBoxAsync(
             AlertWindow::WarningIcon, error_title, "The input operation has failed.");
         return;
@@ -1137,7 +1120,7 @@ void Generic_Main_Component<T>::load_bank_mem(const uint8_t *mem, size_t length,
 }
 
 template <class T>
-void Generic_Main_Component<T>::load_single_instrument_mem(uint32_t program, const uint8_t *mem, size_t length, const String &bank_name, int format)
+void Generic_Main_Component<T>::load_single_instrument_mem(uint32_t program, const uint8_t *mem, size_t length, [[maybe_unused]] const String &bank_name, int format)
 {
     Instrument ins;
     const char *error_title = "Error loading instrument";
@@ -1515,7 +1498,7 @@ void Generic_Main_Component<T>::handleNoteOff(MidiKeyboardState *, int channel_,
 }
 
 template <class T>
-void Generic_Main_Component<T>::focusGained(FocusChangeType cause)
+void Generic_Main_Component<T>::focusGained([[maybe_unused]] FocusChangeType cause)
 {
     if (self()->midi_kb)
         self()->midi_kb->grabKeyboardFocus();

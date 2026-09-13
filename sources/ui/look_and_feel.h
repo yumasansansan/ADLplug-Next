@@ -19,6 +19,8 @@ public:
 
     //==========================================================================
     Typeface::Ptr getTypefaceForFont(const Font &font) override;
+    // Keep widgets on pre-JUCE-8 font sizing; see ui/utility/legacy_font.h.
+    TypefaceMetricsKind getDefaultMetricsKind() const override { return TypefaceMetricsKind::legacy; }
 
     void drawButtonBackground(Graphics &g, Button &button, const Colour &background_colour, bool is_mouse_over_button, bool is_button_down) override;
 

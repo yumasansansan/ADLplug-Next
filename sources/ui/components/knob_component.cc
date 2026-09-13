@@ -143,7 +143,7 @@ void Knob::mouseDown(const MouseEvent &event)
     handle_drag(event);
 }
 
-void Knob::mouseUp(const MouseEvent &event)
+void Knob::mouseUp([[maybe_unused]] const MouseEvent &event)
 {
     if (!in_drag_)
         return;

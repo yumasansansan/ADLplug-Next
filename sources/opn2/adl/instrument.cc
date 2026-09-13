@@ -67,7 +67,7 @@ WOPNInstrument Instrument::to_wopl() const noexcept
 
 void Instrument::describe(FILE *out) const noexcept
 {
-    fprintf(stderr,
+    fprintf(out,
             "Instrument\n"
             " - Blank %u\n"
             " - Feedback %u Algorithm %u Tune %d\n"
@@ -84,7 +84,7 @@ void Instrument::describe(FILE *out) const noexcept
 
 void Instrument::describe_operator(unsigned op, FILE *out, const char *indent) const noexcept
 {
-    fprintf(stderr,
+    fprintf(out,
             "%sOperator %u\n"
             "%s - ADSR %u %u,%u %u %u\n"
             "%s - AM %u Level %u Rate scale %u Detune %u FMul %u\n"

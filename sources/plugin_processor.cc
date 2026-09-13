@@ -82,21 +82,21 @@ int AdlplugAudioProcessor::getCurrentProgram()
     return 0;
 }
 
-void AdlplugAudioProcessor::setCurrentProgram(int index)
+void AdlplugAudioProcessor::setCurrentProgram([[maybe_unused]] int index)
 {
 }
 
-const String AdlplugAudioProcessor::getProgramName(int index)
+const String AdlplugAudioProcessor::getProgramName([[maybe_unused]] int index)
 {
     return {};
 }
 
-void AdlplugAudioProcessor::changeProgramName(int index, const String &new_name)
+void AdlplugAudioProcessor::changeProgramName([[maybe_unused]] int index, [[maybe_unused]] const String &new_name)
 {
 }
 
 //==============================================================================
-void AdlplugAudioProcessor::prepareToPlay(double sample_rate, int block_size)
+void AdlplugAudioProcessor::prepareToPlay(double sample_rate, [[maybe_unused]] int block_size)
 {
     Simple_Fifo *mq_to_ui = new Simple_Fifo(32 * 1024);
     mq_to_ui_.reset(mq_to_ui);
@@ -709,7 +709,7 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
     return true;
 }
 
-void AdlplugAudioProcessor::finish_handling_messages(Message_Handler_Context &ctx)
+void AdlplugAudioProcessor::finish_handling_messages([[maybe_unused]] Message_Handler_Context &ctx)
 {
     bank_manager_->send_notifications();
     bank_manager_->send_measurement_requests();
@@ -761,16 +761,16 @@ void AdlplugAudioProcessor::processBlock(AudioBuffer<float> &buffer,
     unsigned nframes = buffer.getNumSamples();
     float *outputs[2] = {buffer.getWritePointer(0), buffer.getWritePointer(1)};
 
-    MidiBuffer::Iterator midi_iterator(midi_messages);
-    Midi_Input_Source midi_source(midi_iterator);
+    Midi_Input_Source::Buffer_Cursor midi_cursor {midi_messages.begin(), midi_messages.end()};
+    Midi_Input_Source midi_source(midi_cursor);
 
     process(outputs, nframes, midi_source);
 }
 
 void AdlplugAudioProcessor::processBlockBypassed(AudioBuffer<float> &buffer, MidiBuffer &midi_messages)
 {
-    MidiBuffer::Iterator midi_iterator(midi_messages);
-    Midi_Input_Source midi_source(midi_iterator);
+    Midi_Input_Source::Buffer_Cursor midi_cursor {midi_messages.begin(), midi_messages.end()};
+    Midi_Input_Source midi_source(midi_cursor);
 
     std::unique_lock<std::mutex> lock(player_lock_, std::try_to_lock);
     process_messages(lock.owns_lock());
@@ -891,7 +891,9 @@ void AdlplugAudioProcessor::setStateInformation(const void *data, int size)
     Parameter_Block &pb = *parameter_block_;
     Bank_Manager &bm = *bank_manager_;
 
-    last_state_information_.replaceWith(data, size);
+    // The deprecated replaceWith() ignored empty input; keep that behaviour.
+    if (size > 0)
+        last_state_information_.replaceAll(data, (size_t)size);
 
     if (!is_playback_ready())
         return;  // not ready yet, will load state information later

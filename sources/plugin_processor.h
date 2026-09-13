@@ -73,7 +73,7 @@ public:
     struct Message_Handler_Context;
     bool handle_midi(const uint8_t *data, unsigned len);
     bool handle_message(const Buffered_Message &msg, Message_Handler_Context &ctx);
-    void begin_handling_messages(Message_Handler_Context &ctx) {}
+    void begin_handling_messages([[maybe_unused]] Message_Handler_Context &ctx) {}
     void finish_handling_messages(Message_Handler_Context &ctx);
 
     void set_instrument_parameters_notifying_host(unsigned part_number);
@@ -141,8 +141,8 @@ public:
 
 protected:
     //==========================================================================
-    void parameterValueChanged(int index, float value) override {}
-    void parameterGestureChanged(int index, bool is_starting) override {}
+    void parameterValueChanged([[maybe_unused]] int index, [[maybe_unused]] float value) override {}
+    void parameterGestureChanged([[maybe_unused]] int index, [[maybe_unused]] bool is_starting) override {}
     void parameterValueChangedEx(int tag) override;
 
 private:

@@ -88,6 +88,7 @@ This package is able to build several plugins from a single source:
 | -DADLplug_CHIP=OPL3/OPN2                      | Build a variant for the given chip type (default: OPL3)         |
 | -DADLplug_PCH=ON/OFF                          | Use precompiled headers, on a compiler which supports it        |
 | -DADLplug_ASSERTIONS=ON/OFF                   | Force building with assertions regardless of build type         |
+| -DADLplug_WERROR=ON/OFF                       | Treat warnings in ADLplug's own code as errors (presets: ON)    |
 
 ### Installing
 

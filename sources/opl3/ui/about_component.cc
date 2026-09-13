@@ -12,6 +12,7 @@
 
 //[Headers] You can add your own extra header files here...
 #include "plugin_version.h"
+#include "ui/utility/legacy_font.h"
 //[/Headers]
 
 #include "about_component.h"
@@ -38,7 +39,7 @@ About_Component::About_Component ()
                             CharPointer_UTF8 ("This program is free software developed by Jean Pierre Cimalando. \xc2\xa9 2018\n"
                             "Many thanks to people who make this program possible.")));
     addAndMakeVisible (label.get());
-    label->setFont (Font (15.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label->setJustificationType (Justification::centredLeft);
     label->setEditable (false, false, false);
     label->setColour (Label::textColourId, Colours::aliceblue);
@@ -55,7 +56,7 @@ About_Component::About_Component ()
                              "Reality for Opal OPL3\n"
                              "Robson Cozendey for Java OPL3")));
     addAndMakeVisible (label2.get());
-    label2->setFont (Font (15.0f, Font::plain).withTypefaceStyle ("Regular"));
+    label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centredLeft);
     label2->setEditable (false, false, false);
     label2->setColour (Label::textColourId, Colours::aliceblue);
@@ -67,7 +68,7 @@ About_Component::About_Component ()
     lbl_prog_version.reset (new Label ("new label",
                                        TRANS("Foobar 1.0")));
     addAndMakeVisible (lbl_prog_version.get());
-    lbl_prog_version->setFont (Font (15.0f, Font::plain).withTypefaceStyle ("Bold"));
+    lbl_prog_version->setFont (legacy_font (15.0f).withStyle ("Bold"));
     lbl_prog_version->setJustificationType (Justification::centredLeft);
     lbl_prog_version->setEditable (false, false, false);
     lbl_prog_version->setColour (Label::textColourId, Colours::aliceblue);
@@ -79,7 +80,7 @@ About_Component::About_Component ()
     lbl_prog_version_extra.reset (new Label ("new label",
                                              TRANS("Final")));
     addAndMakeVisible (lbl_prog_version_extra.get());
-    lbl_prog_version_extra->setFont (Font (15.0f, Font::plain).withTypefaceStyle ("Bold"));
+    lbl_prog_version_extra->setFont (legacy_font (15.0f).withStyle ("Bold"));
     lbl_prog_version_extra->setJustificationType (Justification::centredLeft);
     lbl_prog_version_extra->setEditable (false, false, false);
     lbl_prog_version_extra->setColour (Label::textColourId, Colours::yellow);
