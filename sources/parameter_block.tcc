@@ -2,12 +2,16 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
-#include "parameter_block.h"
+// Included at the end of parameter_block.h.
 #include <utility>
 
 template <AudioParameterType Ty, class... Arg>
-inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_automatable_parameter(AudioProcessorEx &p, int tag, Arg &&... args)
+inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_automatable_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args)
 {
     TypedAudioParameter<Ty> *par = do_add_parameter<TypedAudioParameter<Ty>>(p, tag, std::forward<Arg>(args)...);
     par->setAutomatable(true);
@@ -15,7 +19,7 @@ inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_automatable_parameter
 }
 
 template <AudioParameterType Ty, class... Arg>
-inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_parameter(AudioProcessorEx &p, int tag, Arg &&... args)
+inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args)
 {
     TypedAudioParameter<Ty> *par = do_add_parameter<TypedAudioParameter<Ty>>(p, tag, std::forward<Arg>(args)...);
     par->setAutomatable(false);
@@ -23,30 +27,32 @@ inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_parameter(AudioProces
 }
 
 template <AudioParameterType Ty, class... Arg>
-inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_internal_parameter(AudioProcessorEx &p, int tag, Arg &&... args)
+inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_internal_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args)
 {
     TypedAudioParameter<Ty> *par = do_add_internal_parameter<TypedAudioParameter<Ty>>(p, tag, std::forward<Arg>(args)...);
     par->setAutomatable(false);
     return par;
 }
 
+// The processor owns external parameters; internal ones stay with the block.
 template <class T, class... Arg>
-inline T *Basic_Parameter_Block::do_add_parameter(AudioProcessorEx &p, int tag, Arg &&... args)
+inline T *Basic_Parameter_Block::do_add_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args)
 {
-    std::unique_ptr<T> parameter(new T(std::forward<Arg>(args)...));
-    tag_of_external_parameter_.push_back(tag);
-    p.addParameter(parameter.get());
-    parameter->setTagEx(tag);
-    parameter->addValueChangedListenerEx(&p);
-    return parameter.release();
+    auto parameter = std::make_unique<T>(std::forward<Arg>(args)...);
+    T *raw = parameter.get();
+    raw->setTagEx(tag);
+    raw->addValueChangedListenerEx(&p);
+    p.addParameter(parameter.release());
+    return raw;
 }
 
 template <class T, class... Arg>
-inline T *Basic_Parameter_Block::do_add_internal_parameter(AudioProcessorEx &p, int tag, Arg &&... args)
+inline T *Basic_Parameter_Block::do_add_internal_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args)
 {
-    std::unique_ptr<T> parameter(new T(std::forward<Arg>(args)...));
-    internal_parameters_.emplace_back(parameter.get());
-    parameter->setTagEx(tag);
-    parameter->addValueChangedListenerEx(&p);
-    return parameter.release();
+    auto parameter = std::make_unique<T>(std::forward<Arg>(args)...);
+    T *raw = parameter.get();
+    raw->setTagEx(tag);
+    raw->addValueChangedListenerEx(&p);
+    internal_parameters_.push_back(std::move(parameter));
+    return raw;
 }

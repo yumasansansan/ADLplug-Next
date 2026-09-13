@@ -2,12 +2,14 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #include "instrument.h"
-#include "player.h"
 #include <opnmidi.h>
 #include <cstring>
-#include <cassert>
 
 #define EACH_INS_FIELD(F)                               \
     F(note_offset)                                      \
@@ -22,7 +24,7 @@
 Instrument Instrument::from_adlmidi(const OPN2_Instrument &o) noexcept
 {
     Instrument ins;
-    std::memcpy(static_cast<OPN2_Instrument *>(&ins), &o, sizeof(OPN2_Instrument));
+    static_cast<OPN2_Instrument &>(ins) = o;
     return ins;
 }
 
@@ -41,7 +43,7 @@ Instrument Instrument::from_wopl(const WOPNInstrument &o) noexcept
         #undef F
     }
 
-    std::memcpy(ins.name, o.inst_name, 32);
+    std::memcpy(ins.name, o.inst_name, sizeof ins.name);
 
     return ins;
 }
@@ -60,74 +62,87 @@ WOPNInstrument Instrument::to_wopl() const noexcept
         #undef F
     }
 
-    std::memcpy(ins.inst_name, name, 32);
+    std::memcpy(ins.inst_name, name, sizeof ins.inst_name);
 
     return ins;
 }
 
-void Instrument::describe(FILE *out) const noexcept
+void Instrument::describe(std::FILE *out) const noexcept
 {
-    fprintf(out,
-            "Instrument\n"
-            " - Blank %u\n"
-            " - Feedback %u Algorithm %u Tune %d\n"
-            " - AM sensitivity %u FM sensitivity %d\n"
-            " - Velocity offset %d\n"
-            " - Percussion note %u\n",
-            blank(),
-            feedback(), algorithm(), note_offset,
-            ams(), fms(),
-            midi_velocity_offset, percussion_key_number);
+    std::fprintf(out,
+                 "Instrument\n"
+                 " - Blank %d\n"
+                 " - Feedback %d Algorithm %d Tune %d\n"
+                 " - AM sensitivity %d FM sensitivity %d\n"
+                 " - Velocity offset %d\n"
+                 " - Percussion note %d\n",
+                 blank(),
+                 feedback(), algorithm(), note_offset,
+                 ams(), fms(),
+                 midi_velocity_offset, percussion_key_number);
     for (unsigned op = 0; op < 4; ++op)
         describe_operator(op, out, "    ");
 }
 
-void Instrument::describe_operator(unsigned op, FILE *out, const char *indent) const noexcept
+void Instrument::describe_operator(unsigned op, std::FILE *out, const char *indent) const noexcept
 {
-    fprintf(out,
-            "%sOperator %u\n"
-            "%s - ADSR %u %u,%u %u %u\n"
-            "%s - AM %u Level %u Rate scale %u Detune %u FMul %u\n"
-            "%s - SSG-EG Enable %u Wave %u\n",
-            indent, op,
-            indent, attack(op), decay2(op), decay1(op), sustain(op), release(op),
-            indent, am(op), level(op), ratescale(op), detune(op), fmul(op),
-            indent, ssgenable(op), ssgwave(op));
+    std::fprintf(out,
+                 "%sOperator %u\n"
+                 "%s - ADSR %d %d,%d %d %d\n"
+                 "%s - AM %d Level %d Rate scale %d Detune %d FMul %d\n"
+                 "%s - SSG-EG Enable %d Wave %d\n",
+                 indent, op,
+                 indent, attack(op), decay2(op), decay1(op), sustain(op), release(op),
+                 indent, am(op), level(op), ratescale(op), detune(op), fmul(op),
+                 indent, ssgenable(op), ssgwave(op));
 }
 
+// Compares field by field. The structs have padding, so memcmp could tell
+// apart two instruments that are the same.
 bool Instrument::equal_instrument(const OPN2_Instrument &o) const noexcept
 {
-    return !std::memcmp(static_cast<const OPN2_Instrument *>(this), &o, sizeof(OPN2_Instrument));
+    if (version != o.version)
+        return false;
+
+    #define F(x) if (x != o.x) return false;
+    EACH_INS_FIELD(F)
+    #undef F
+
+    for (unsigned op = 0; op < 4; ++op) {
+        #define F(x) if (operators[op].x != o.operators[op].x) return false;
+        EACH_OP_FIELD(F)
+        #undef F
+    }
+
+    return true;
 }
 
 bool Instrument::equal_instrument_except_delays(const OPN2_Instrument &o) const noexcept
 {
-    OPN2_Instrument samedelay = o;
-    samedelay.delay_on_ms = this->delay_on_ms;
-    samedelay.delay_off_ms = this->delay_off_ms;
-    return equal_instrument(samedelay);
+    OPN2_Instrument same_delays = o;
+    same_delays.delay_on_ms = delay_on_ms;
+    same_delays.delay_off_ms = delay_off_ms;
+    return equal_instrument(same_delays);
 }
 
 void Midi_Bank::from_wopl(const WOPNFile &wopl, std::vector<Midi_Bank> &banks, Instrument_Global_Parameters &igp)
 {
+    const unsigned nm = wopl.banks_count_melodic;
+    const unsigned np = wopl.banks_count_percussion;
     banks.clear();
-
-    unsigned nm = wopl.banks_count_melodic;
-    unsigned np = wopl.banks_count_percussion;
     banks.resize(nm + np);
 
-    for (unsigned i = 0; i < nm + np; ++i) {
-        Midi_Bank &bank = banks[i];
-        bool percussive = i >= nm;
-        const WOPNBank &src = percussive ?
-            wopl.banks_percussive[i - nm] : wopl.banks_melodic[i];
+    for (unsigned b = 0; b < nm + np; ++b) {
+        Midi_Bank &bank = banks[b];
+        const bool percussive = b >= nm;
+        const WOPNBank &src = percussive ? wopl.banks_percussive[b - nm] : wopl.banks_melodic[b];
         bank.id = Bank_Id(src.bank_midi_msb, src.bank_midi_lsb, percussive);
-        for (unsigned i = 0; i < 128; ++i)
-            bank.ins[i] = Instrument::from_wopl(src.ins[i]);
-        memcpy(bank.name, src.bank_name, 32);
+        for (std::size_t p = 0; p < bank.ins.size(); ++p)
+            bank.ins[p] = Instrument::from_wopl(src.ins[p]);
+        std::memcpy(bank.name, src.bank_name, sizeof bank.name);
     }
 
     igp.volume_model = wopl.volume_model;
-    igp.lfo_enable = wopl.lfo_freq & 8;
+    igp.lfo_enable = (wopl.lfo_freq & 8) != 0;
     igp.lfo_frequency = wopl.lfo_freq & 7;
 }

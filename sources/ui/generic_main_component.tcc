@@ -2,6 +2,10 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #include "generic_main_component.h"
 #include "plugin_processor.h"
@@ -13,34 +17,26 @@
 #include "adl/wopx_file.h"
 #include "midi/insnames.h"
 #include "utility/functional_timer.h"
+#include "utility/name_field.h"
 #include "utility/simple_fifo.h"
 #include "utility/pak.h"
 #include "resources.h"
-#include <fmt/format.h>
-#include <cmath>
+#include <algorithm>
 #include <cassert>
-
-#if defined(ADLPLUG_OPL3)
-RESOURCE(Res, opl3_banks_pak);
-static const Res::Data &banks_pak = Res::opl3_banks_pak;
-#elif defined(ADLPLUG_OPN2)
-RESOURCE(Res, opn2_banks_pak);
-static const Res::Data &banks_pak = Res::opn2_banks_pak;
-#endif
-
-RESOURCE(Res, emoji_u1f4be);
-RESOURCE(Res, emoji_u1f4c2);
-RESOURCE(Res, emoji_u1f4dd);
-RESOURCE(Res, emoji_u2328);
-RESOURCE(Res, emoji_u2795);
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <format>
+#include <string>
+#include <utility>
 
 #if 1
 #   define trace(fmt, ...)
 #else
-#   define trace(fmt, ...) fprintf(stderr, "[UI Main] " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
+#   define trace(fmt, ...) std::fprintf(stderr, "[UI Main] " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 #endif
 
-#if !JUCE_LINUX
+#if !defined(JUCE_LINUX)
 static constexpr bool prefer_native_file_dialog = true;
 #else
 static constexpr bool prefer_native_file_dialog = false;
@@ -65,16 +61,22 @@ Generic_Main_Component<T>::Generic_Main_Component(
 {
     Desktop::getInstance().addFocusChangeListener(this);
     setWantsKeyboardFocus(true);
-    Mouse_Hover_Listener *mouse_hover_listener = new Mouse_Hover_Listener(self());
-    mouse_hover_listener_.reset(mouse_hover_listener);
-    addMouseListener(mouse_hover_listener, true);
+    mouse_hover_listener_ = std::make_unique<Mouse_Hover_Listener>(self());
+    addMouseListener(mouse_hover_listener_.get(), true);
     midi_kb_state_.addListener(this);
+    message_flush_timer_ = Functional_Timer::create([this] { flush_messages_to_processor(); });
     initialize_bank_directory();
 }
 
 template <class T>
 Generic_Main_Component<T>::~Generic_Main_Component()
 {
+    // The dialogs act on this component; do not leave them behind.
+    for (DialogWindow *dialog : {dlg_new_program_.getComponent(), dlg_edit_program_.getComponent(), dlg_about_.getComponent()})
+        delete dialog;
+
+    midi_kb_state_.removeListener(this);
+    removeMouseListener(mouse_hover_listener_.get());
     Desktop::getInstance().removeFocusChangeListener(this);
 }
 
@@ -91,73 +93,63 @@ void Generic_Main_Component<T>::setup_generic_components()
     self()->kn_mastervol->add_listener(self());
     self()->kn_mastervol->set_range(0, 1);
 
-    double linmin, linmax, dbmin, dbmax;
-    self()->get_master_volume_limits(*pb.p_mastervol, linmin, linmax, dbmin, dbmax);
-    self()->kn_mastervol->set_max_increment(1.0 / (dbmax - dbmin));
+    const Volume_Limits limits = master_volume_limits(*pb.p_mastervol);
+    self()->kn_mastervol->set_max_increment(1.0 / (limits.dbmax - limits.dbmin));
 
     self()->edt_bank_name->addListener(this);
     self()->edt_bank_name->setTextToShowWhenEmpty(
         TRANS("Bank name"), findColour(TextEditor::backgroundColourId).contrasting(0.5f));
 
-    self()->last_key_layout_ = load_key_configuration(*self()->midi_kb, conf);
+    last_key_layout_ = load_key_configuration(*self()->midi_kb, conf);
     self()->midi_kb->setKeyPressBaseOctave(midi_kb_octave_);
     self()->midi_kb->setLowestVisibleKey(24);
 
     self()->btn_bank_load->setTooltip(TRANS("Load bank"));
     self()->btn_bank_save->setTooltip(TRANS("Save bank"));
-    create_image_overlay(*self()->btn_bank_load, ImageCache::getFromMemory(Res::emoji_u1f4c2.data, Res::emoji_u1f4c2.size), 0.7f);
-    create_image_overlay(*self()->btn_bank_save, ImageCache::getFromMemory(Res::emoji_u1f4be.data, Res::emoji_u1f4be.size), 0.7f);
+    create_image_overlay(*self()->btn_bank_load, image_from_resource(Res::emoji_u1f4c2), 0.7);
+    create_image_overlay(*self()->btn_bank_save, image_from_resource(Res::emoji_u1f4be), 0.7);
 
-    create_image_overlay(*self()->btn_pgm_edit, ImageCache::getFromMemory(Res::emoji_u1f4dd.data, Res::emoji_u1f4dd.size), 0.7f);
-    create_image_overlay(*self()->btn_pgm_add, ImageCache::getFromMemory(Res::emoji_u2795.data, Res::emoji_u2795.size), 0.7f);
+    create_image_overlay(*self()->btn_pgm_edit, image_from_resource(Res::emoji_u1f4dd), 0.7);
+    create_image_overlay(*self()->btn_pgm_add, image_from_resource(Res::emoji_u2795), 0.7);
 
-    for (unsigned note = 0; note < 128; ++note) {
-        const char *octave_names[12] =
-            {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-        String name = octave_names[note % 12] + String((int)(note / 12) - 1);
-        self()->cb_percussion_key->addItem(name, note + 1);
-    }
+    static constexpr const char *note_names[12] =
+        {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    for (int note = 0; note < 128; ++note)
+        self()->cb_percussion_key->addItem(note_names[note % 12] + String(note / 12 - 1), note + 1);
     self()->cb_percussion_key->setSelectedId(69 + 1, dontSendNotification);
     self()->cb_percussion_key->setScrollWheelEnabled(true);
 
-    create_image_overlay(*self()->btn_keymap, ImageCache::getFromMemory(Res::emoji_u2328.data, Res::emoji_u2328.size), 0.7f);
+    create_image_overlay(*self()->btn_keymap, image_from_resource(Res::emoji_u2328), 0.7);
 
-    vu_timer_.reset(Functional_Timer::create([this]() { vu_update(); }));
+    vu_timer_ = Functional_Timer::create([this] { vu_update(); });
     vu_timer_->startTimer(30);
 
-    cpu_load_timer_.reset(Functional_Timer::create([this]() { cpu_load_update(); }));
+    cpu_load_timer_ = Functional_Timer::create([this] { cpu_load_update(); });
     cpu_load_timer_->startTimer(500);
     self()->lbl_cpu->setText("0%", dontSendNotification);
 
-    midi_activity_timer_.reset(Functional_Timer::create([this]() { midi_activity_update(); }));
+    midi_activity_timer_ = Functional_Timer::create([this] { midi_activity_update(); });
     midi_activity_timer_->startTimer(100);
 
-    midi_keys_timer_.reset(Functional_Timer::create([this]() { midi_keys_update(); }));
+    midi_keys_timer_ = Functional_Timer::create([this] { midi_keys_update(); });
     midi_keys_timer_->startTimer(40);
 
-    parameter_watch_timer_.reset(Functional_Timer::create([this]() { parameters_update(); }));
+    parameter_watch_timer_ = Functional_Timer::create([this] { parameters_update(); });
     parameter_watch_timer_->startTimer(500);
 }
 
 template <class T>
 void Generic_Main_Component<T>::request_state_from_processor()
 {
-    Messages::User::RequestChipSettings msg_chip;
-    write_to_processor(msg_chip.tag, &msg_chip, sizeof(msg_chip));
+    write_to_processor(Messages::User::RequestChipSettings{});
+    write_to_processor(Messages::User::RequestFullBankState{});
 
-    Messages::User::RequestFullBankState msg_bank;
-    write_to_processor(msg_bank.tag, &msg_bank, sizeof(msg_bank));
+    Messages::User::RequestSelections selections;
+    selections.channel_mask.set();
+    write_to_processor(selections);
 
-    Messages::User::RequestSelections msg_sel;
-    for (unsigned p = 0; p < 16; ++p)
-        msg_sel.channel_mask.set(p);
-    write_to_processor(msg_sel.tag, &msg_sel, sizeof(msg_sel));
-
-    Messages::User::RequestActivePart msg_part;
-    write_to_processor(msg_part.tag, &msg_part, sizeof(msg_part));
-
-    Messages::User::RequestBankTitle msg_title;
-    write_to_processor(msg_title.tag, &msg_title, sizeof(msg_title));
+    write_to_processor(Messages::User::RequestActivePart{});
+    write_to_processor(Messages::User::RequestBankTitle{});
 }
 
 template <class T>
@@ -172,10 +164,8 @@ void Generic_Main_Component<T>::send_rename_bank(Bank_Id bank, const String &nam
     Messages::User::RenameBank msg;
     msg.bank = bank;
     msg.notify_back = true;
-    const char *utf8 = name.toRawUTF8();
-    memset(msg.name, 0, 32);
-    memcpy(msg.name, utf8, strnlen(utf8, 32));
-    write_to_processor(msg.tag, &msg, sizeof(msg));
+    copy_name_to_field(msg.name, name);
+    write_to_processor(msg);
 }
 
 template <class T>
@@ -183,12 +173,10 @@ void Generic_Main_Component<T>::send_rename_program(Bank_Id bank, unsigned pgm, 
 {
     Messages::User::RenameProgram msg;
     msg.bank = bank;
-    msg.program = pgm;
+    msg.program = static_cast<std::uint8_t>(pgm & 127);
     msg.notify_back = true;
-    const char *utf8 = name.toRawUTF8();
-    memset(msg.name, 0, 32);
-    memcpy(msg.name, utf8, strnlen(utf8, 32));
-    write_to_processor(msg.tag, &msg, sizeof(msg));
+    copy_name_to_field(msg.name, name);
+    write_to_processor(msg);
 }
 
 template <class T>
@@ -196,16 +184,15 @@ void Generic_Main_Component<T>::send_create_program(Bank_Id bank, unsigned pgm)
 {
     Messages::User::CreateInstrument msg;
     msg.bank = bank;
-    msg.program = pgm;
+    msg.program = static_cast<std::uint8_t>(pgm & 127);
     msg.notify_back = true;
-    write_to_processor(msg.tag, &msg, sizeof(msg));
+    write_to_processor(msg);
 }
 
 template <class T>
-Instrument *Generic_Main_Component<T>::find_instrument(uint32_t program, Instrument *if_not_found)
+Instrument *Generic_Main_Component<T>::find_instrument(std::uint32_t program, Instrument *if_not_found)
 {
-    uint32_t psid = program >> 8;
-    auto it = instrument_map_.find(psid);
+    const auto it = instrument_map_.find(program >> 8);
     if (it == instrument_map_.end())
         return if_not_found;
     return &it->second.ins[program & 255];
@@ -214,18 +201,19 @@ Instrument *Generic_Main_Component<T>::find_instrument(uint32_t program, Instrum
 template <class T>
 void Generic_Main_Component<T>::reload_selected_instrument(NotificationType ntf)
 {
-    int selection = self()->cb_program->getSelectedId();
+    const int selection = self()->cb_program->getSelectedId();
 
     trace("Reload selected instrument %s", program_selection_to_string(selection).toRawUTF8());
 
-    Instrument ins_empty, *ins = &ins_empty;
+    Instrument ins_empty;
+    const Instrument *ins = &ins_empty;
     int designated_note = -1;
 
     if (selection != 0) {
-        uint32_t program = (unsigned)selection - 1;
+        const auto program = static_cast<std::uint32_t>(selection - 1);
         ins = find_instrument(program, &ins_empty);
-        bool percussive = program & 128;
-        designated_note = percussive ? (program & 127) : -1;
+        if ((program & 128) != 0)
+            designated_note = static_cast<int>(program & 127);
     }
     self()->set_instrument_parameters(*ins, ntf);
     self()->midi_kb->designate_note(designated_note);
@@ -234,13 +222,11 @@ void Generic_Main_Component<T>::reload_selected_instrument(NotificationType ntf)
 template <class T>
 void Generic_Main_Component<T>::send_selection_update()
 {
-    int selection = self()->cb_program->getSelectedId();
+    const int selection = self()->cb_program->getSelectedId();
 
-    unsigned insno = 0;
-    unsigned psid = 0;
+    std::uint32_t program = 0;
     if (selection != 0) {
-        insno = ((unsigned)selection - 1) & 255;
-        psid = ((unsigned)selection - 1) >> 8;
+        program = static_cast<std::uint32_t>(selection - 1);
         trace("Send selection update %s",
               program_selection_to_string(selection).toRawUTF8());
     }
@@ -250,68 +236,57 @@ void Generic_Main_Component<T>::send_selection_update()
 
     Messages::User::SelectProgram msg;
     msg.part = midichannel_;
-    msg.bank = Bank_Id(psid >> 7, psid & 127, insno >= 128);
-    msg.program = insno & 127;
-    write_to_processor(msg.tag, &msg, sizeof(msg));
+    msg.bank = bank_of_psid(program >> 8, (program & 128) != 0);
+    msg.program = static_cast<std::uint8_t>(program & 127);
+    write_to_processor(msg);
 }
 
 template <class T>
 void Generic_Main_Component<T>::receive_bank_slots(const Messages::Fx::NotifyBankSlots &msg)
 {
-    unsigned count = msg.count;
+    const std::span<const Messages::Fx::NotifyBankSlots::Entry> entries(
+        msg.entry, std::min<std::size_t>(msg.count, std::size(msg.entry)));
     bool update = false;
     auto &imap = instrument_map_;
 
-    trace("Receive %u bank slots", count);
+    trace("Receive %zu bank slots", entries.size());
 
     // delete bank entries not in the slots
-    for (auto it = imap.begin(), end = imap.end(); it != end;) {
-        uint32_t psid = it->first;
-        bool found = false;
-        for (unsigned slotno = 0; slotno < count && !found; ++slotno)
-            found = msg.entry[slotno].bank.msb == (psid >> 7) &&
-                msg.entry[slotno].bank.lsb == (psid & 127);
+    for (auto it = imap.begin(); it != imap.end();) {
+        const std::uint32_t psid = it->first;
+        const bool found = std::ranges::any_of(entries, [psid](const auto &entry) { return entry.bank.pseudo_id() == psid; });
         if (found)
             ++it;
         else {
-            imap.erase(it++);
+            it = imap.erase(it);
             update = true;
         }
     }
 
     // extract the names
     std::map<Bank_Id, std::array<char, 32>> bank_name_map;
-    for (unsigned slotno = 0; slotno < count; ++slotno) {
-        const Messages::Fx::NotifyBankSlots::Entry &entry = msg.entry[slotno];
+    for (const auto &entry : entries) {
         if (entry.name[0] != '\0')
             std::memcpy(bank_name_map[entry.bank].data(), entry.name, 32);
     }
 
     // enable or disable instruments according to slots
-    for (unsigned slotno = 0; slotno < count; ++slotno) {
-        const Messages::Fx::NotifyBankSlots::Entry &entry = msg.entry[slotno];
-        uint32_t psid = entry.bank.pseudo_id();
-        bool percussive = entry.bank.percussive;
-        Editor_Bank &e_bank = imap[psid];
+    for (const auto &entry : entries) {
+        const bool percussive = entry.bank.percussive != 0;
+        Editor_Bank &e_bank = imap[entry.bank.pseudo_id()];
         for (unsigned i = 0; i < 128; ++i) {
-            unsigned insno = i + (percussive ? 128 : 0);
-            bool isblank = !entry.used.test(i);
-            if (e_bank.ins[insno].blank() != isblank) {
-                e_bank.ins[insno].blank(isblank);
+            Instrument &ins = e_bank.ins[i + (percussive ? 128 : 0)];
+            const bool isblank = !entry.used.test(i);
+            if (ins.blank() != isblank) {
+                ins.blank(isblank);
                 update = true;
             }
         }
-        const char *name_src;
-        char *name_dst = entry.bank.percussive ? e_bank.percussion_name : e_bank.melodic_name;
-        auto it = bank_name_map.find(Bank_Id(entry.bank.msb, entry.bank.lsb, entry.bank.percussive));
-        if (it != bank_name_map.end())
-            name_src = it->second.data();
-        else {
-            static const char name_empty[32] = {};
-            name_src = name_empty;
-        }
-        unsigned name_len = strnlen(name_src, 32);
-        if (std::memcmp(name_dst, name_src, std::min(name_len + 1, 32u)) != 0) {
+        static constexpr char name_empty[32] = {};
+        const auto it = bank_name_map.find(entry.bank);
+        const char *name_src = (it != bank_name_map.end()) ? it->second.data() : name_empty;
+        char *name_dst = percussive ? e_bank.percussion_name : e_bank.melodic_name;
+        if (std::memcmp(name_dst, name_src, 32) != 0) {
             std::memcpy(name_dst, name_src, 32);
             update = true;
         }
@@ -337,35 +312,30 @@ void Generic_Main_Component<T>::receive_instrument(Bank_Id bank, unsigned pgm, c
 {
     assert(pgm < 128);
 
-    Editor_Bank *e_bank;
-    bool update;
-    unsigned insno = pgm + (bank.percussive ? 128 : 0);
-    uint32_t psid = bank.pseudo_id();
+    const unsigned insno = (pgm & 127) + (bank.percussive ? 128 : 0);
+    const std::uint32_t psid = bank.pseudo_id();
 
     trace("Receive instrument %u:%u:%u", bank.msb, bank.lsb, insno);
 
     auto &instrument_map = instrument_map_;
     auto it = instrument_map.find(psid);
+    bool update = false;
     if (it == instrument_map.end()) {
         if (ins.blank())
             return;
-        it = instrument_map.insert({psid, Editor_Bank()}).first;
-        e_bank = &it->second;
-        e_bank->ins[insno] = ins;
+        it = instrument_map.emplace(psid, Editor_Bank()).first;
+        it->second.ins[insno] = ins;
         update = true;
     }
     else {
-        e_bank = &it->second;
-        update = !e_bank->ins[insno].equal_instrument(ins) ||
-            strncmp(ins.name, e_bank->ins[insno].name, 32) != 0;
+        Instrument &current = it->second.ins[insno];
+        update = !current.equal_instrument(ins) || std::strncmp(ins.name, current.name, 32) != 0;
         if (update)
-            e_bank->ins[insno] = ins;
+            current = ins;
     }
 
-    bool empty_bank = ins.blank();
-    for (unsigned i = 0; i < 256 && empty_bank; ++i)
-        empty_bank = e_bank->ins[i].blank();
-
+    const bool empty_bank = std::ranges::all_of(
+        it->second.ins, [](const Instrument &instrument) { return instrument.blank(); });
     if (empty_bank) {
         instrument_map.erase(it);
         update = true;
@@ -387,15 +357,16 @@ void Generic_Main_Component<T>::receive_chip_settings(const Chip_Settings &cs)
 }
 
 template <class T>
-void Generic_Main_Component<T>::receive_selection(unsigned part, Bank_Id bank, uint8_t pgm)
+void Generic_Main_Component<T>::receive_selection(unsigned part, Bank_Id bank, std::uint8_t pgm)
 {
-    uint32_t psid = bank.pseudo_id();
-    uint32_t program = pgm + (bank.percussive ? 128 : 0);
-    uint32_t selection = (psid << 8) | program;
+    if (part >= midiprogram_.size())
+        return;
+
+    const std::uint32_t selection = (bank.pseudo_id() << 8) | (pgm & 127u) | (bank.percussive ? 128u : 0u);
     midiprogram_[part] = selection;
 
     if (part == midichannel_) {
-        set_program_selection(selection + 1, dontSendNotification);
+        set_program_selection(static_cast<int>(selection) + 1, dontSendNotification);
         reload_selected_instrument(dontSendNotification);
     }
 }
@@ -404,52 +375,42 @@ template <class T>
 void Generic_Main_Component<T>::update_instrument_choices()
 {
     ComboBox &cb = *self()->cb_program;
-    int selection = cb.getSelectedId();
+    const int selection = cb.getSelectedId();
     cb.clear(dontSendNotification);
     PopupMenu *menu = cb.getRootMenu();
-    bool percussion_channel = is_percussion_channel(midichannel_);
+    const bool percussion_channel = is_percussion_channel(midichannel_);
+    const Midi_Db &db = midi_db();
 
-    auto &instrument_map = instrument_map_;
-    auto it = instrument_map.begin();
-
-    for (; it != instrument_map.end(); ++it) {
-        uint32_t psid = it->first;
-        Editor_Bank &e_bank = it->second;
+    for (auto &[psid, e_bank] : instrument_map_) {
+        const unsigned msb = psid >> 7;
+        const unsigned lsb = psid & 127;
 
         String bank_sid;
         if (e_bank.melodic_name[0] != '\0')
-            bank_sid = fmt::format("{:03d}:{:03d} {:.32s}", psid >> 7, psid & 127, e_bank.melodic_name);
+            bank_sid = std::format("{:03d}:{:03d} {}", msb, lsb, name_view(e_bank.melodic_name));
         else if (e_bank.percussion_name[0] != '\0')
-            bank_sid = fmt::format("{:03d}:{:03d} {:.32s}", psid >> 7, psid & 127, e_bank.percussion_name);
+            bank_sid = std::format("{:03d}:{:03d} {}", msb, lsb, name_view(e_bank.percussion_name));
         else
-            bank_sid = fmt::format("{:03d}:{:03d} {:s}", psid >> 7, psid & 127, "<Untitled bank>");
+            bank_sid = std::format("{:03d}:{:03d} <Untitled bank>", msb, lsb);
 
         e_bank.ins_menu.clear();
         for (unsigned i = 0; i < 256; ++i) {
             const Instrument &ins = e_bank.ins[i];
-            if (ins.blank())
+            if (ins.blank() || percussion_channel != (i >= 128))
                 continue;
 
-            if (percussion_channel != (i >= 128))
-                continue;
-
+            const char kind = (i >= 128) ? 'P' : 'M';
             String ins_sid;
             if (ins.name[0] != '\0')
-                ins_sid = fmt::format("{:c}{:03d} {:.32s}", "MP"[i >= 128], i & 127, ins.name);
+                ins_sid = std::format("{:c}{:03d} {}", kind, i & 127, name_view(ins.name));
             else {
-                const Midi_Program_Ex *ex = midi_db.find_ex(psid >> 7, psid & 127, i);
-                const char *name = ex ? ex->name : (i < 128) ?
-                    midi_db.inst(i) : midi_db.perc(i & 127).name;
-                ins_sid = fmt::format("{:c}{:03d} {:s}", "MP"[i >= 128], i & 127, name);
+                const Midi_Program_Ex *ex = db.find_ex(msb, lsb, i);
+                const char *name = ex ? ex->name : (i < 128) ? db.inst(i) : db.perc(i & 127).name;
+                ins_sid = std::format("{:c}{:03d} {}", kind, i & 127, name);
             }
 
-            uint32_t program = (psid << 8) + i;
-            e_bank.ins_menu.addItem(program + 1, ins_sid);
-
-            if (false)
-                trace("Add choice %s %s",
-                      program_selection_to_string(program + 1).toRawUTF8(),
-                      ins_sid.toRawUTF8());
+            const std::uint32_t program = (psid << 8) + i;
+            e_bank.ins_menu.addItem(static_cast<int>(program) + 1, ins_sid);
         }
 
         menu->addSubMenu(bank_sid, e_bank.ins_menu);
@@ -478,12 +439,9 @@ String Generic_Main_Component<T>::program_selection_to_string(int selection)
     if (selection == 0)
         return "(nil)";
 
-    unsigned insno = ((unsigned)selection - 1) & 255;
-    unsigned psid = ((unsigned)selection - 1) >> 8;
-
-    char buf[64];
-    std::sprintf(buf, "%u:%u:%u", psid >> 7, psid & 127, insno);
-    return buf;
+    const auto program = static_cast<std::uint32_t>(selection - 1);
+    const std::uint32_t psid = program >> 8;
+    return std::format("{}:{}:{}", psid >> 7, psid & 127, program & 255);
 }
 
 template <class T>
@@ -493,10 +451,7 @@ void Generic_Main_Component<T>::handle_selected_program(int selection)
           program_selection_to_string(selection).toRawUTF8());
 
     if (selection != 0) {
-        unsigned insno = ((unsigned)selection - 1) & 255;
-        unsigned psid = ((unsigned)selection - 1) >> 8;
-        unsigned channel = midichannel_;
-        midiprogram_[channel] = (psid << 8) | insno;
+        midiprogram_[midichannel_] = static_cast<std::uint32_t>(selection - 1);
         send_selection_update();
     }
     reload_selected_instrument(dontSendNotification);
@@ -508,49 +463,45 @@ void Generic_Main_Component<T>::handle_edit_program()
     if (dlg_edit_program_)
         return;
 
+    const std::uint32_t program = midiprogram_[midichannel_];
+    const std::uint32_t psid = program >> 8;
+    const bool percussive = (program & 128) != 0;
+
+    const auto it = instrument_map_.find(psid);
+    if (it == instrument_map_.end())
+        return;
+
+    const Editor_Bank &e_bank = it->second;
+    const Instrument &ins = e_bank.ins[program & 255];
+    if (ins.blank())
+        return;
+
+    auto editor = std::make_unique<Program_Name_Editor>();
+    editor->set_program(bank_of_psid(psid, percussive), program & 127,
+                        name_from_field(percussive ? e_bank.percussion_name : e_bank.melodic_name),
+                        name_from_field(ins.name));
+
+    const Component::SafePointer<Generic_Main_Component<T>> safe(this);
+    editor->on_ok = [safe](const Program_Name_Editor::Result &result) {
+        if (safe == nullptr)
+            return;
+        safe->send_rename_bank(result.bank, result.bank_name);
+        safe->send_rename_program(result.bank, result.pgm, result.pgm_name);
+        if (DialogWindow *dialog = safe->dlg_edit_program_.getComponent())
+            dialog->exitModalState(1);
+    };
+    editor->on_cancel = [safe]() {
+        if (safe == nullptr)
+            return;
+        if (DialogWindow *dialog = safe->dlg_edit_program_.getComponent())
+            dialog->exitModalState(0);
+    };
+
     DialogWindow::LaunchOptions dlgopts;
     dlgopts.dialogTitle = "Edit program";
     dlgopts.componentToCentreAround = this;
     dlgopts.resizable = false;
-
-    unsigned part = midichannel_;
-    uint32_t program = midiprogram_[part];
-    uint32_t psid = program >> 8;
-    bool percussive = program & 128;
-    Bank_Id bank(psid >> 7, psid & 127, percussive);
-
-    auto &instrument_map = instrument_map_;
-    auto it = instrument_map.find(psid);
-    if (it == instrument_map.end())
-        return;
-
-    Editor_Bank &e_bank = it->second;
-    Instrument &ins = e_bank.ins[program & 255];
-    if (ins.blank())
-        return;
-
-    Program_Name_Editor *editor = new Program_Name_Editor;
-    dlgopts.content.set(editor, true);
-
-    char bank_name[33], ins_name[33];
-    sprintf(bank_name, "%.32s", percussive ? e_bank.percussion_name : e_bank.melodic_name);
-    sprintf(ins_name, "%.32s", ins.name);
-    editor->set_program(bank, program & 127, bank_name, ins_name);
-
-    Component::SafePointer<Generic_Main_Component<T>> self(this);
-    editor->on_ok = [self](const Program_Name_Editor::Result &result) {
-                        if (!self || !self->dlg_edit_program_)
-                            return;
-                        self.getComponent()->send_rename_bank(result.bank, result.bank_name);
-                        self.getComponent()->send_rename_program(result.bank, result.pgm, result.pgm_name);
-                        delete self->dlg_edit_program_.getComponent();
-                    };
-    editor->on_cancel = [self]() {
-                            if (!self || !self->dlg_edit_program_)
-                                return;
-                            delete self->dlg_edit_program_.getComponent();
-                        };
-
+    dlgopts.content.set(editor.release(), true);
     dlg_edit_program_ = dlgopts.launchAsync();
 }
 
@@ -564,9 +515,9 @@ void Generic_Main_Component<T>::handle_add_program()
     menu.addItem(3, "Delete bank");
     menu.addItem(4, "Delete all banks");
 
-    Component::SafePointer<Generic_Main_Component<T>> safe(this);
+    const Component::SafePointer<Generic_Main_Component<T>> safe(this);
     menu.showMenuAsync(PopupMenu::Options().withParentComponent(this),
-                       [safe](int selection) mutable {
+                       [safe](int selection) {
                            if (safe != nullptr)
                                safe->finish_add_program(selection);
                        });
@@ -575,57 +526,54 @@ void Generic_Main_Component<T>::handle_add_program()
 template <class T>
 void Generic_Main_Component<T>::finish_add_program(int selection)
 {
-    unsigned part = midichannel_;
-    uint32_t program = midiprogram_[part];
-    uint32_t psid = program >> 8;
-    bool percussive = program & 128;
-    Bank_Id bank(psid >> 7, psid & 127, percussive);
+    const std::uint32_t program = midiprogram_[midichannel_];
+    const bool percussive = (program & 128) != 0;
+    const Bank_Id bank = bank_of_psid(program >> 8, percussive);
+    const auto pgm = static_cast<std::uint8_t>(program & 127);
+    const Component::SafePointer<Generic_Main_Component<T>> safe(this);
 
     switch (selection) {
     case 1: {
         if (dlg_new_program_)
             return;
 
+        auto editor = std::make_unique<New_Program_Editor>();
+        editor->set_current(bank, pgm);
+
+        editor->on_ok = [safe](const New_Program_Editor::Result &result) {
+            if (safe == nullptr)
+                return;
+            safe->send_create_program(result.bank, result.pgm);
+            if (DialogWindow *dialog = safe->dlg_new_program_.getComponent())
+                dialog->exitModalState(1);
+        };
+        editor->on_cancel = [safe]() {
+            if (safe == nullptr)
+                return;
+            if (DialogWindow *dialog = safe->dlg_new_program_.getComponent())
+                dialog->exitModalState(0);
+        };
+
         DialogWindow::LaunchOptions dlgopts;
         dlgopts.dialogTitle = "Add program";
         dlgopts.componentToCentreAround = this;
         dlgopts.resizable = false;
-
-        New_Program_Editor *editor = new New_Program_Editor;
-        dlgopts.content.set(editor, true);
-
-        editor->set_current(bank, program & 127);
-
-        Component::SafePointer<Generic_Main_Component<T>> self(this);
-        editor->on_ok = [self](const New_Program_Editor::Result &result) {
-                            if (!self || !self->dlg_new_program_)
-                                return;
-                            self.getComponent()->send_create_program(result.bank, result.pgm);
-                            delete self->dlg_new_program_.getComponent();
-                        };
-        editor->on_cancel = [self]() {
-                                if (!self || !self->dlg_new_program_)
-                                    return;
-                                delete self->dlg_new_program_.getComponent();
-                            };
-
+        dlgopts.content.set(editor.release(), true);
         dlg_new_program_ = dlgopts.launchAsync();
         break;
     }
     case 2: {
         Messages::User::DeleteInstrument msg;
         msg.bank = bank;
-        msg.program = program & 127;
+        msg.program = pgm;
         msg.notify_back = true;
-        Component::SafePointer<Generic_Main_Component<T>> safe(this);
         AlertWindow::showOkCancelBox(
             AlertWindow::QuestionIcon, "Delete program",
-            fmt::format("Confirm deletion of program {:c}{:03d}?",
-                        percussive ? 'P' : 'M', program & 127),
+            std::format("Confirm deletion of program {:c}{:03d}?", percussive ? 'P' : 'M', pgm),
             {}, {}, this,
-            ModalCallbackFunction::create([safe, msg](int result) mutable {
+            ModalCallbackFunction::create([safe, msg](int result) {
                 if (result == 1 && safe != nullptr)
-                    safe->write_to_processor(msg.tag, &msg, sizeof(msg));
+                    safe->write_to_processor(msg);
             }));
         break;
     }
@@ -633,56 +581,55 @@ void Generic_Main_Component<T>::finish_add_program(int selection)
         Messages::User::DeleteBank msg;
         msg.bank = bank;
         msg.notify_back = true;
-        bool percussive_was = bank.percussive;
-        Component::SafePointer<Generic_Main_Component<T>> safe(this);
         AlertWindow::showOkCancelBox(
             AlertWindow::QuestionIcon, "Delete bank",
-            fmt::format("Confirm deletion of bank {:03d}:{:03d}?",
-                        bank.msb, bank.lsb),
+            std::format("Confirm deletion of bank {:03d}:{:03d}?", bank.msb, bank.lsb),
             {}, {}, this,
-            ModalCallbackFunction::create([safe, msg, percussive_was](int result) mutable {
+            ModalCallbackFunction::create([safe, msg](int result) mutable {
                 if (result != 1 || safe == nullptr)
                     return;
-                safe->write_to_processor(msg.tag, &msg, sizeof(msg));
-                msg.bank.percussive = !percussive_was;
-                safe->write_to_processor(msg.tag, &msg, sizeof(msg));
+                // both the melodic and the percussion bank
+                safe->write_to_processor(msg);
+                msg.bank.percussive = !msg.bank.percussive;
+                safe->write_to_processor(msg);
             }));
         break;
     }
     case 4: {
         Messages::User::ClearBanks msg;
         msg.notify_back = true;
-        Component::SafePointer<Generic_Main_Component<T>> safe(this);
         AlertWindow::showOkCancelBox(
             AlertWindow::QuestionIcon, "Delete all banks",
             "Confirm deletion of all banks?",
             {}, {}, this,
-            ModalCallbackFunction::create([safe, msg](int result) mutable {
+            ModalCallbackFunction::create([safe, msg](int result) {
                 if (result == 1 && safe != nullptr)
-                    safe->write_to_processor(msg.tag, &msg, sizeof(msg));
+                    safe->write_to_processor(msg);
             }));
         break;
     }
+    default:
+        break;
     }
 }
 
 template <class T>
-void Generic_Main_Component<T>::create_image_overlay(Component &component, Image image, float ratio)
+void Generic_Main_Component<T>::create_image_overlay(Component &component, const Image &image, double ratio)
 {
-    ImageComponent *overlay = new ImageComponent;
-    image_overlays_.push_back(std::unique_ptr<ImageComponent>(overlay));
-    Rectangle<int> bounds = component.getBounds();
-    bounds = bounds.withSizeKeepingCentre(ratio * bounds.getWidth(), ratio * bounds.getHeight());
-    overlay->setBounds(bounds);
+    auto overlay = std::make_unique<ImageComponent>();
+    const Rectangle<int> bounds = component.getBounds();
+    overlay->setBounds(bounds.withSizeKeepingCentre(
+        static_cast<int>(ratio * bounds.getWidth()), static_cast<int>(ratio * bounds.getHeight())));
     overlay->setImage(image, RectanglePlacement::centred);
     overlay->setInterceptsMouseClicks(false, true);
-    addAndMakeVisible(overlay);
+    addAndMakeVisible(*overlay);
+    image_overlays_.push_back(std::move(overlay));
 }
 
 template <class T>
 void Generic_Main_Component<T>::vu_update()
 {
-    AdlplugAudioProcessor &proc = *proc_;
+    const AdlplugAudioProcessor &proc = *proc_;
     self()->vu_left->set_value(proc.vu_level(0));
     self()->vu_right->set_value(proc.vu_level(1));
 }
@@ -690,67 +637,68 @@ void Generic_Main_Component<T>::vu_update()
 template <class T>
 void Generic_Main_Component<T>::cpu_load_update()
 {
-    AdlplugAudioProcessor &proc = *proc_;
-    String text = String((int)(100.0 * proc.cpu_load())) + "%";
+    const AdlplugAudioProcessor &proc = *proc_;
+    const String text = String(static_cast<int>(100.0 * proc.cpu_load())) + "%";
     self()->lbl_cpu->setText(text, dontSendNotification);
 }
 
 template <class T>
 void Generic_Main_Component<T>::midi_activity_update()
 {
-    AdlplugAudioProcessor &proc = *proc_;
-    for (unsigned i = 0; i < 16; ++i) {
-        bool active = proc.midi_channel_note_count(i) > 0;
-        unsigned columns = self()->ind_midi_activity->columns();
-        self()->ind_midi_activity->set_value(i / columns, i % columns, active);
-    }
+    const AdlplugAudioProcessor &proc = *proc_;
+    auto &indicator = *self()->ind_midi_activity;
+    const unsigned columns = indicator.columns();
+    if (columns == 0)
+        return;
+    for (unsigned i = 0; i < 16; ++i)
+        indicator.set_value(i / columns, i % columns, proc.midi_channel_note_count(i) > 0);
 }
 
 template <class T>
 void Generic_Main_Component<T>::midi_keys_update()
 {
-    AdlplugAudioProcessor &proc = *proc_;
+    const AdlplugAudioProcessor &proc = *proc_;
     Midi_Keyboard_Ex &kb = *self()->midi_kb;
-    unsigned midichannel = midichannel_;
-    for (unsigned note = 0; note < 128; ++note) {
-        bool note_active = proc.midi_channel_note_active(midichannel, note);
-        unsigned velocity = note_active ? 127 : 0;
-        kb.highlight_note(note, velocity);
-    }
+    const unsigned midichannel = midichannel_;
+    for (unsigned note = 0; note < 128; ++note)
+        kb.highlight_note(note, proc.midi_channel_note_active(midichannel, note) ? 127 : 0);
 }
 
 template <class T>
 void Generic_Main_Component<T>::parameters_update()
 {
-    Parameter_Block &pb = *parameter_block_;
-    set_volume_knob_value(pb.p_mastervol->get(), dontSendNotification);
+    const Parameter_Block &pb = *parameter_block_;
+    set_volume_knob_value(static_cast<double>(pb.p_mastervol->get()), dontSendNotification);
 }
 
 template <class T>
 void Generic_Main_Component<T>::update_emulator_icon()
 {
     const Emulator_Defaults &defaults = get_emulator_defaults();
-    unsigned emulator = chip_settings_.emulator;
+    const std::vector<Image> &images = emulator_icons_->images;
+    const unsigned emulator = chip_settings_.emulator;
 
     self()->btn_emulator->setImages(
         false, true, true,
-        emulator_icons_->images[emulator], 1, Colour(),
+        (emulator < images.size()) ? images[emulator] : Image(), 1, Colour(),
         Image(), 1, Colour(),
         Image(), 1, Colour());
-    self()->btn_emulator->setTooltip(defaults.choices[emulator]);
+    self()->btn_emulator->setTooltip(defaults.choices[static_cast<int>(emulator)]);
 }
 
 template <class T>
 void Generic_Main_Component<T>::build_emulator_menu(PopupMenu &menu)
 {
     const Emulator_Defaults &defaults = get_emulator_defaults();
-    unsigned count = defaults.choices.size();
+    const std::vector<Image> &images = emulator_icons_->images;
 
     menu.clear();
-    for (size_t i = 0; i < count; ++i) {
+    for (int i = 0; i < defaults.choices.size(); ++i) {
         const String &name = defaults.choices[i];
-        if (!name.isEmpty())
-            menu.addItem(i + 1, name, true, false, emulator_icons_->images[i]);
+        if (name.isEmpty())
+            continue;
+        const auto index = static_cast<std::size_t>(i);
+        menu.addItem(i + 1, name, true, false, (index < images.size()) ? images[index] : Image());
     }
 }
 
@@ -759,10 +707,9 @@ void Generic_Main_Component<T>::select_emulator_by_menu(std::function<void(int)>
 {
     PopupMenu menu;
     build_emulator_menu(menu);
-    unsigned emulator = chip_settings_.emulator;
     menu.showMenuAsync(PopupMenu::Options()
                        .withParentComponent(this)
-                       .withItemThatMustBeVisible(emulator + 1),
+                       .withItemThatMustBeVisible(static_cast<int>(chip_settings_.emulator) + 1),
                        std::move(on_selected));
 }
 
@@ -770,25 +717,23 @@ template <class T>
 void Generic_Main_Component<T>::handle_load_bank(Component *clicked)
 {
     PopupMenu menu;
-    int menu_index = 1;
-    menu.addItem(menu_index++, "Load bank file...");
-    menu.addItem(menu_index++, "Load instrument file...");
+    menu.addItem(load_bank_file_id, "Load bank file...");
+    menu.addItem(load_instrument_file_id, "Load instrument file...");
 
     Pak_File_Reader pak;
-    if (!pak.init_with_data((const uint8_t *)banks_pak.data, banks_pak.size))
-        assert(false);
+    [[maybe_unused]] const bool pak_ok = pak.init_with_data(Res::banks_pak.data, Res::banks_pak.size);
+    assert(pak_ok);
 
-    PopupMenu pak_submenu;
-    uint32_t pak_entries = pak.entry_count();
-    if (pak_entries > 0) {
-        for (uint32_t i = 0; i < pak_entries; ++i)
-            pak_submenu.addItem(menu_index + i, pak.name(i));
+    if (pak.entry_count() > 0) {
+        PopupMenu pak_submenu;
+        for (std::size_t i = 0; i < pak.entry_count(); ++i)
+            pak_submenu.addItem(load_collection_first_id + static_cast<int>(i), pak.name(i));
         menu.addSubMenu("Load from collection", pak_submenu);
     }
 
-    Component::SafePointer<Generic_Main_Component<T>> safe(this);
+    const Component::SafePointer<Generic_Main_Component<T>> safe(this);
     menu.showMenuAsync(PopupMenu::Options().withTargetComponent(clicked),
-                       [safe](int selection) mutable {
+                       [safe](int selection) {
                            if (safe != nullptr)
                                safe->finish_load_bank(selection);
                        });
@@ -812,46 +757,36 @@ void Generic_Main_Component<T>::finish_load_bank(int selection)
     const char *ins_file_filter =
         "*." WOPx_INST_SUFFIX;
 #endif
-    // The two fixed entries occupy ids 1 and 2; the collection starts after.
-    const int menu_index = 3;
-
-    Pak_File_Reader pak;
-    if (!pak.init_with_data((const uint8_t *)banks_pak.data, banks_pak.size))
-        assert(false);
 
     constexpr int open_flags =
         FileBrowserComponent::openMode | FileBrowserComponent::canSelectFiles;
 
-    Component::SafePointer<Generic_Main_Component<T>> safe(this);
+    const Component::SafePointer<Generic_Main_Component<T>> safe(this);
 
-    if (selection == 1) {
-        file_chooser_.reset(new FileChooser(
-            TRANS("Load bank..."), bank_directory_, bank_file_filter, prefer_native_file_dialog));
-        file_chooser_->launchAsync(open_flags, [safe](const FileChooser &chooser) mutable {
-            if (safe == nullptr)
-                return;
-            File file = chooser.getResult();
-            if (file == File())
+    if (selection == load_bank_file_id) {
+        file_chooser_ = std::make_unique<FileChooser>(
+            TRANS("Load bank..."), bank_directory_, bank_file_filter, prefer_native_file_dialog);
+        file_chooser_->launchAsync(open_flags, [safe](const FileChooser &chooser) {
+            const File file = chooser.getResult();
+            if (safe == nullptr || file == File())
                 return;
             safe->change_bank_directory(file.getParentDirectory());
             safe->load_bank(file, 0);
         });
     }
-    else if (selection == 2) {
-        int program_selection = self()->cb_program->getSelectedId();
+    else if (selection == load_instrument_file_id) {
+        const int program_selection = self()->cb_program->getSelectedId();
         if (program_selection == 0) {
             AlertWindow::showMessageBoxAsync(
                 AlertWindow::WarningIcon, TRANS("Load instrument..."), TRANS("Please select a program first."));
             return;
         }
 
-        file_chooser_.reset(new FileChooser(
-            TRANS("Load instrument..."), bank_directory_, ins_file_filter, prefer_native_file_dialog));
-        file_chooser_->launchAsync(open_flags, [safe, program_selection](const FileChooser &chooser) mutable {
-            if (safe == nullptr)
-                return;
-            File file = chooser.getResult();
-            if (file == File())
+        file_chooser_ = std::make_unique<FileChooser>(
+            TRANS("Load instrument..."), bank_directory_, ins_file_filter, prefer_native_file_dialog);
+        file_chooser_->launchAsync(open_flags, [safe, program_selection](const FileChooser &chooser) {
+            const File file = chooser.getResult();
+            if (safe == nullptr || file == File())
                 return;
             safe->change_bank_directory(file.getParentDirectory());
             int format = 0;
@@ -859,14 +794,19 @@ void Generic_Main_Component<T>::finish_load_bank(int selection)
             if (file.hasFileExtension(".sbi"))
                 format = 1;
 #endif
-            safe->load_single_instrument(program_selection - 1, file, format);
+            safe->load_single_instrument(static_cast<std::uint32_t>(program_selection - 1), file, format);
         });
     }
-    else if (selection >= menu_index) {
-        uint32_t index = selection - menu_index;
-        const std::string &name = pak.name(index);
-        std::string wopl = pak.extract(index);
-        load_bank_mem((const uint8_t *)wopl.data(), wopl.size(), name, 0);
+    else if (selection >= load_collection_first_id) {
+        Pak_File_Reader pak;
+        [[maybe_unused]] const bool pak_ok = pak.init_with_data(Res::banks_pak.data, Res::banks_pak.size);
+        assert(pak_ok);
+
+        const auto index = static_cast<std::size_t>(selection - load_collection_first_id);
+        if (index >= pak.entry_count())
+            return;
+        const std::string data = pak.extract(index);
+        load_bank_mem(reinterpret_cast<const std::uint8_t *>(data.data()), data.size(), String(pak.name(index)), 0);
     }
 }
 
@@ -874,13 +814,12 @@ template <class T>
 void Generic_Main_Component<T>::handle_save_bank(Component *clicked)
 {
     PopupMenu menu;
-    int menu_index = 1;
-    menu.addItem(menu_index++, "Save bank file...");
-    menu.addItem(menu_index++, "Save instrument file...");
+    menu.addItem(1, "Save bank file...");
+    menu.addItem(2, "Save instrument file...");
 
-    Component::SafePointer<Generic_Main_Component<T>> safe(this);
+    const Component::SafePointer<Generic_Main_Component<T>> safe(this);
     menu.showMenuAsync(PopupMenu::Options().withTargetComponent(clicked),
-                       [safe](int selection) mutable {
+                       [safe](int selection) {
                            if (safe != nullptr)
                                safe->finish_save_bank(selection);
                        });
@@ -896,17 +835,17 @@ void Generic_Main_Component<T>::confirm_overwrite(const File &file, std::functio
         return;
     }
 
-    String title = TRANS("File already exists");
-    String message = TRANS("There's already a file called: ")
+    const String title = TRANS("File already exists");
+    const String message = TRANS("There's already a file called: ")
         + file.getFullPathName() + "\n\n" +
         TRANS("Are you sure you want to overwrite it?");
 
     AlertWindow::showOkCancelBox(
         AlertWindow::WarningIcon, title, message,
         TRANS("Overwrite"), TRANS("Cancel"), this,
-        ModalCallbackFunction::create([on_confirmed = std::move(on_confirmed)](int result) {
+        ModalCallbackFunction::create([callback = std::move(on_confirmed)](int result) {
             if (result == 1)
-                on_confirmed();
+                callback();
         }));
 }
 
@@ -924,21 +863,18 @@ void Generic_Main_Component<T>::finish_save_bank(int selection)
     constexpr int save_flags =
         FileBrowserComponent::saveMode | FileBrowserComponent::canSelectFiles;
 
-    Component::SafePointer<Generic_Main_Component<T>> safe(this);
+    const Component::SafePointer<Generic_Main_Component<T>> safe(this);
 
     if (selection == 1) {
-        File initial_file = bank_directory_.getChildFile(
+        const File initial_file = bank_directory_.getChildFile(
             File::createLegalFileName(self()->edt_bank_name->getText()));
-        file_chooser_.reset(new FileChooser(
-            TRANS("Save bank..."), initial_file, bank_file_filter, prefer_native_file_dialog));
-        file_chooser_->launchAsync(save_flags, [safe, bank_file_extension](const FileChooser &chooser) mutable {
-            if (safe == nullptr)
+        file_chooser_ = std::make_unique<FileChooser>(
+            TRANS("Save bank..."), initial_file, bank_file_filter, prefer_native_file_dialog);
+        file_chooser_->launchAsync(save_flags, [safe, bank_file_extension](const FileChooser &chooser) {
+            if (safe == nullptr || chooser.getResult() == File())
                 return;
-            File file = chooser.getResult();
-            if (file == File())
-                return;
-            file = file.withFileExtension(bank_file_extension);
-            safe->confirm_overwrite(file, [safe, file]() mutable {
+            const File file = chooser.getResult().withFileExtension(bank_file_extension);
+            safe->confirm_overwrite(file, [safe, file]() {
                 if (safe == nullptr)
                     return;
                 safe->change_bank_directory(file.getParentDirectory());
@@ -947,28 +883,25 @@ void Generic_Main_Component<T>::finish_save_bank(int selection)
         });
     }
     else if (selection == 2) {
-        int program_selection = self()->cb_program->getSelectedId();
+        const int program_selection = self()->cb_program->getSelectedId();
         if (program_selection == 0) {
             AlertWindow::showMessageBoxAsync(
                 AlertWindow::WarningIcon, TRANS("Save instrument..."), TRANS("Please select a program first."));
             return;
         }
 
-        file_chooser_.reset(new FileChooser(
-            TRANS("Save instrument..."), bank_directory_, ins_file_filter, prefer_native_file_dialog));
+        file_chooser_ = std::make_unique<FileChooser>(
+            TRANS("Save instrument..."), bank_directory_, ins_file_filter, prefer_native_file_dialog);
         file_chooser_->launchAsync(save_flags,
-            [safe, program_selection, ins_file_extension](const FileChooser &chooser) mutable {
-                if (safe == nullptr)
+            [safe, program_selection, ins_file_extension](const FileChooser &chooser) {
+                if (safe == nullptr || chooser.getResult() == File())
                     return;
-                File file = chooser.getResult();
-                if (file == File())
-                    return;
-                file = file.withFileExtension(ins_file_extension);
-                safe->confirm_overwrite(file, [safe, program_selection, file]() mutable {
+                const File file = chooser.getResult().withFileExtension(ins_file_extension);
+                safe->confirm_overwrite(file, [safe, program_selection, file]() {
                     if (safe == nullptr)
                         return;
                     safe->change_bank_directory(file.getParentDirectory());
-                    safe->save_single_instrument(program_selection - 1, file);
+                    safe->save_single_instrument(static_cast<std::uint32_t>(program_selection - 1), file);
                 });
             });
     }
@@ -977,75 +910,25 @@ void Generic_Main_Component<T>::finish_save_bank(int selection)
 template <class T>
 void Generic_Main_Component<T>::load_bank(const File &file, int format)
 {
-    trace("Load from WOPL file: %s", file.getFullPathName().toRawUTF8());
+    trace("Load from " WOPx_BANK_FORMAT " file: %s", file.getFullPathName().toRawUTF8());
 
-    std::unique_ptr<uint8_t[]> filedata;
-    std::unique_ptr<FileInputStream> stream(file.createInputStream());
-    uint64_t length;
-    constexpr uint64_t max_length = 8 * 1024 * 1024;
-    const char *error_title = "Error loading bank";
-
-    if (stream->failedToOpen()) {
-        AlertWindow::showMessageBoxAsync(
-            AlertWindow::WarningIcon, error_title, "The file could not be opened.");
-        return;
-    }
-
-    if ((length = stream->getTotalLength()) >= max_length) {
-        AlertWindow::showMessageBoxAsync(
-            AlertWindow::WarningIcon, error_title, "The selected file is too large to be valid.");
-        return;
-    }
-
-    // length < max_length (8 MiB) was checked above, so it fits in an int.
-    const int nbytes = (int)length;
-    filedata.reset(new uint8_t[nbytes]);
-    if (stream->read(filedata.get(), nbytes) != nbytes) {
-        AlertWindow::showMessageBoxAsync(
-            AlertWindow::WarningIcon, error_title, "The input operation has failed.");
-        return;
-    }
-
-    load_bank_mem(filedata.get(), length, file.getFileNameWithoutExtension(), format);
+    if (const std::optional<MemoryBlock> data = read_file_for_loading(file, "Error loading bank"))
+        load_bank_mem(static_cast<const std::uint8_t *>(data->getData()), data->getSize(),
+                      file.getFileNameWithoutExtension(), format);
 }
 
 template <class T>
-void Generic_Main_Component<T>::load_single_instrument(uint32_t program, const File &file, int format)
+void Generic_Main_Component<T>::load_single_instrument(std::uint32_t program, const File &file, int format)
 {
     trace("Load from " WOPx_INST_FORMAT " file: %s", file.getFullPathName().toRawUTF8());
 
-    std::unique_ptr<uint8_t[]> filedata;
-    std::unique_ptr<FileInputStream> stream(file.createInputStream());
-    uint64_t length;
-    constexpr uint64_t max_length = 8 * 1024 * 1024;
-    const char *error_title = "Error loading instrument";
-
-    if (stream->failedToOpen()) {
-        AlertWindow::showMessageBoxAsync(
-            AlertWindow::WarningIcon, error_title, "The file could not be opened.");
-        return;
-    }
-
-    if ((length = stream->getTotalLength()) >= max_length) {
-        AlertWindow::showMessageBoxAsync(
-            AlertWindow::WarningIcon, error_title, "The selected file is too large to be valid.");
-        return;
-    }
-
-    // length < max_length (8 MiB) was checked above, so it fits in an int.
-    const int nbytes = (int)length;
-    filedata.reset(new uint8_t[nbytes]);
-    if (stream->read(filedata.get(), nbytes) != nbytes) {
-        AlertWindow::showMessageBoxAsync(
-            AlertWindow::WarningIcon, error_title, "The input operation has failed.");
-        return;
-    }
-
-    load_single_instrument_mem(program, filedata.get(), length, file.getFileNameWithoutExtension(), format);
+    if (const std::optional<MemoryBlock> data = read_file_for_loading(file, "Error loading instrument"))
+        load_single_instrument_mem(program, static_cast<const std::uint8_t *>(data->getData()), data->getSize(),
+                                   file.getFileNameWithoutExtension(), format);
 }
 
 template <class T>
-void Generic_Main_Component<T>::load_bank_mem(const uint8_t *mem, size_t length, const String &bank_name, int format)
+void Generic_Main_Component<T>::load_bank_mem(const std::uint8_t *mem, std::size_t length, const String &bank_name, int format)
 {
     std::vector<Midi_Bank> banks;
     Instrument_Global_Parameters igp;
@@ -1054,7 +937,7 @@ void Generic_Main_Component<T>::load_bank_mem(const uint8_t *mem, size_t length,
 
     switch (format) {
     default: {
-        WOPx::BankFile_Ptr wopl(WOPx::LoadBankFromMem((void *)mem, length, nullptr));
+        const WOPx::BankFile_Ptr wopl(WOPx::LoadBankFromMem(const_cast<void *>(static_cast<const void *>(mem)), length, nullptr));
         if (!wopl) {
             AlertWindow::showMessageBoxAsync(
                 AlertWindow::WarningIcon, error_title, "The input file is not in " WOPx_BANK_FORMAT " format.");
@@ -1063,8 +946,7 @@ void Generic_Main_Component<T>::load_bank_mem(const uint8_t *mem, size_t length,
         Midi_Bank::from_wopl(*wopl, banks, igp);
         need_measurement = false;
 #if defined(ADLPLUG_OPN2)
-        Parameter_Block &pb = *parameter_block_;
-        *pb.p_chiptype = wopl->chip_type;
+        *parameter_block_->p_chiptype = int{wopl->chip_type};
 #endif
         break;
     }
@@ -1072,21 +954,21 @@ void Generic_Main_Component<T>::load_bank_mem(const uint8_t *mem, size_t length,
 
     {
         Messages::User::SetBankTitle msg;
-        std::strncpy(msg.title, bank_name.toRawUTF8(), 64);
-        write_to_processor(msg.tag, &msg, sizeof(msg));
+        copy_name_to_field(msg.title, bank_name);
+        write_to_processor(msg);
     }
 
     {
         Messages::User::LoadGlobalParameters msg;
         msg.param = igp;
         msg.notify_back = true;
-        write_to_processor(msg.tag, &msg, sizeof(msg));
+        write_to_processor(msg);
     }
 
     {
         Messages::User::ClearBanks msg;
         msg.notify_back = false;
-        write_to_processor(msg.tag, &msg, sizeof(msg));
+        write_to_processor(msg);
     }
 
     for (const Midi_Bank &bank : banks) {
@@ -1094,33 +976,26 @@ void Generic_Main_Component<T>::load_bank_mem(const uint8_t *mem, size_t length,
             Messages::User::LoadInstrument msg;
             msg.part = midichannel_;
             msg.bank = bank.id;
-            msg.program = i;
+            msg.program = static_cast<std::uint8_t>(i);
             msg.instrument = bank.ins[i];
             msg.need_measurement = need_measurement;
             msg.notify_back = false;
-            write_to_processor(msg.tag, &msg, sizeof(msg));
+            write_to_processor(msg);
         }
 
         Messages::User::RenameBank msg;
         msg.bank = bank.id;
         msg.notify_back = false;
-        std::memcpy(msg.name, bank.name, 32);
-        write_to_processor(msg.tag, &msg, sizeof(msg));
+        std::memcpy(msg.name, bank.name, sizeof msg.name);
+        write_to_processor(msg);
     }
 
-    {
-        Messages::User::RequestFullBankState msg;
-        write_to_processor(msg.tag, &msg, sizeof(msg));
-    }
-
-    {
-        Messages::User::RequestBankTitle msg;
-        write_to_processor(msg.tag, &msg, sizeof(msg));
-    }
+    write_to_processor(Messages::User::RequestFullBankState{});
+    write_to_processor(Messages::User::RequestBankTitle{});
 }
 
 template <class T>
-void Generic_Main_Component<T>::load_single_instrument_mem(uint32_t program, const uint8_t *mem, size_t length, [[maybe_unused]] const String &bank_name, int format)
+void Generic_Main_Component<T>::load_single_instrument_mem(std::uint32_t program, const std::uint8_t *mem, std::size_t length, [[maybe_unused]] const String &bank_name, int format)
 {
     Instrument ins;
     const char *error_title = "Error loading instrument";
@@ -1128,7 +1003,7 @@ void Generic_Main_Component<T>::load_single_instrument_mem(uint32_t program, con
     switch (format) {
     default: {
         WOPx::InstrumentFile wopi = {};
-        if (WOPx::LoadInstFromMem(&wopi, (void *)mem, length) != 0) {
+        if (WOPx::LoadInstFromMem(&wopi, const_cast<void *>(static_cast<const void *>(mem)), length) != 0) {
             AlertWindow::showMessageBoxAsync(
                 AlertWindow::WarningIcon, error_title, "The input file is not in " WOPx_INST_FORMAT " format.");
             return;
@@ -1148,19 +1023,14 @@ void Generic_Main_Component<T>::load_single_instrument_mem(uint32_t program, con
 #endif
     }
 
-    unsigned part = midichannel_;
-    uint32_t psid = program >> 8;
-    bool percussive = program & 128;
-    Bank_Id bank(psid >> 7, psid & 127, percussive);
-
     Messages::User::LoadInstrument msg;
-    msg.part = part;
-    msg.bank = bank;
-    msg.program = program & 127;
+    msg.part = midichannel_;
+    msg.bank = bank_of_psid(program >> 8, (program & 128) != 0);
+    msg.program = static_cast<std::uint8_t>(program & 127);
     msg.instrument = ins;
     msg.need_measurement = true;
     msg.notify_back = true;
-    write_to_processor(msg.tag, &msg, sizeof(msg));
+    write_to_processor(msg);
 }
 
 template <class T>
@@ -1168,40 +1038,34 @@ void Generic_Main_Component<T>::save_bank(const File &file)
 {
     trace("Save to " WOPx_BANK_FORMAT " file: %s", file.getFullPathName().toRawUTF8());
 
-    const auto &instrument_map = instrument_map_;
-    size_t max_bank_count = instrument_map.size();
-
     std::vector<WOPx::Bank> melo_array;
     std::vector<WOPx::Bank> drum_array;
-    melo_array.reserve(max_bank_count);
-    drum_array.reserve(max_bank_count);
+    melo_array.reserve(instrument_map_.size());
+    drum_array.reserve(instrument_map_.size());
 
-    for (auto &entry : instrument_map) {
-        uint32_t psid = entry.first;
+    for (const auto &[psid, e_bank] : instrument_map_) {
+        WOPx::Bank melo {};
+        WOPx::Bank drum {};
 
-        WOPx::Bank melo;
-        WOPx::Bank drum;
-        std::memset(&melo, 0, sizeof(WOPx::Bank));
-        std::memset(&drum, 0, sizeof(WOPx::Bank));
+        std::memcpy(melo.bank_name, e_bank.melodic_name, sizeof e_bank.melodic_name);
+        std::memcpy(drum.bank_name, e_bank.percussion_name, sizeof e_bank.percussion_name);
 
-        std::memcpy(melo.bank_name, entry.second.melodic_name, 32);
-        std::memcpy(drum.bank_name, entry.second.percussion_name, 32);
+        melo.bank_midi_msb = drum.bank_midi_msb = static_cast<std::uint8_t>(psid >> 7);
+        melo.bank_midi_lsb = drum.bank_midi_lsb = static_cast<std::uint8_t>(psid & 127);
 
-        melo.bank_midi_msb = drum.bank_midi_msb = psid >> 7;
-        melo.bank_midi_lsb = drum.bank_midi_lsb = psid & 127;
-
-        size_t melo_count = 0;
-        size_t drum_count = 0;
-        for (size_t i = 0; i < 256; ++i) {
-            WOPx::Instrument ins = entry.second.ins[i].to_wopl();
+        std::size_t melo_count = 0;
+        std::size_t drum_count = 0;
+        for (std::size_t i = 0; i < 256; ++i) {
+            const WOPx::Instrument ins = e_bank.ins[i].to_wopl();
+            const bool used = (ins.inst_flags & WOPx::Ins_IsBlank) == 0;
             if (i < 128) {
                 melo.ins[i] = ins;
-                if (!(ins.inst_flags & WOPx::Ins_IsBlank))
+                if (used)
                     ++melo_count;
             }
             else {
                 drum.ins[i - 128] = ins;
-                if (!(ins.inst_flags & WOPx::Ins_IsBlank))
+                if (used)
                     ++drum_count;
             }
         }
@@ -1212,121 +1076,78 @@ void Generic_Main_Component<T>::save_bank(const File &file)
             drum_array.push_back(drum);
     }
 
-    WOPx::BankFile wopl;
+    WOPx::BankFile wopl {};
     wopl.version = 0;
 
 #if defined(ADLPLUG_OPL3)
-    wopl.opl_flags =
+    wopl.opl_flags = static_cast<std::uint8_t>(
         (instrument_gparam_.deep_tremolo ? WOPL_FLAG_DEEP_TREMOLO : 0) |
-        (instrument_gparam_.deep_vibrato ? WOPL_FLAG_DEEP_VIBRATO : 0);
+        (instrument_gparam_.deep_vibrato ? WOPL_FLAG_DEEP_VIBRATO : 0));
 #elif defined(ADLPLUG_OPN2)
-    wopl.lfo_freq =
+    wopl.lfo_freq = static_cast<std::uint8_t>(
         (instrument_gparam_.lfo_enable ? 8 : 0) |
-        (instrument_gparam_.lfo_frequency & 7);
-    wopl.chip_type = chip_settings_.chip_type;
+        (instrument_gparam_.lfo_frequency & 7));
+    wopl.chip_type = static_cast<std::uint8_t>(chip_settings_.chip_type);
 #endif
-    wopl.volume_model = instrument_gparam_.volume_model;
+    wopl.volume_model = static_cast<std::uint8_t>(instrument_gparam_.volume_model);
 
-    wopl.banks_count_melodic = melo_array.size();
-    wopl.banks_count_percussion = drum_array.size();
+    wopl.banks_count_melodic = static_cast<std::uint16_t>(melo_array.size());
+    wopl.banks_count_percussion = static_cast<std::uint16_t>(drum_array.size());
     wopl.banks_melodic = melo_array.data();
     wopl.banks_percussive = drum_array.data();
 
-    size_t filesize = WOPx::CalculateBankFileSize(&wopl, wopl.version);
-    std::unique_ptr<uint8_t> filedata(new uint8_t[filesize]);
-
+    const std::size_t filesize = WOPx::CalculateBankFileSize(&wopl, wopl.version);
+    std::vector<std::uint8_t> filedata(filesize);
     const char *error_title = "Error saving bank";
 
-    if (WOPx::SaveBankToMem(&wopl, filedata.get(), filesize, wopl.version, 0) != 0) {
+    if (WOPx::SaveBankToMem(&wopl, filedata.data(), filesize, wopl.version, 0) != 0) {
         AlertWindow::showMessageBoxAsync(
             AlertWindow::WarningIcon, error_title, "The bank could not be converted to " WOPx_BANK_FORMAT ".");
         return;
     }
 
-    std::unique_ptr<FileOutputStream> stream(file.createOutputStream());
-
-    if (stream->failedToOpen()) {
-        AlertWindow::showMessageBoxAsync(
-            AlertWindow::WarningIcon, error_title, "The file could not be opened.");
-        return;
-    }
-
-    stream->setPosition(0);
-    stream->truncate();
-    stream->write(filedata.get(), filesize);
-    stream->flush();
-
-    if (!stream->getStatus()) {
-        AlertWindow::showMessageBoxAsync(
-            AlertWindow::WarningIcon, error_title, "The output operation has failed.");
-        return;
-    }
+    write_file_for_saving(file, filedata, error_title);
 }
 
 template <class T>
-void Generic_Main_Component<T>::save_single_instrument(uint32_t program, const File &file)
+void Generic_Main_Component<T>::save_single_instrument(std::uint32_t program, const File &file)
 {
     trace("Save to " WOPx_INST_FORMAT " file: %s", file.getFullPathName().toRawUTF8());
 
-    uint32_t psid = program >> 8;
-
-    auto it = instrument_map_.find(psid);
+    const auto it = instrument_map_.find(program >> 8);
     if (it == instrument_map_.end())
         return;
 
-    const Editor_Bank &e_bank = it->second;
-    const Instrument &ins = e_bank.ins[program & 255];
-
-    WOPx::InstrumentFile opli;
+    WOPx::InstrumentFile opli {};
     opli.version = 0;
-    opli.is_drum = program & 128;
-    opli.inst = ins.to_wopl();
+    opli.is_drum = ((program & 128) != 0) ? 1 : 0;
+    opli.inst = it->second.ins[program & 255].to_wopl();
 
-    size_t filesize = WOPx::CalculateInstFileSize(&opli, opli.version);
-    std::unique_ptr<uint8_t> filedata(new uint8_t[filesize]);
-
+    const std::size_t filesize = WOPx::CalculateInstFileSize(&opli, opli.version);
+    std::vector<std::uint8_t> filedata(filesize);
     const char *error_title = "Error saving instrument";
 
-    if (WOPx::SaveInstToMem(&opli, filedata.get(), filesize, opli.version) != 0) {
+    if (WOPx::SaveInstToMem(&opli, filedata.data(), filesize, opli.version) != 0) {
         AlertWindow::showMessageBoxAsync(
-            AlertWindow::WarningIcon, error_title, "The bank could not be converted to " WOPx_INST_FORMAT ".");
+            AlertWindow::WarningIcon, error_title, "The instrument could not be converted to " WOPx_INST_FORMAT ".");
         return;
     }
 
-    std::unique_ptr<FileOutputStream> stream(file.createOutputStream());
-
-    if (stream->failedToOpen()) {
-        AlertWindow::showMessageBoxAsync(
-            AlertWindow::WarningIcon, error_title, "The file could not be opened.");
-        return;
-    }
-
-    stream->setPosition(0);
-    stream->truncate();
-    stream->write(filedata.get(), filesize);
-    stream->flush();
-
-    if (!stream->getStatus()) {
-        AlertWindow::showMessageBoxAsync(
-            AlertWindow::WarningIcon, error_title, "The output operation has failed.");
-        return;
-    }
+    write_file_for_saving(file, filedata, error_title);
 }
 
 template <class T>
 void Generic_Main_Component<T>::handle_change_keymap()
 {
-    Midi_Keyboard_Ex &kb = *self()->midi_kb;
     PopupMenu menu;
     build_key_layout_menu(menu, last_key_layout_);
 
-    Component::SafePointer<Generic_Main_Component<T>> safe(this);
+    const Component::SafePointer<Generic_Main_Component<T>> safe(this);
     menu.showMenuAsync(PopupMenu::Options().withParentComponent(this),
-                       [safe](int selection) mutable {
+                       [safe](int selection) {
                            if (safe != nullptr)
                                safe->finish_change_keymap(selection);
                        });
-    (void)kb;
 }
 
 template <class T>
@@ -1334,7 +1155,7 @@ void Generic_Main_Component<T>::finish_change_keymap(int selection)
 {
     Midi_Keyboard_Ex &kb = *self()->midi_kb;
     if (selection != 0)
-        last_key_layout_ = set_key_layout(kb, (Key_Layout)(selection - 1), *conf_);
+        last_key_layout_ = set_key_layout(kb, static_cast<Key_Layout>(selection - 1), *conf_);
     kb.grabKeyboardFocus();
 }
 
@@ -1342,9 +1163,7 @@ template <class T>
 void Generic_Main_Component<T>::handle_change_octave(int diff)
 {
     Midi_Keyboard_Ex &kb = *self()->midi_kb;
-    int octave = midi_kb_octave_ + diff;
-    octave = (octave < 0) ? 0 : octave;
-    octave = (octave > 10) ? 10 : octave;
+    const int octave = std::clamp(midi_kb_octave_ + diff, 0, 10);
     if (octave != midi_kb_octave_) {
         midi_kb_octave_ = octave;
         kb.setKeyPressBaseOctave(octave);
@@ -1353,68 +1172,55 @@ void Generic_Main_Component<T>::handle_change_octave(int diff)
 }
 
 template <class T>
-void Generic_Main_Component<T>::set_int_parameter_with_delay(unsigned delay, AudioParameterInt &p, int v)
+void Generic_Main_Component<T>::set_int_parameter_with_delay(int delay_ms, AudioParameterInt &p, int v)
 {
     const String &id = p.paramID;
     std::unique_ptr<Timer> &slot = parameters_delayed_[id];
 
     if (slot)
         trace("Cancel delayed parameter %s", id.toRawUTF8());
-    trace("Schedule delayed parameter %s in %u ms", id.toRawUTF8(), delay);
+    trace("Schedule delayed parameter %s in %d ms", id.toRawUTF8(), delay_ms);
 
-    Timer *timer = Functional_Timer::create1(
-                    [&p, v](Timer *t){
-                        t->stopTimer();
-                        trace("Set delayed parameter %s now", p.paramID.toRawUTF8());
-                        p = v;
-                    });
-    slot.reset(timer);
-    timer->startTimer(delay);
+    slot = Functional_Timer::create1([&p, v](Timer *t) {
+        t->stopTimer();
+        trace("Set delayed parameter %s now", p.paramID.toRawUTF8());
+        p = v;
+    });
+    slot->startTimer(delay_ms);
 }
 
 template <class T>
 double Generic_Main_Component<T>::get_volume_knob_value() const
 {
-    const Parameter_Block &pb = *parameter_block_;
-
-    double knobval = self()->kn_mastervol->value();
+    const double knobval = self()->kn_mastervol->value();
     if (knobval <= 0.0)
         return 0.0;
 
-    double linmin, linmax, dbmin, dbmax;
-    get_master_volume_limits(*pb.p_mastervol, linmin, linmax, dbmin, dbmax);
-
-    double dbval = dbmin + (dbmax - dbmin) * knobval;
-    double linval = std::pow(10.0, 0.05 * dbval);
-    return jlimit(linmin, linmax, linval);
+    const Volume_Limits limits = master_volume_limits(*parameter_block_->p_mastervol);
+    const double dbval = limits.dbmin + (limits.dbmax - limits.dbmin) * knobval;
+    const double linval = std::pow(10.0, 0.05 * dbval);
+    return std::clamp(linval, limits.linmin, limits.linmax);
 }
 
 template <class T>
 void Generic_Main_Component<T>::set_volume_knob_value(double linval, NotificationType ntf)
 {
-    const Parameter_Block &pb = *parameter_block_;
+    const Volume_Limits limits = master_volume_limits(*parameter_block_->p_mastervol);
 
-    double linmin, linmax, dbmin, dbmax;
-    get_master_volume_limits(*pb.p_mastervol, linmin, linmax, dbmin, dbmax);
+    const double kval = (linval < limits.linmin) ? 0.0 :
+        (20.0 * std::log10(linval) - limits.dbmin) / (limits.dbmax - limits.dbmin);
 
-    double kval;
-    double old_kval = self()->kn_mastervol->value();
-    if (linval < linmin)
-        kval = 0.0;
-    else {
-        double dbval = 20.0 * std::log10(linval);
-        kval = (dbval - dbmin) / (dbmax - dbmin);
-    }
-
-    self()->kn_mastervol->set_value(kval, ntf);
-    if (old_kval != self()->kn_mastervol->value())
+    auto &knob = *self()->kn_mastervol;
+    const double old_kval = knob.value();
+    knob.set_value(kval, ntf);
+    if (old_kval != knob.value())
         update_master_volume_label();
 }
 
 template <class T>
 void Generic_Main_Component<T>::initialize_bank_directory()
 {
-    Configuration &conf = *conf_;
+    const Configuration &conf = *conf_;
 
     File dir(conf.get_string("paths", "last-instrument-directory", ""));
     if (!dir.isDirectory())
@@ -1445,56 +1251,38 @@ void Generic_Main_Component<T>::on_change_bank_title(const String &title, Notifi
 template <class T>
 void Generic_Main_Component<T>::update_master_volume_label()
 {
-    const Parameter_Block &pb = *parameter_block_;
-
-    double linmin, linmax, dbmin, dbmax;
-    get_master_volume_limits(*pb.p_mastervol, linmin, linmax, dbmin, dbmax);
-
-    double kval = self()->kn_mastervol->value();
-    if (kval == 0.0)
+    const double kval = self()->kn_mastervol->value();
+    if (kval == 0.0) {
         self()->lbl_mastervol->setText(CharPointer_UTF8("-∞ dB"), dontSendNotification);
-    else {
-        double dbval = dbmin + (dbmax - dbmin) * kval;
-        long displayval = std::lround(jlimit(dbmin, dbmax, dbval));
-        String displaytext = String(displayval) + " dB";
-        if (displayval >= 0)
-            displaytext = "+" + displaytext;
-        self()->lbl_mastervol->setText(displaytext, dontSendNotification);
+        return;
     }
+
+    const Volume_Limits limits = master_volume_limits(*parameter_block_->p_mastervol);
+    const double dbval = limits.dbmin + (limits.dbmax - limits.dbmin) * kval;
+    const long displayval = std::lround(std::clamp(dbval, limits.dbmin, limits.dbmax));
+    self()->lbl_mastervol->setText(std::format("{:+d} dB", displayval), dontSendNotification);
 }
 
 template <class T>
 void Generic_Main_Component<T>::textEditorTextChanged(TextEditor &editor)
 {
     if (&editor == self()->edt_bank_name.get()) {
-        char title[64 + 1];
-        editor.getText().copyToUTF8(title, 64 + 1);
         Messages::User::SetBankTitle msg;
-        memcpy(msg.title, title, 64);
-        write_to_processor(msg.tag, &msg, sizeof(msg));
+        copy_name_to_field(msg.title, editor.getText());
+        write_to_processor(msg);
     }
 }
 
 template <class T>
-void Generic_Main_Component<T>::handleNoteOn(MidiKeyboardState *, int channel_, int note, float velocity)
+void Generic_Main_Component<T>::handleNoteOn(MidiKeyboardState *, int channel, int note, float velocity)
 {
-    unsigned channel = (unsigned)(channel_ - 1);
-    uint8_t midi[3];
-    midi[0] = channel | (0b1001u << 4);
-    midi[1] = note;
-    midi[2] = velocity * 127;
-    write_to_processor(User_Message::Midi, midi, 3);
+    write_midi_to_processor(MidiMessage::noteOn(channel, note, velocity));
 }
 
 template <class T>
-void Generic_Main_Component<T>::handleNoteOff(MidiKeyboardState *, int channel_, int note, float velocity)
+void Generic_Main_Component<T>::handleNoteOff(MidiKeyboardState *, int channel, int note, float velocity)
 {
-    unsigned channel = (unsigned)(channel_ - 1);
-    uint8_t midi[3];
-    midi[0] = channel | (0b1000u << 4);
-    midi[1] = note;
-    midi[2] = velocity * 127;
-    write_to_processor(User_Message::Midi, midi, 3);
+    write_midi_to_processor(MidiMessage::noteOff(channel, note, velocity));
 }
 
 template <class T>
@@ -1507,12 +1295,7 @@ void Generic_Main_Component<T>::focusGained([[maybe_unused]] FocusChangeType cau
 template <class T>
 void Generic_Main_Component<T>::globalFocusChanged(Component *component)
 {
-    ComponentPeer *peer = getPeer();
-    Component *window = nullptr;
-    if (peer)
-        window = &peer->getComponent();
-
-    if (component == window)
+    if (ComponentPeer *peer = getPeer(); peer && component == &peer->getComponent())
         grabKeyboardFocus();
 }
 
@@ -1523,39 +1306,127 @@ void Generic_Main_Component<T>::display_info_now(const String &text)
 }
 
 template <class T>
-inline void Generic_Main_Component<T>::get_master_volume_limits(
-    const AudioParameterFloat &parameter,
-    double &linmin, double &linmax, double &dbmin, double &dbmax) const
+auto Generic_Main_Component<T>::master_volume_limits(const AudioParameterFloat &parameter) -> Volume_Limits
 {
-    linmin = 0.1;
-    dbmin = -20.0;
-    linmax = parameter.range.end;
-    dbmax = 20.0 * std::log10(linmax);
+    Volume_Limits limits;
+    limits.linmin = 0.1;
+    limits.dbmin = -20.0;
+    limits.linmax = static_cast<double>(parameter.range.end);
+    limits.dbmax = 20.0 * std::log10(limits.linmax);
+    return limits;
 }
 
 template <class T>
-bool Generic_Main_Component<T>::write_to_processor(
-    User_Message tag, const void *msgbody, unsigned msgsize)
+std::optional<MemoryBlock> Generic_Main_Component<T>::read_file_for_loading(const File &file, const char *error_title)
 {
-    AdlplugAudioProcessor &proc = *proc_;
+    constexpr int64 max_length = 8 * 1024 * 1024;
 
-    Message_Header hdr(tag, msgsize);
-
-    Buffered_Message msg;
-    while (!msg) {
-        std::shared_ptr<Simple_Fifo> queue = proc.message_queue_for_ui();
-        if (!queue)
-            return false;
-        msg = Messages::write(*queue, hdr);
-        if (!msg)
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        else {
-            std::memcpy(msg.data, msgbody, msgsize);
-            Messages::finish_write(*queue, msg);
-        }
+    // A file which cannot be opened gives a stream which says so, whereas
+    // File::createInputStream() gives none.
+    FileInputStream stream(file);
+    const int64 length = stream.failedToOpen() ? -1 : stream.getTotalLength();
+    if (length < 0) {
+        AlertWindow::showMessageBoxAsync(
+            AlertWindow::WarningIcon, error_title, "The file could not be opened.");
+        return std::nullopt;
     }
 
-    return true;
+    if (length >= max_length) {
+        AlertWindow::showMessageBoxAsync(
+            AlertWindow::WarningIcon, error_title, "The selected file is too large to be valid.");
+        return std::nullopt;
+    }
+
+    MemoryBlock data;
+    if (stream.readIntoMemoryBlock(data) != static_cast<std::size_t>(length)) {
+        AlertWindow::showMessageBoxAsync(
+            AlertWindow::WarningIcon, error_title, "The input operation has failed.");
+        return std::nullopt;
+    }
+
+    return data;
+}
+
+// The data goes to a temporary file which then replaces the target, so a
+// failure does not leave a truncated file behind.
+template <class T>
+void Generic_Main_Component<T>::write_file_for_saving(const File &file, std::span<const std::uint8_t> data, const char *error_title)
+{
+    if (!file.replaceWithData(data.data(), data.size())) {
+        AlertWindow::showMessageBoxAsync(
+            AlertWindow::WarningIcon, error_title, "The file could not be written.");
+    }
+}
+
+template <class T>
+template <Messages::Body M>
+    requires std::same_as<std::remove_cv_t<decltype(M::tag)>, User_Message>
+void Generic_Main_Component<T>::write_to_processor(const M &msg)
+{
+    write_raw_to_processor(std::to_underlying(M::tag), std::as_bytes(std::span(&msg, 1)));
+}
+
+template <class T>
+void Generic_Main_Component<T>::write_midi_to_processor(const MidiMessage &message)
+{
+    const std::span<const std::uint8_t> data(message.getRawData(), static_cast<std::size_t>(message.getRawDataSize()));
+    write_raw_to_processor(std::to_underlying(User_Message::Midi), std::as_bytes(data));
+}
+
+template <class T>
+void Generic_Main_Component<T>::write_raw_to_processor(unsigned tag, std::span<const std::byte> body)
+{
+    pending_messages_.push_back(Pending_Message{tag, {body.begin(), body.end()}});
+    flush_messages_to_processor();
+}
+
+template <class T>
+void Generic_Main_Component<T>::flush_messages_to_processor()
+{
+    const std::shared_ptr<Simple_Fifo> queue = proc_->message_queue_for_ui();
+    if (!queue) {
+        // Released: the processor would not take the messages, and it asks
+        // for the state again once it is prepared.
+        pending_messages_.clear();
+    }
+
+    while (queue && !pending_messages_.empty()) {
+        const Pending_Message &pending = pending_messages_.front();
+        const Buffered_Message msg = Messages::write(*queue, pending.tag, static_cast<unsigned>(pending.body.size()));
+        if (!msg)
+            break;
+        if (!pending.body.empty())
+            std::memcpy(msg.data, pending.body.data(), pending.body.size());
+        Messages::finish_write(*queue, msg);
+        pending_messages_.pop_front();
+    }
+
+    if (pending_messages_.empty())
+        message_flush_timer_->stopTimer();
+    else if (!message_flush_timer_->isTimerRunning())
+        message_flush_timer_->startTimer(10);
+}
+
+template <class T>
+Label *Generic_Main_Component<T>::slider_text_box(Slider &slider)
+{
+    for (Component *child : slider.getChildren()) {
+        if (auto *label = dynamic_cast<Label *>(child))
+            return label;
+    }
+    return nullptr;
+}
+
+template <class T>
+Image Generic_Main_Component<T>::image_from_resource(const Res_Data &data)
+{
+    return ImageCache::getFromMemory(data.data, static_cast<int>(data.size));
+}
+
+template <class T>
+Bank_Id Generic_Main_Component<T>::bank_of_psid(std::uint32_t psid, bool percussive) noexcept
+{
+    return Bank_Id(static_cast<std::uint8_t>((psid >> 7) & 127), static_cast<std::uint8_t>(psid & 127), percussive);
 }
 
 template <class T>

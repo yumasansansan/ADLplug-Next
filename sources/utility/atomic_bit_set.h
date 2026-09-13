@@ -1,4 +1,4 @@
-//          Part of ADLplug, distributed under the GNU GPL v3.
+//     Part of ADLplug, distributed under the GNU GPL v3 or later.
 //               (See accompanying file LICENSE.)
 //
 // A fixed-size bitset whose individual bits can be set and cleared from
@@ -35,14 +35,18 @@ public:
     // Assign bit `idx`, returning its previous value.
     bool set(std::size_t idx, bool value, std::memory_order order = std::memory_order_seq_cst);
 
+    // Clear every bit. Not atomic as a whole: a concurrent set() of another
+    // bit may or may not survive.
+    void reset_all(std::memory_order order = std::memory_order_seq_cst);
+
     bool test(std::size_t idx, std::memory_order order = std::memory_order_seq_cst) const;
     bool operator[](std::size_t idx) const { return test(idx); }
 
     constexpr std::size_t size() const { return N; }
 
 private:
-    typedef unsigned int Block;
-    typedef std::atomic<Block> Atomic_Block;
+    using Block = unsigned int;
+    using Atomic_Block = std::atomic<Block>;
 
     // The audio thread touches this, so a lock-free representation is not
     // merely preferable here; a mutex-backed std::atomic would be a bug.
@@ -62,16 +66,16 @@ template <std::size_t N>
 inline bool Atomic_Bit_Set<N>::set(std::size_t idx, std::memory_order order)
 {
     assert(idx < N);
-    Block mask = bit_mask(idx);
-    return data_[block_index(idx)].fetch_or(mask, order) & mask;
+    const Block mask = bit_mask(idx);
+    return (data_[block_index(idx)].fetch_or(mask, order) & mask) != 0;
 }
 
 template <std::size_t N>
 inline bool Atomic_Bit_Set<N>::reset(std::size_t idx, std::memory_order order)
 {
     assert(idx < N);
-    Block mask = bit_mask(idx);
-    return data_[block_index(idx)].fetch_and(static_cast<Block>(~mask), order) & mask;
+    const Block mask = bit_mask(idx);
+    return (data_[block_index(idx)].fetch_and(~mask, order) & mask) != 0;
 }
 
 template <std::size_t N>
@@ -81,9 +85,16 @@ inline bool Atomic_Bit_Set<N>::set(std::size_t idx, bool value, std::memory_orde
 }
 
 template <std::size_t N>
+inline void Atomic_Bit_Set<N>::reset_all(std::memory_order order)
+{
+    for (Atomic_Block &block : data_)
+        block.store(0, order);
+}
+
+template <std::size_t N>
 inline bool Atomic_Bit_Set<N>::test(std::size_t idx, std::memory_order order) const
 {
     assert(idx < N);
-    Block mask = bit_mask(idx);
-    return data_[block_index(idx)].load(order) & mask;
+    const Block mask = bit_mask(idx);
+    return (data_[block_index(idx)].load(order) & mask) != 0;
 }

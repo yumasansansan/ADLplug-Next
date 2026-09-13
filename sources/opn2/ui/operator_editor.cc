@@ -7,6 +7,9 @@
   now maintained by hand. The "//[...]" markers left behind are ordinary
   section comments and no longer carry any special meaning -- edit anywhere.
 
+  Modified for ADLplug-Next. The modifications are distributed under the
+  GNU GPL v3 or later (see the accompanying file LICENSE).
+
   ==============================================================================
 */
 
@@ -15,8 +18,9 @@
 #include "ui/components/info_display.h"
 #include "adl/instrument.h"
 #include "parameter_block.h"
-#include <fmt/format.h>
+#include <format>
 #include <cmath>
+#include <memory>
 #include "ui/utility/legacy_font.h"
 //[/Headers]
 
@@ -34,31 +38,31 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     parameter_block_ = &pb;
     //[/Constructor_pre]
 
-    kn_attack.reset (new Styled_Knob_Default());
+    kn_attack = std::make_unique<Styled_Knob_Default> ();
     addAndMakeVisible (kn_attack.get());
     kn_attack->setName ("new component");
 
     kn_attack->setBounds (16, 3, 40, 40);
 
-    kn_decay.reset (new Styled_Knob_Default());
+    kn_decay = std::make_unique<Styled_Knob_Default> ();
     addAndMakeVisible (kn_decay.get());
     kn_decay->setName ("new component");
 
     kn_decay->setBounds (64, 3, 40, 40);
 
-    kn_sustain.reset (new Styled_Knob_Default());
+    kn_sustain = std::make_unique<Styled_Knob_Default> ();
     addAndMakeVisible (kn_sustain.get());
     kn_sustain->setName ("new component");
 
     kn_sustain->setBounds (16, 48, 40, 40);
 
-    kn_release.reset (new Styled_Knob_Default());
+    kn_release = std::make_unique<Styled_Knob_Default> ();
     addAndMakeVisible (kn_release.get());
     kn_release->setName ("new component");
 
     kn_release->setBounds (64, 48, 40, 40);
 
-    btn_ssgenable.reset (new TextButton ("new button"));
+    btn_ssgenable = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_ssgenable.get());
     btn_ssgenable->setButtonText (String());
     btn_ssgenable->addListener (this);
@@ -66,8 +70,8 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     btn_ssgenable->setBounds (4, 100, 15, 15);
 
-    lbl_level.reset (new Label ("new label",
-                                TRANS("Lv")));
+    lbl_level = std::make_unique<Label> ("new label",
+                                TRANS("Lv"));
     addAndMakeVisible (lbl_level.get());
     lbl_level->setFont (legacy_font (14.0f).withStyle ("Regular"));
     lbl_level->setJustificationType (Justification::centredLeft);
@@ -78,8 +82,8 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     lbl_level->setBounds (163, 0, 28, 16);
 
-    label.reset (new Label ("new label",
-                            TRANS("A")));
+    label = std::make_unique<Label> ("new label",
+                            TRANS("A"));
     addAndMakeVisible (label.get());
     label->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label->setJustificationType (Justification::centredTop);
@@ -90,8 +94,8 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     label->setBounds (4, 0, 20, 16);
 
-    label2.reset (new Label ("new label",
-                             TRANS("D")));
+    label2 = std::make_unique<Label> ("new label",
+                             TRANS("D"));
     addAndMakeVisible (label2.get());
     label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centredTop);
@@ -102,8 +106,8 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     label2->setBounds (52, 0, 20, 16);
 
-    label3.reset (new Label ("new label",
-                             TRANS("S")));
+    label3 = std::make_unique<Label> ("new label",
+                             TRANS("S"));
     addAndMakeVisible (label3.get());
     label3->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label3->setJustificationType (Justification::centredTop);
@@ -114,8 +118,8 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     label3->setBounds (4, 48, 20, 16);
 
-    label4.reset (new Label ("new label",
-                             TRANS("R")));
+    label4 = std::make_unique<Label> ("new label",
+                             TRANS("R"));
     addAndMakeVisible (label4.get());
     label4->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label4->setJustificationType (Justification::centredTop);
@@ -126,8 +130,8 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     label4->setBounds (52, 48, 20, 16);
 
-    lbl_fmul.reset (new Label ("new label",
-                               TRANS("F*")));
+    lbl_fmul = std::make_unique<Label> ("new label",
+                               TRANS("F*"));
     addAndMakeVisible (lbl_fmul.get());
     lbl_fmul->setFont (legacy_font (14.0f).withStyle ("Regular"));
     lbl_fmul->setJustificationType (Justification::centredLeft);
@@ -138,8 +142,8 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     lbl_fmul->setBounds (163, 16, 28, 16);
 
-    lbl_rsl.reset (new Label ("new label",
-                              TRANS("Rsl")));
+    lbl_rsl = std::make_unique<Label> ("new label",
+                              TRANS("Rsl"));
     addAndMakeVisible (lbl_rsl.get());
     lbl_rsl->setFont (legacy_font (14.0f).withStyle ("Regular"));
     lbl_rsl->setJustificationType (Justification::centredLeft);
@@ -150,14 +154,14 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     lbl_rsl->setBounds (163, 32, 28, 16);
 
-    kn_decay2.reset (new Styled_Knob_Default());
+    kn_decay2 = std::make_unique<Styled_Knob_Default> ();
     addAndMakeVisible (kn_decay2.get());
     kn_decay2->setName ("new component");
 
     kn_decay2->setBounds (112, 3, 40, 40);
 
-    label9.reset (new Label ("new label",
-                             TRANS("D")));
+    label9 = std::make_unique<Label> ("new label",
+                             TRANS("D"));
     addAndMakeVisible (label9.get());
     label9->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label9->setJustificationType (Justification::centredTop);
@@ -168,7 +172,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     label9->setBounds (100, 0, 20, 16);
 
-    btn_am.reset (new TextButton ("new button"));
+    btn_am = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_am.get());
     btn_am->setButtonText (TRANS("AM"));
     btn_am->addListener (this);
@@ -176,8 +180,8 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     btn_am->setBounds (112, 55, 40, 24);
 
-    lbl_tune.reset (new Label ("new label",
-                               TRANS("Detune")));
+    lbl_tune = std::make_unique<Label> ("new label",
+                               TRANS("Detune"));
     addAndMakeVisible (lbl_tune.get());
     lbl_tune->setFont (legacy_font (14.0f).withStyle ("Regular"));
     lbl_tune->setJustificationType (Justification::centred);
@@ -188,8 +192,8 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     lbl_tune->setBounds (163, 48, 96, 16);
 
-    label5.reset (new Label ("new label",
-                             TRANS("SSG-EG")));
+    label5 = std::make_unique<Label> ("new label",
+                             TRANS("SSG-EG"));
     addAndMakeVisible (label5.get());
     label5->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label5->setJustificationType (Justification::centredLeft);
@@ -200,7 +204,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     label5->setBounds (20, 99, 56, 16);
 
-    btn_prev_ssgwave.reset (new TextButton ("new button"));
+    btn_prev_ssgwave = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_prev_ssgwave.get());
     btn_prev_ssgwave->setButtonText (TRANS("<"));
     btn_prev_ssgwave->setConnectedEdges (Button::ConnectedOnRight);
@@ -208,7 +212,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     btn_prev_ssgwave->setBounds (82, 96, 23, 24);
 
-    btn_next_ssgwave.reset (new TextButton ("new button"));
+    btn_next_ssgwave = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_next_ssgwave.get());
     btn_next_ssgwave->setButtonText (TRANS(">"));
     btn_next_ssgwave->setConnectedEdges (Button::ConnectedOnLeft);
@@ -216,13 +220,13 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     btn_next_ssgwave->setBounds (211, 96, 23, 24);
 
-    lbl_ssgwave.reset (new Wave_Label (ssgeg_waves_));
+    lbl_ssgwave = std::make_unique<Wave_Label> (ssgeg_waves_);
     addAndMakeVisible (lbl_ssgwave.get());
     lbl_ssgwave->setName ("new component");
 
     lbl_ssgwave->setBounds (105, 96, 106, 24);
 
-    cb_detune.reset (new ComboBox ("new combo box"));
+    cb_detune = std::make_unique<ComboBox> ("new combo box");
     addAndMakeVisible (cb_detune.get());
     cb_detune->setEditableText (false);
     cb_detune->setJustificationType (Justification::centredLeft);
@@ -232,19 +236,19 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
 
     cb_detune->setBounds (163, 65, 96, 24);
 
-    sl_level.reset (new Styled_Slider_DefaultSmall());
+    sl_level = std::make_unique<Styled_Slider_DefaultSmall> ();
     addAndMakeVisible (sl_level.get());
     sl_level->setName ("new component");
 
     sl_level->setBounds (195, -2, 64, 20);
 
-    sl_fmul.reset (new Styled_Slider_DefaultSmall());
+    sl_fmul = std::make_unique<Styled_Slider_DefaultSmall> ();
     addAndMakeVisible (sl_fmul.get());
     sl_fmul->setName ("new component");
 
     sl_fmul->setBounds (195, 14, 64, 20);
 
-    sl_rsl.reset (new Styled_Slider_DefaultSmall());
+    sl_rsl = std::make_unique<Styled_Slider_DefaultSmall> ();
     addAndMakeVisible (sl_rsl.get());
     sl_rsl->setName ("new component");
 
@@ -298,10 +302,8 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
         "×(1-3ε)",
     };
 
-    for (unsigned i = 0; i < 8; ++i) {
-        std::string text = fmt::format("{:d} : {:s}", i + 1, detunes[i]);
-        cb_detune->addItem(text, i + 1);
-    }
+    for (int i = 0; i < 8; ++i)
+        cb_detune->addItem(std::format("{:d} : {:s}", i + 1, detunes[i]), i + 1);
     cb_detune->setScrollWheelEnabled(true);
     //[/Constructor]
 }
@@ -410,10 +412,11 @@ void Operator_Editor::buttonClicked (Button* buttonThatWasClicked)
     {
         //[UserButtonCode_btn_prev_ssgwave] -- add your button handler code here..
         AudioParameterChoice &p = *op.p_ssgwave;
+        p.beginChangeGesture();
         int wave = std::max(p.getIndex() - 1, 0);
         p = wave;
         p.endChangeGesture();
-        lbl_ssgwave->set_wave(wave, dontSendNotification);
+        lbl_ssgwave->set_wave(static_cast<unsigned>(wave), dontSendNotification);
         //[/UserButtonCode_btn_prev_ssgwave]
     }
     else if (buttonThatWasClicked == btn_next_ssgwave.get())
@@ -424,7 +427,7 @@ void Operator_Editor::buttonClicked (Button* buttonThatWasClicked)
         int wave = std::min(p.getIndex() + 1, p.choices.size() - 1);
         p = wave;
         p.endChangeGesture();
-        lbl_ssgwave->set_wave(wave, dontSendNotification);
+        lbl_ssgwave->set_wave(static_cast<unsigned>(wave), dontSendNotification);
         //[/UserButtonCode_btn_next_ssgwave]
     }
 
@@ -474,7 +477,7 @@ void Operator_Editor::set_operator_parameters(const Instrument &ins, unsigned op
 
     btn_am->setToggleState(ins.am(op), ntf);
     btn_ssgenable->setToggleState(ins.ssgenable(op), ntf);
-    lbl_ssgwave->set_wave(ins.ssgwave(op), ntf);
+    lbl_ssgwave->set_wave(static_cast<unsigned>(ins.ssgwave(op)), ntf);
 }
 
 void Operator_Editor::set_operator_enabled(bool b)
@@ -494,35 +497,35 @@ void Operator_Editor::knob_value_changed(Knob *k)
 
     if (k == sl_level.get()) {
         AudioParameterInt &p = *op.p_level;
-        p = (int)std::lround(k->value());
+        p = static_cast<int>(std::lround(k->value()));
     }
     else if (k == sl_fmul.get()) {
         AudioParameterInt &p = *op.p_fmul;
-        p = (int)std::lround(k->value());
+        p = static_cast<int>(std::lround(k->value()));
     }
     else if (k == sl_rsl.get()) {
         AudioParameterInt &p = *op.p_ratescale;
-        p = (int)std::lround(k->value());
+        p = static_cast<int>(std::lround(k->value()));
     }
     else if (k == kn_attack.get()) {
         AudioParameterInt &p = *op.p_attack;
-        p = (int)std::lround(k->value());
+        p = static_cast<int>(std::lround(k->value()));
     }
     else if (k == kn_decay.get()) {
         AudioParameterInt &p = *op.p_decay1;
-        p = (int)std::lround(k->value());
+        p = static_cast<int>(std::lround(k->value()));
     }
     else if (k == kn_decay2.get()) {
         AudioParameterInt &p = *op.p_decay2;
-        p = (int)std::lround(k->value());
+        p = static_cast<int>(std::lround(k->value()));
     }
     else if (k == kn_sustain.get()) {
         AudioParameterInt &p = *op.p_sustain;
-        p = (int)std::lround(k->value());
+        p = static_cast<int>(std::lround(k->value()));
     }
     else if (k == kn_release.get()) {
         AudioParameterInt &p = *op.p_release;
-        p = (int)std::lround(k->value());
+        p = static_cast<int>(std::lround(k->value()));
     }
 
     display_info_for_component(k);
@@ -632,39 +635,39 @@ bool Operator_Editor::display_info_for_component(Component *c)
 
     if (c == sl_level.get()) {
         param = prefix + "Level";
-        val = (int)std::lround(kn->value());
+        val = static_cast<int>(std::lround(kn->value()));
     }
     else if (c == sl_fmul.get()) {
         param = prefix + "Frequency multiplier";
-        val = (int)std::lround(kn->value());
+        val = static_cast<int>(std::lround(kn->value()));
     }
     else if (c == sl_rsl.get()) {
         param = prefix + "Rate scale level";
-        val = (int)std::lround(kn->value());
+        val = static_cast<int>(std::lround(kn->value()));
     }
     else if (kn == kn_attack.get()) {
         param = prefix + "Attack";
-        val = (int)std::lround(kn->value());
+        val = static_cast<int>(std::lround(kn->value()));
     }
     else if (kn == kn_decay.get()) {
         param = prefix + "Primary Decay";
-        val = (int)std::lround(kn->value());
+        val = static_cast<int>(std::lround(kn->value()));
     }
     else if (kn == kn_decay2.get()) {
         param = prefix + "Secondary Decay";
-        val = (int)std::lround(kn->value());
+        val = static_cast<int>(std::lround(kn->value()));
     }
     else if (kn == kn_sustain.get()) {
         param = prefix + "Sustain";
-        val = (int)std::lround(kn->value());
+        val = static_cast<int>(std::lround(kn->value()));
     }
     else if (kn == kn_release.get()) {
         param = prefix + "Release";
-        val = (int)std::lround(kn->value());
+        val = static_cast<int>(std::lround(kn->value()));
     }
     else if (c == btn_next_ssgwave.get() || c == btn_prev_ssgwave.get()) {
         param = prefix + "SSG-EG Wave";
-        val = lbl_ssgwave->wave();
+        val = static_cast<int>(lbl_ssgwave->wave());
     }
 
     if (param.isEmpty())

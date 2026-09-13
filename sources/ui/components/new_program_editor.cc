@@ -7,11 +7,20 @@
   now maintained by hand. The "//[...]" markers left behind are ordinary
   section comments and no longer carry any special meaning -- edit anywhere.
 
+  Modified for ADLplug-Next. The modifications are distributed under the
+  GNU GPL v3 or later (see the accompanying file LICENSE).
+
   ==============================================================================
 */
 
 //[Headers] You can add your own extra header files here...
-#include <fmt/format.h>
+#include <charconv>
+#include <cstdint>
+#include <format>
+#include <memory>
+#include <optional>
+#include <string>
+#include <system_error>
 #include "ui/utility/legacy_font.h"
 //[/Headers]
 
@@ -27,8 +36,8 @@ New_Program_Editor::New_Program_Editor ()
     //[Constructor_pre] You can add your own custom stuff here..
     //[/Constructor_pre]
 
-    label.reset (new Label ("new label",
-                            TRANS("Program")));
+    label = std::make_unique<Label> ("new label",
+                            TRANS("Program"));
     addAndMakeVisible (label.get());
     label->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label->setJustificationType (Justification::centredLeft);
@@ -39,8 +48,8 @@ New_Program_Editor::New_Program_Editor ()
 
     label->setBounds (8, 48, 64, 24);
 
-    label2.reset (new Label ("new label",
-                             TRANS("Bank")));
+    label2 = std::make_unique<Label> ("new label",
+                             TRANS("Bank"));
     addAndMakeVisible (label2.get());
     label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centredLeft);
@@ -51,21 +60,21 @@ New_Program_Editor::New_Program_Editor ()
 
     label2->setBounds (8, 8, 64, 24);
 
-    btn_ok.reset (new TextButton ("new button"));
+    btn_ok = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_ok.get());
     btn_ok->setButtonText (TRANS("OK"));
     btn_ok->addListener (this);
 
     btn_ok->setBounds (130, 86, 70, 24);
 
-    btn_cancel.reset (new TextButton ("new button"));
+    btn_cancel = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_cancel.get());
     btn_cancel->setButtonText (TRANS("Cancel"));
     btn_cancel->addListener (this);
 
     btn_cancel->setBounds (218, 86, 70, 24);
 
-    cb_pgm_kind.reset (new ComboBox ("new combo box"));
+    cb_pgm_kind = std::make_unique<ComboBox> ("new combo box");
     addAndMakeVisible (cb_pgm_kind.get());
     cb_pgm_kind->setEditableText (false);
     cb_pgm_kind->setJustificationType (Justification::centredLeft);
@@ -75,7 +84,7 @@ New_Program_Editor::New_Program_Editor ()
 
     cb_pgm_kind->setBounds (96, 48, 144, 24);
 
-    edt_pgm_num.reset (new TextEditor ("new text editor"));
+    edt_pgm_num = std::make_unique<TextEditor> ("new text editor");
     addAndMakeVisible (edt_pgm_num.get());
     edt_pgm_num->setMultiLine (false);
     edt_pgm_num->setReturnKeyStartsNewLine (false);
@@ -87,7 +96,7 @@ New_Program_Editor::New_Program_Editor ()
 
     edt_pgm_num->setBounds (248, 48, 40, 24);
 
-    edt_bank_msb.reset (new TextEditor ("new text editor"));
+    edt_bank_msb = std::make_unique<TextEditor> ("new text editor");
     addAndMakeVisible (edt_bank_msb.get());
     edt_bank_msb->setMultiLine (false);
     edt_bank_msb->setReturnKeyStartsNewLine (false);
@@ -99,7 +108,7 @@ New_Program_Editor::New_Program_Editor ()
 
     edt_bank_msb->setBounds (96, 8, 40, 24);
 
-    edt_bank_lsb.reset (new TextEditor ("new text editor"));
+    edt_bank_lsb = std::make_unique<TextEditor> ("new text editor");
     addAndMakeVisible (edt_bank_lsb.get());
     edt_bank_lsb->setMultiLine (false);
     edt_bank_lsb->setReturnKeyStartsNewLine (false);
@@ -111,8 +120,8 @@ New_Program_Editor::New_Program_Editor ()
 
     edt_bank_lsb->setBounds (152, 8, 40, 24);
 
-    label3.reset (new Label ("new label",
-                             TRANS(":")));
+    label3 = std::make_unique<Label> ("new label",
+                             TRANS(":"));
     addAndMakeVisible (label3.get());
     label3->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label3->setJustificationType (Justification::centredLeft);
@@ -125,7 +134,7 @@ New_Program_Editor::New_Program_Editor ()
 
 
     //[UserPreSize]
-#if JUCE_MAC
+#if defined(JUCE_MAC)
     {
         Rectangle<int> bounds_ok = btn_ok->getBounds();
         Rectangle<int> bounds_cancel = btn_cancel->getBounds();
@@ -200,25 +209,29 @@ void New_Program_Editor::buttonClicked (Button* buttonThatWasClicked)
     {
         //[UserButtonCode_btn_ok] -- add your button handler code here..
         if (on_ok) {
-            auto to_uint7 =
-                [](const char *str) -> unsigned {
-                    unsigned result, count;
-                    return (sscanf(str, "%u%n", &result, &count) == 1 &&
-                            (result < 128) && count == strlen(str)) ? result : ~0u;
-                };
+            // A whole number from 0 to 127 and nothing else. (sscanf with "%n"
+            // took an unsigned for its int, and let signs and spaces through.)
+            const auto to_uint7 = [](const String &text) -> std::optional<std::uint8_t> {
+                const std::string str = text.trim().toStdString();
+                unsigned value = 0;
+                const auto [end, error] = std::from_chars(str.data(), str.data() + str.size(), value);
+                if (error != std::errc() || end != str.data() + str.size() || value > 127)
+                    return std::nullopt;
+                return static_cast<std::uint8_t>(value);
+            };
 
-            unsigned msb = to_uint7(edt_bank_msb->getText().toRawUTF8());
-            unsigned lsb = to_uint7(edt_bank_lsb->getText().toRawUTF8());
-            unsigned pgm = to_uint7(edt_pgm_num->getText().toRawUTF8());
+            const std::optional<std::uint8_t> msb = to_uint7(edt_bank_msb->getText());
+            const std::optional<std::uint8_t> lsb = to_uint7(edt_bank_lsb->getText());
+            const std::optional<std::uint8_t> pgm = to_uint7(edt_pgm_num->getText());
 
-            if (msb == ~0u || lsb == ~0u || pgm == ~0u)
+            if (!msb || !lsb || !pgm)
                 AlertWindow::showMessageBoxAsync(
                     AlertWindow::WarningIcon,
                     "Invalid value", "Identifiers must be integers between 0 and 127.");
             else {
                 Result result;
-                result.bank = Bank_Id(msb, lsb, cb_pgm_kind->getSelectedId() - 1);
-                result.pgm = pgm;
+                result.bank = Bank_Id(*msb, *lsb, cb_pgm_kind->getSelectedId() == 2);
+                result.pgm = *pgm;
                 on_ok(result);
             }
         }
@@ -257,9 +270,9 @@ void New_Program_Editor::comboBoxChanged (ComboBox* comboBoxThatHasChanged)
 void New_Program_Editor::set_current(const Bank_Id &id, unsigned pgm)
 {
     cb_pgm_kind->setSelectedId(id.percussive ? 2 : 1);
-    edt_pgm_num->setText(fmt::format("{:03d}", pgm));
-    edt_bank_msb->setText(fmt::format("{:03d}", id.msb));
-    edt_bank_lsb->setText(fmt::format("{:03d}", id.lsb));
+    edt_pgm_num->setText(std::format("{:03d}", pgm));
+    edt_bank_msb->setText(std::format("{:03d}", id.msb));
+    edt_bank_lsb->setText(std::format("{:03d}", id.lsb));
 }
 //[/MiscUserCode]
 

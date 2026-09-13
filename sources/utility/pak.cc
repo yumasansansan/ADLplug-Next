@@ -2,41 +2,54 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #include "pak.h"
 #include "JuceHeader.h"
+#include <cstring>
+#include <limits>
 
-bool Pak_File_Reader::init_with_data(const uint8_t *data, uint32_t size)
+namespace {
+
+std::uint32_t read_big_endian_u32(const std::uint8_t *p) noexcept
+{
+    return static_cast<std::uint32_t>(p[0]) << 24 | static_cast<std::uint32_t>(p[1]) << 16 |
+           static_cast<std::uint32_t>(p[2]) << 8 | static_cast<std::uint32_t>(p[3]);
+}
+
+}  // namespace
+
+bool Pak_File_Reader::init_with_data(const std::uint8_t *data, std::size_t size)
 {
     data_ = data;
     size_ = size;
     return read_dictionary();
 }
 
-uint32_t Pak_File_Reader::entry_count() const
+const std::string &Pak_File_Reader::name(std::size_t nth) const
 {
-    return entries_.size();
+    return entries_.at(nth).name;
 }
 
-const std::string &Pak_File_Reader::name(uint32_t nth) const
+std::string Pak_File_Reader::extract(std::size_t nth) const
 {
     const Entry &entry = entries_.at(nth);
-    return entry.name;
-}
-
-std::string Pak_File_Reader::extract(uint32_t nth) const
-{
-    const Entry &entry = entries_.at(nth);
+    if (entry.size > static_cast<std::uint32_t>(std::numeric_limits<int>::max()))
+        return {};
 
     MemoryInputStream mem_stream(data_ + content_offset_, size_ - content_offset_, false);
     GZIPDecompressorInputStream gz_stream(&mem_stream, false, GZIPDecompressorInputStream::gzipFormat);
 
     if (!gz_stream.setPosition(entry.offset))
-        return std::string();
+        return {};
 
     std::string data(entry.size, '\0');
-    if ((unsigned)gz_stream.read(&data[0], entry.size) != entry.size)
-        return std::string();
+    const int size = static_cast<int>(entry.size);
+    if (gz_stream.read(data.data(), size) != size)
+        return {};
 
     return data;
 }
@@ -47,43 +60,37 @@ bool Pak_File_Reader::read_dictionary()
     entries_.reserve(256);
     content_offset_ = 0;
 
-    const uint8_t *ptr = data_;
-    uint32_t left = size_;
-    bool dictionary_end = false;
-    while (!dictionary_end) {
+    const std::uint8_t *ptr = data_;
+    std::size_t left = size_;
+    for (;;) {
         Entry ent;
 
         if (left < 4)
             return false;
-
-        ent.size = (ptr[0] << 24) | (ptr[1] << 16) | (ptr[2] << 8) | ptr[3];
+        ent.size = read_big_endian_u32(ptr);
         ptr += 4;
         left -= 4;
 
-        dictionary_end = ent.size == 0;
+        if (ent.size == 0)
+            break;
 
-        if (!dictionary_end) {
-            if (left < 4)
-                return false;
+        if (left < 4)
+            return false;
+        ent.offset = read_big_endian_u32(ptr);
+        ptr += 4;
+        left -= 4;
 
-            ent.offset = (ptr[0] << 24) | (ptr[1] << 16) | (ptr[2] << 8) | ptr[3];
-            ptr += 4;
-            left -= 4;
+        const auto *name_end = static_cast<const std::uint8_t *>(std::memchr(ptr, 0, left));
+        if (!name_end)
+            return false;
+        const auto name_length = static_cast<std::size_t>(name_end - ptr);
+        ent.name.assign(reinterpret_cast<const char *>(ptr), name_length);
+        ptr = name_end + 1;
+        left -= name_length + 1;
 
-            ent.name.reserve(64);
-            char c;
-            do {
-                if (left == 0)
-                    return false;
-                c = *ptr++;
-                --left;
-                if (c != '\0')
-                    ent.name.push_back(c);
-            } while (c != '\0');
-            entries_.push_back(std::move(ent));
-        }
+        entries_.push_back(std::move(ent));
     }
 
-    content_offset_ = ptr - data_;
+    content_offset_ = static_cast<std::size_t>(ptr - data_);
     return true;
 }

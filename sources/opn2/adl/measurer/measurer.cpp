@@ -14,20 +14,22 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Modified for ADLplug-Next. The modifications are distributed under the
+ * GNU GPL v3 or later, as above.
  */
 
 #include "measurer.h"
 #include "../instrument.h"
-#include <vector>
+#include <algorithm>
+#include <array>
 #include <cmath>
-#include <memory>
-#include <cstring>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
-#include <limits>
-
-#ifndef M_PI
-#define M_PI    3.14159265358979323846
-#endif
+#include <memory>
+#include <numbers>
+#include <vector>
 
 //Measurer is always needs for emulator
 // Chip emulators come from the libOPNMIDI submodule; ADLplug used to carry
@@ -35,24 +37,26 @@
 #include <chips/opn_chip_base.h>
 #include <chips/mame_opn2.h>
 
-typedef MameOPN2 DefaultOPN2;
+using DefaultOPN2 = MameOPN2;
+
+namespace {
 
 template <class T>
 class AudioHistory
 {
     std::unique_ptr<T[]> m_data;
-    size_t m_index = 0;  // points to the next write slot
-    size_t m_length = 0;
-    size_t m_capacity = 0;
+    std::size_t m_index = 0;  // points to the next write slot
+    std::size_t m_length = 0;
+    std::size_t m_capacity = 0;
 
 public:
-    size_t size() const { return m_length; }
-    size_t capacity() const { return m_capacity; }
+    std::size_t size() const { return m_length; }
+    std::size_t capacity() const { return m_capacity; }
     const T *data() const { return &m_data[m_index + m_capacity - m_length]; }
 
-    void reset(size_t capacity)
+    void reset(std::size_t capacity)
     {
-        m_data.reset(new T[2 * capacity]());
+        m_data = std::make_unique<T[]>(2 * capacity);
         m_index = 0;
         m_length = 0;
         m_capacity = capacity;
@@ -66,63 +70,61 @@ public:
     void add(const T &item)
     {
         T *data = m_data.get();
-        const size_t capacity = m_capacity;
-        size_t index = m_index;
+        const std::size_t capacity = m_capacity;
+        const std::size_t index = m_index;
         data[index] = item;
         data[index + capacity] = item;
         m_index = (index + 1 != capacity) ? (index + 1) : 0;
-        size_t length = m_length + 1;
+        const std::size_t length = m_length + 1;
         m_length = (length < capacity) ? length : capacity;
     }
 };
 
-static void HannWindow(double *w, unsigned n)
+void HannWindow(double *w, std::size_t n)
 {
-    for (unsigned i = 0; i < n; ++i)
-        w[i] = 0.5 * (1.0 - std::cos(2 * M_PI * i / (n - 1)));
+    for (std::size_t i = 0; i < n; ++i)
+        w[i] = 0.5 * (1.0 - std::cos(2 * std::numbers::pi * static_cast<double>(i) / static_cast<double>(n - 1)));
 }
 
-static double MeasureRMS(const double *signal, const double *window, unsigned length)
+double MeasureRMS(const double *signal, const double *window, std::size_t length)
 {
     double mean = 0;
-#pragma omp simd reduction(+: mean)
-    for(unsigned i = 0; i < length; ++i)
+    for (std::size_t i = 0; i < length; ++i)
         mean += window[i] * signal[i];
-    mean /= length;
+    mean /= static_cast<double>(length);
 
     double rms = 0;
-#pragma omp simd reduction(+: rms)
-    for(unsigned i = 0; i < length; ++i)
+    for (std::size_t i = 0; i < length; ++i)
     {
-        double diff = window[i] * signal[i] - mean;
+        const double diff = window[i] * signal[i] - mean;
         rms += diff * diff;
     }
-    rms = std::sqrt(rms / (length - 1));
+    rms = std::sqrt(rms / static_cast<double>(length - 1));
 
     return rms;
 }
 
-static const unsigned g_outputRate = 53267;
+constexpr unsigned g_outputRate = 53267;
 
 struct TinySynth
 {
     //! Context of the chip emulator
-    OPNChipBase *m_chip;
+    OPNChipBase *m_chip = nullptr;
     //! Count of playing notes
-    unsigned m_notesNum;
+    unsigned m_notesNum = 0;
     //! MIDI note to play
-    int m_notenum;
+    int m_notenum = 0;
     //! Centy detune
-    int8_t  m_fineTune;
+    std::int8_t  m_fineTune = 0;
     //! Half-tone offset
-    int16_t m_noteOffsets[2];
+    std::int16_t m_noteOffsets[2] = {};
 
     //! Absolute channel
-    uint32_t    m_c;
+    std::uint32_t    m_c = 0;
     //! Port of OPN2 chip
-    uint8_t     m_port;
+    std::uint8_t     m_port = 0;
     //! Relative channel
-    uint8_t     m_cc;
+    std::uint8_t     m_cc = 0;
 
     void resetChip()
     {
@@ -146,7 +148,7 @@ struct TinySynth
     void setInstrument(const Instrument &in)
     {
         m_notenum = in.percussion_key_number >= 128 ? (in.percussion_key_number - 128) : in.percussion_key_number;
-        if(m_notenum == 0)
+        if (m_notenum == 0)
             m_notenum = 25;
         m_notesNum = 1;
         m_fineTune = 0;
@@ -155,59 +157,62 @@ struct TinySynth
 
         m_c = 0;
         m_port = (m_c <= 2) ? 0 : 1;
-        m_cc   = m_c % 3;
+        m_cc   = static_cast<std::uint8_t>(m_c % 3);
 
-        for(uint8_t op = 0; op < 4; op++)
+        for (unsigned op = 0; op < 4; op++)
         {
-            m_chip->writeReg(m_port, 0x30 + (op * 4) + m_cc, in.operators[op].dtfm_30);
-            m_chip->writeReg(m_port, 0x40 + (op * 4) + m_cc, in.operators[op].level_40);
-            m_chip->writeReg(m_port, 0x50 + (op * 4) + m_cc, in.operators[op].rsatk_50);
-            m_chip->writeReg(m_port, 0x60 + (op * 4) + m_cc, in.operators[op].amdecay1_60);
-            m_chip->writeReg(m_port, 0x70 + (op * 4) + m_cc, in.operators[op].decay2_70);
-            m_chip->writeReg(m_port, 0x80 + (op * 4) + m_cc, in.operators[op].susrel_80);
-            m_chip->writeReg(m_port, 0x90 + (op * 4) + m_cc, in.operators[op].ssgeg_90);
+            const auto reg = [this, op](unsigned base) { return static_cast<std::uint16_t>(base + (op * 4) + m_cc); };
+            m_chip->writeReg(m_port, reg(0x30), in.operators[op].dtfm_30);
+            m_chip->writeReg(m_port, reg(0x40), in.operators[op].level_40);
+            m_chip->writeReg(m_port, reg(0x50), in.operators[op].rsatk_50);
+            m_chip->writeReg(m_port, reg(0x60), in.operators[op].amdecay1_60);
+            m_chip->writeReg(m_port, reg(0x70), in.operators[op].decay2_70);
+            m_chip->writeReg(m_port, reg(0x80), in.operators[op].susrel_80);
+            m_chip->writeReg(m_port, reg(0x90), in.operators[op].ssgeg_90);
         }
-        m_chip->writeReg(m_port, 0xB0 + m_cc, in.fbalg);
-        m_chip->writeReg(m_port, 0xB4 + m_cc, 0xC0);//Disable LFO sensitivity for clear measure
+        m_chip->writeReg(m_port, static_cast<std::uint16_t>(0xB0 + m_cc), in.fbalg);
+        m_chip->writeReg(m_port, static_cast<std::uint16_t>(0xB4 + m_cc), 0xC0);//Disable LFO sensitivity for clear measure
     }
 
     void noteOn()
     {
         double hertz = 321.88557 * std::exp(0.057762265 * (m_notenum + m_noteOffsets[0]));
-        uint16_t x2 = 0x0000;
-        if(hertz < 0 || hertz > 262143)
+        std::uint16_t x2 = 0x0000;
+        if (hertz < 0 || hertz > 262143)
         {
             std::fprintf(stderr, "MEASURER WARNING: Why does note %d + note-offset %d produce hertz %g?          \n",
                          m_notenum, m_noteOffsets[0], hertz);
             hertz = 262143;
         }
 
-        while(hertz >= 2047.5)
+        while (hertz >= 2047.5)
         {
             hertz /= 2.0;    // Calculate octave
             x2 += 0x800;
         }
-        x2 += static_cast<uint32_t>(hertz + 0.5);
+        x2 = static_cast<std::uint16_t>(x2 + static_cast<unsigned>(hertz + 0.5));
 
         // Keyon the note
-        m_chip->writeReg(m_port, 0xA4 + m_cc, (x2>>8) & 0xFF);//Set frequency and octave
-        m_chip->writeReg(m_port, 0xA0 + m_cc,  x2 & 0xFF);
+        m_chip->writeReg(m_port, static_cast<std::uint16_t>(0xA4 + m_cc), static_cast<std::uint8_t>((x2 >> 8) & 0xFF));//Set frequency and octave
+        m_chip->writeReg(m_port, static_cast<std::uint16_t>(0xA0 + m_cc), static_cast<std::uint8_t>(x2 & 0xFF));
 
-        m_chip->writeReg(0, 0x28, 0xF0 + uint8_t((m_c <= 2) ? m_c : m_c + 1));
+        m_chip->writeReg(0, 0x28, static_cast<std::uint8_t>(0xF0 + ((m_c <= 2) ? m_c : m_c + 1)));
     }
 
     void noteOff()
     {
         // Keyoff the note
-        uint8_t cc = static_cast<uint8_t>(m_c % 6);
-        m_chip->writeReg(0, 0x28, (m_c <= 2) ? cc : cc + 1);
+        const auto cc = static_cast<std::uint8_t>(m_c % 6);
+        m_chip->writeReg(0, 0x28, static_cast<std::uint8_t>((m_c <= 2) ? cc : cc + 1));
     }
 
-    void generate(int16_t *output, size_t frames)
+    void generate(std::int16_t *output, std::size_t frames)
     {
         m_chip->generate(output, frames);
     }
 };
+
+}  // namespace
 
 namespace Measurer {
 
@@ -216,15 +221,15 @@ void ComputeDurations(const Instrument &in, DurationInfo &result)
     DefaultOPN2 chip(OPNChip_OPN2);
     AudioHistory<double> audioHistory;
 
-    const unsigned interval             = 150;
-    const unsigned samples_per_interval = g_outputRate / interval;
+    constexpr unsigned interval             = 150;
+    constexpr unsigned samples_per_interval = g_outputRate / interval;
 
-    const double historyLength = 0.1;  // maximum duration to memorize (seconds)
-    audioHistory.reset(std::ceil(historyLength * g_outputRate));
+    constexpr double historyLength = 0.1;  // maximum duration to memorize (seconds)
+    const auto historyCapacity = static_cast<std::size_t>(std::ceil(historyLength * g_outputRate));
+    audioHistory.reset(historyCapacity);
 
-    std::unique_ptr<double[]> window;
-    window.reset(new double[audioHistory.capacity()]);
-    unsigned winsize = 0;
+    std::vector<double> window(audioHistory.capacity());
+    std::size_t winsize = 0;
 
     TinySynth synth;
     synth.m_chip = &chip;
@@ -233,93 +238,89 @@ void ComputeDurations(const Instrument &in, DurationInfo &result)
     synth.noteOn();
 
     /* For capturing */
-    const unsigned max_silent = 6;
-    const unsigned max_on  = 40;
-    const unsigned max_off = 60;
+    constexpr unsigned max_silent = 6;
+    constexpr unsigned max_on  = 40;
+    constexpr unsigned max_off = 60;
 
-    unsigned max_period_on = max_on * interval;
-    unsigned max_period_off = max_off * interval;
+    constexpr unsigned max_period_on = max_on * interval;
+    constexpr unsigned max_period_off = max_off * interval;
 
-    const double min_coefficient_on = 0.008;
-    const double min_coefficient_off = 0.1;
+    constexpr double min_coefficient_on = 0.008;
+    constexpr double min_coefficient_off = 0.1;
 
     unsigned windows_passed_on = 0;
-    unsigned windows_passed_off = 0;
 
     /* For Analyze the results */
     double begin_amplitude        = 0;
     double peak_amplitude_value   = 0;
-    size_t peak_amplitude_time    = 0;
-    size_t quarter_amplitude_time = max_period_on;
+    std::size_t peak_amplitude_time    = 0;
+    std::size_t quarter_amplitude_time = max_period_on;
     bool   quarter_amplitude_time_found = false;
-    size_t keyoff_out_time        = 0;
+    std::size_t keyoff_out_time        = 0;
     bool   keyoff_out_time_found  = false;
 
-    const size_t audioBufferLength = 256;
-    const size_t audioBufferSize = 2 * audioBufferLength;
-    int16_t audioBuffer[audioBufferSize];
+    constexpr std::size_t audioBufferLength = 256;
+    std::array<std::int16_t, 2 * audioBufferLength> audioBuffer {};
 
     // For up to 40 seconds, measure mean amplitude.
     double highest_sofar = 0;
-    short sound_min = 0, sound_max = 0;
+    std::int16_t sound_min = 0, sound_max = 0;
 
-    for(unsigned period = 0; period < max_period_on; ++period, ++windows_passed_on)
+    for (unsigned period = 0; period < max_period_on; ++period, ++windows_passed_on)
     {
-        for(unsigned i = 0; i < samples_per_interval;)
+        for (unsigned i = 0; i < samples_per_interval;)
         {
-            size_t blocksize = samples_per_interval - i;
-            blocksize = (blocksize < audioBufferLength) ? blocksize : audioBufferLength;
-            synth.generate(audioBuffer, blocksize);
-            for (unsigned j = 0; j < blocksize; ++j)
+            const std::size_t blocksize = std::min<std::size_t>(samples_per_interval - i, audioBufferLength);
+            synth.generate(audioBuffer.data(), blocksize);
+            for (std::size_t j = 0; j < blocksize; ++j)
             {
-                int16_t s = audioBuffer[2 * j];
+                const std::int16_t s = audioBuffer[2 * j];
                 audioHistory.add(s);
-                if(sound_min > s) sound_min = s;
-                if(sound_max < s) sound_max = s;
+                if (sound_min > s) sound_min = s;
+                if (sound_max < s) sound_max = s;
             }
-            i += blocksize;
+            i += static_cast<unsigned>(blocksize);
         }
 
-        if(winsize != audioHistory.size())
+        if (winsize != audioHistory.size())
         {
             winsize = audioHistory.size();
-            HannWindow(window.get(), winsize);
+            HannWindow(window.data(), winsize);
         }
 
-        double rms = MeasureRMS(audioHistory.data(), window.get(), winsize);
+        const double rms = MeasureRMS(audioHistory.data(), window.data(), winsize);
         /* ======== Peak time detection ======== */
-        if(period == 0)
+        if (period == 0)
         {
             begin_amplitude = rms;
             peak_amplitude_value = rms;
             peak_amplitude_time = 0;
         }
-        else if(rms > peak_amplitude_value)
+        else if (rms > peak_amplitude_value)
         {
             peak_amplitude_value = rms;
             peak_amplitude_time  = period;
             // In next step, update the quater amplitude time
             quarter_amplitude_time_found = false;
         }
-        else if(!quarter_amplitude_time_found && (rms <= peak_amplitude_value * min_coefficient_on))
+        else if (!quarter_amplitude_time_found && (rms <= peak_amplitude_value * min_coefficient_on))
         {
             quarter_amplitude_time = period;
             quarter_amplitude_time_found = true;
         }
         /* ======== Peak time detection =END==== */
-        if(rms > highest_sofar)
+        if (rms > highest_sofar)
             highest_sofar = rms;
 
-        if((period > max_silent * interval) &&
-           ( (rms < highest_sofar * min_coefficient_on) || (sound_min >= -1 && sound_max <= 1) )
-        )
+        if ((period > max_silent * interval) &&
+            ((rms < highest_sofar * min_coefficient_on) || (sound_min >= -1 && sound_max <= 1)))
             break;
     }
 
-    if(!quarter_amplitude_time_found)
+    if (!quarter_amplitude_time_found)
         quarter_amplitude_time = windows_passed_on;
 
-    if(windows_passed_on >= max_period_on)
+    if (windows_passed_on >= max_period_on)
     {
         // Just Keyoff the note
         synth.noteOff();
@@ -331,71 +332,69 @@ void ComputeDurations(const Instrument &in, DurationInfo &result)
         synth.setInstrument(in);
         synth.noteOn();
 
-        audioHistory.reset(std::ceil(historyLength * g_outputRate));
-        for(unsigned period = 0;
-            ((period < peak_amplitude_time) || (period == 0)) && (period < max_period_on);
-            ++period)
+        audioHistory.reset(historyCapacity);
+        for (unsigned period = 0;
+             ((period < peak_amplitude_time) || (period == 0)) && (period < max_period_on);
+             ++period)
         {
-            for(unsigned i = 0; i < samples_per_interval;)
+            for (unsigned i = 0; i < samples_per_interval;)
             {
-                size_t blocksize = samples_per_interval - i;
-                blocksize = (blocksize < audioBufferLength) ? blocksize : audioBufferLength;
-                synth.generate(audioBuffer, blocksize);
-                for (unsigned j = 0; j < blocksize; ++j)
+                const std::size_t blocksize = std::min<std::size_t>(samples_per_interval - i, audioBufferLength);
+                synth.generate(audioBuffer.data(), blocksize);
+                for (std::size_t j = 0; j < blocksize; ++j)
                     audioHistory.add(audioBuffer[2 * j]);
-                i += blocksize;
+                i += static_cast<unsigned>(blocksize);
             }
         }
         synth.noteOff();
     }
 
     // Now, for up to 60 seconds, measure mean amplitude.
-    for(unsigned period = 0; period < max_period_off; ++period, ++windows_passed_off)
+    for (unsigned period = 0; period < max_period_off; ++period)
     {
-        for(unsigned i = 0; i < samples_per_interval;)
+        for (unsigned i = 0; i < samples_per_interval;)
         {
-            size_t blocksize = samples_per_interval - i;
-            blocksize = (blocksize < 256) ? blocksize : 256;
-            synth.generate(audioBuffer, blocksize);
-            for (unsigned j = 0; j < blocksize; ++j)
+            const std::size_t blocksize = std::min<std::size_t>(samples_per_interval - i, audioBufferLength);
+            synth.generate(audioBuffer.data(), blocksize);
+            for (std::size_t j = 0; j < blocksize; ++j)
             {
-                int16_t s = audioBuffer[2 * j];
+                const std::int16_t s = audioBuffer[2 * j];
                 audioHistory.add(s);
-                if(sound_min > s) sound_min = s;
-                if(sound_max < s) sound_max = s;
+                if (sound_min > s) sound_min = s;
+                if (sound_max < s) sound_max = s;
             }
-            i += blocksize;
+            i += static_cast<unsigned>(blocksize);
         }
 
-        if(winsize != audioHistory.size())
+        if (winsize != audioHistory.size())
         {
             winsize = audioHistory.size();
-            HannWindow(window.get(), winsize);
+            HannWindow(window.data(), winsize);
         }
 
-        double rms = MeasureRMS(audioHistory.data(), window.get(), winsize);
+        const double rms = MeasureRMS(audioHistory.data(), window.data(), winsize);
         /* ======== Find Key Off time ======== */
-        if(!keyoff_out_time_found && (rms <= peak_amplitude_value * min_coefficient_off))
+        if (!keyoff_out_time_found && (rms <= peak_amplitude_value * min_coefficient_off))
         {
             keyoff_out_time = period;
             keyoff_out_time_found = true;
         }
         /* ======== Find Key Off time ==END=== */
-        if(rms < highest_sofar * min_coefficient_off)
+        if (rms < highest_sofar * min_coefficient_off)
             break;
 
-        if((period > max_silent * interval) && (sound_min >= -1 && sound_max <= 1))
+        if ((period > max_silent * interval) && (sound_min >= -1 && sound_max <= 1))
             break;
     }
 
     result.peak_amplitude_time = peak_amplitude_time;
     result.peak_amplitude_value = peak_amplitude_value;
     result.begin_amplitude = begin_amplitude;
-    result.quarter_amplitude_time = (double)quarter_amplitude_time;
-    result.keyoff_out_time = (double)keyoff_out_time;
+    result.quarter_amplitude_time = static_cast<double>(quarter_amplitude_time);
+    result.keyoff_out_time = static_cast<double>(keyoff_out_time);
 
-    result.ms_sound_kon  = (int64_t)(quarter_amplitude_time * 1000.0 / interval);
-    result.ms_sound_koff = (int64_t)(keyoff_out_time        * 1000.0 / interval);
+    result.ms_sound_kon  = static_cast<std::uint64_t>(static_cast<double>(quarter_amplitude_time) * 1000.0 / interval);
+    result.ms_sound_koff = static_cast<std::uint64_t>(static_cast<double>(keyoff_out_time) * 1000.0 / interval);
     result.nosound = (peak_amplitude_value < 0.5) || ((sound_min >= -1) && (sound_max <= 1));
 }
 

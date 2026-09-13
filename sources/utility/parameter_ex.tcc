@@ -2,8 +2,12 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
-#include "parameter_ex.h"
+// Included at the end of parameter_ex.h.
 
 template <class Parameter>
 void AudioParameterEx<Parameter>::addValueChangedListenerEx(ValueChangedListener *l)
@@ -23,24 +27,24 @@ template <class Parameter>
 void AudioParameterEx<Parameter>::invoke_value_changed_listeners()
 {
     const ScopedLock sl(listener_lock_);
-    for (unsigned i = listeners_.size(); i-- > 0;)
-        listeners_[i]->parameterValueChangedEx(tag_);
+    for (int i = listeners_.size(); i-- > 0;)
+        listeners_.getUnchecked(i)->parameterValueChangedEx(tag_);
 }
 
 template <class Parameter>
-int AudioParameterEx<Parameter>::getTagEx() const noexcept
+std::uint32_t AudioParameterEx<Parameter>::getTagEx() const noexcept
 {
     return tag_;
 }
 
 template <class Parameter>
-void AudioParameterEx<Parameter>::setTagEx(int tag) noexcept
+void AudioParameterEx<Parameter>::setTagEx(std::uint32_t tag) noexcept
 {
     tag_ = tag;
 }
 
 template <class Parameter>
-void AudioParameterEx<Parameter>:: setAutomatable(bool automatable)
+void AudioParameterEx<Parameter>::setAutomatable(bool automatable)
 {
     automatable_ = automatable;
 }
@@ -48,12 +52,5 @@ void AudioParameterEx<Parameter>:: setAutomatable(bool automatable)
 template <class Parameter>
 bool AudioParameterEx<Parameter>::isAutomatable() const
 {
-    switch (automatable_) {
-    default:
-        return Parameter::isAutomatable();
-    case 0:
-        return false;
-    case 1:
-        return true;
-    }
+    return automatable_ ? *automatable_ : Parameter::isAutomatable();
 }

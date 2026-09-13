@@ -2,11 +2,14 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #pragma once
 #include "JuceHeader.h"
 #include "../parameter_block.h"
-class AudioProcessorEx;
 struct Instrument;
 struct Chip_Settings;
 struct Instrument_Global_Parameters;
@@ -56,10 +59,18 @@ struct Parameter_Block : Basic_Parameter_Block {
 
         Operator op1, op3, op2, op4;
 
-        Operator &nth_operator(unsigned i)
-            { Operator *ops[] = {&op1, &op3, &op2, &op4}; return *ops[i]; }
-        const Operator &nth_operator(unsigned i) const
-            { return const_cast<Part *>(this)->nth_operator(i); }
+        // Operators in the order the instrument numbers them.
+        Operator &nth_operator(unsigned i) noexcept
+            { return this->*operator_member(i); }
+        const Operator &nth_operator(unsigned i) const noexcept
+            { return this->*operator_member(i); }
+
+    private:
+        static constexpr Operator Part::*operator_member(unsigned i) noexcept
+        {
+            static constexpr Operator Part::*members[4] {&Part::op1, &Part::op3, &Part::op2, &Part::op4};
+            return members[i];
+        }
     };
 
     Part part[16];

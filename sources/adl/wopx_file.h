@@ -2,6 +2,10 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #pragma once
 #include <memory>
@@ -14,7 +18,7 @@
 struct WOPLFile_Deleter {
     void operator()(WOPLFile *file) const { WOPL_Free(file); }
 };
-typedef std::unique_ptr<WOPLFile, WOPLFile_Deleter> WOPLFile_Ptr;
+using WOPLFile_Ptr = std::unique_ptr<WOPLFile, WOPLFile_Deleter>;
 
 #elif defined(ADLPLUG_OPN2)
 #include <wopn/wopn_file.h>
@@ -23,7 +27,7 @@ typedef std::unique_ptr<WOPLFile, WOPLFile_Deleter> WOPLFile_Ptr;
 struct WOPNFile_Deleter {
     void operator()(WOPNFile *file) const { WOPN_Free(file); }
 };
-typedef std::unique_ptr<WOPNFile, WOPNFile_Deleter> WOPNFile_Ptr;
+using WOPNFile_Ptr = std::unique_ptr<WOPNFile, WOPNFile_Deleter>;
 
 #endif
 
@@ -40,10 +44,10 @@ enum {
     Ins_IsBlank = WOPL_Ins_IsBlank,
 };
 
-typedef WOPLInstrument Instrument;
-typedef WOPLBank Bank;
-typedef WOPIFile InstrumentFile;
-typedef WOPLFile BankFile;
+using Instrument = WOPLInstrument;
+using Bank = WOPLBank;
+using InstrumentFile = WOPIFile;
+using BankFile = WOPLFile;
 
 static constexpr auto &LoadBankFromMem = WOPL_LoadBankFromMem;
 static constexpr auto &LoadInstFromMem = WOPL_LoadInstFromMem;
@@ -52,8 +56,8 @@ static constexpr auto &CalculateInstFileSize = WOPL_CalculateInstFileSize;
 static constexpr auto &SaveBankToMem = WOPL_SaveBankToMem;
 static constexpr auto &SaveInstToMem = WOPL_SaveInstToMem;
 
-typedef WOPLFile_Deleter BankFile_Deleter;
-typedef WOPLFile_Ptr BankFile_Ptr;
+using BankFile_Deleter = WOPLFile_Deleter;
+using BankFile_Ptr = WOPLFile_Ptr;
 
 #elif defined(ADLPLUG_OPN2)
 
@@ -66,10 +70,10 @@ enum {
     Ins_IsBlank = WOPN_Ins_IsBlank,
 };
 
-typedef WOPNInstrument Instrument;
-typedef WOPNBank Bank;
-typedef OPNIFile InstrumentFile;
-typedef WOPNFile BankFile;
+using Instrument = WOPNInstrument;
+using Bank = WOPNBank;
+using InstrumentFile = OPNIFile;
+using BankFile = WOPNFile;
 
 static constexpr auto &LoadBankFromMem = WOPN_LoadBankFromMem;
 static constexpr auto &LoadInstFromMem = WOPN_LoadInstFromMem;
@@ -78,8 +82,8 @@ static constexpr auto &CalculateInstFileSize = WOPN_CalculateInstFileSize;
 static constexpr auto &SaveBankToMem = WOPN_SaveBankToMem;
 static constexpr auto &SaveInstToMem = WOPN_SaveInstToMem;
 
-typedef WOPNFile_Deleter BankFile_Deleter;
-typedef WOPNFile_Ptr BankFile_Ptr;
+using BankFile_Deleter = WOPNFile_Deleter;
+using BankFile_Ptr = WOPNFile_Ptr;
 
 #endif
 

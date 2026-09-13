@@ -2,37 +2,37 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #pragma once
 #include "JuceHeader.h"
+#include <cstdint>
 
 struct Midi_Input_Message
 {
-    const uint8_t *data = nullptr;
+    const std::uint8_t *data = nullptr;
     unsigned size = 0;
     int time = 0;
 
-    Midi_Input_Message()
-        {}
-    Midi_Input_Message(const uint8_t *data, unsigned size, int time)
-        : data(data), size(size), time(time) {}
-
-    explicit operator bool() const
-        { return data; }
+    explicit operator bool() const noexcept
+        { return data != nullptr; }
 };
 
 class Midi_Input_Source {
 public:
-    typedef Midi_Input_Message (callback_function)(void *);
+    using callback_function = Midi_Input_Message(void *);
 
-    explicit Midi_Input_Source(callback_function *cb, void *cbdata = nullptr)
+    explicit Midi_Input_Source(callback_function *cb, void *cbdata = nullptr) noexcept
         : cb_(cb), cbdata_(cbdata) {}
     // Position within a MidiBuffer. Must outlive the source that reads it.
     struct Buffer_Cursor {
         MidiBufferIterator current;
         MidiBufferIterator end;
     };
-    explicit Midi_Input_Source(Buffer_Cursor &cursor)
+    explicit Midi_Input_Source(Buffer_Cursor &cursor) noexcept
         : cb_(&midi_cb_for_buffer_cursor), cbdata_(&cursor) {}
 
     Midi_Input_Message get_next_event()

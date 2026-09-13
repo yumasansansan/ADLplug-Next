@@ -8,7 +8,7 @@ set(_ADLplug_saved_policy_min "${CMAKE_POLICY_VERSION_MINIMUM}")
 set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 
 # Real-time plugin use: no file loading, no sequencer, no embedded banks
-# (ADLplug ships its own bank set in sources/resources.cc).
+# (ADLplug ships its own bank set in sources/resources.c).
 set(WITH_MIDI_SEQUENCER OFF CACHE BOOL "" FORCE)
 set(WITH_XMI_SUPPORT OFF CACHE BOOL "" FORCE)
 set(WITH_EMBEDDED_BANKS OFF CACHE BOOL "" FORCE)

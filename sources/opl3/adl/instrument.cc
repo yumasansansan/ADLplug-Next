@@ -2,12 +2,14 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #include "instrument.h"
-#include "player.h"
 #include <adlmidi.h>
 #include <cstring>
-#include <cassert>
 
 #define EACH_INS_FIELD(F)                                               \
     F(note_offset1) F(note_offset2)                                     \
@@ -22,7 +24,7 @@
 Instrument Instrument::from_adlmidi(const ADL_Instrument &o) noexcept
 {
     Instrument ins;
-    std::memcpy(static_cast<ADL_Instrument *>(&ins), &o, sizeof(ADL_Instrument));
+    static_cast<ADL_Instrument &>(ins) = o;
     return ins;
 }
 
@@ -41,7 +43,7 @@ Instrument Instrument::from_wopl(const WOPLInstrument &o) noexcept
         #undef F
     }
 
-    std::memcpy(ins.name, o.inst_name, 32);
+    std::memcpy(ins.name, o.inst_name, sizeof ins.name);
 
     return ins;
 }
@@ -60,12 +62,12 @@ WOPLInstrument Instrument::to_wopl() const noexcept
         #undef F
     }
 
-    std::memcpy(ins.inst_name, name, 32);
+    std::memcpy(ins.inst_name, name, sizeof ins.inst_name);
 
     return ins;
 }
 
-Instrument Instrument::from_sbi(const uint8_t *data, size_t length) noexcept
+Instrument Instrument::from_sbi(const std::uint8_t *data, std::size_t length) noexcept
 {
     Instrument ins;
     ins.version = ADLMIDI_InstrumentVersion;
@@ -74,39 +76,36 @@ Instrument Instrument::from_sbi(const uint8_t *data, size_t length) noexcept
     if (length < 4 + 32)
         return ins;
 
-    const uint8_t *magic = data;
+    const std::uint8_t *magic = data;
     data += 4;
     length -= 4;
 
-    enum {
-        SBI_Dos, SBI_Unix2OP, SBI_Unix4OP, SBI_Other
-    } kind;
+    enum class Kind { Dos, Unix2op, Unix4op, Other };
 
-    size_t minsize;
-    if (!memcmp(magic, "SBI\x1a", 4)) {
-        kind = SBI_Dos;
+    Kind kind;
+    std::size_t minsize;
+    if (std::memcmp(magic, "SBI\x1a", 4) == 0) {
+        kind = Kind::Dos;
         minsize = 11;
     }
-    else if (!memcmp(magic, "2OP\x1a", 4)) {
-        kind = SBI_Unix2OP;
+    else if (std::memcmp(magic, "2OP\x1a", 4) == 0) {
+        kind = Kind::Unix2op;
         minsize = 11;
     }
-    else if (!memcmp(magic, "4OP\x1a", 4)) {
-        kind = SBI_Unix4OP;
+    else if (std::memcmp(magic, "4OP\x1a", 4) == 0) {
+        kind = Kind::Unix4op;
         minsize = 22;
     }
-    else if (!memcmp(magic, "SBI", 3)) {
-        kind = SBI_Other;
+    else if (std::memcmp(magic, "SBI", 3) == 0) {
+        kind = Kind::Other;
         minsize = 11;
     }
     else
         return ins;
 
-    const uint8_t *name_field = data;
-    if (kind != SBI_Unix2OP && kind != SBI_Unix4OP)
-        memcpy(ins.name, name_field, 32);
-    else
-        memcpy(ins.name, name_field, 30);
+    const bool unix_format = kind == Kind::Unix2op || kind == Kind::Unix4op;
+    const std::uint8_t *name_field = data;
+    std::memcpy(ins.name, name_field, unix_format ? 30 : 32);
     data += 32;
     length -= 32;
 
@@ -115,41 +114,42 @@ Instrument Instrument::from_sbi(const uint8_t *data, size_t length) noexcept
         return ins;
     }
 
-    for (unsigned i = 0; i < 2; ++i) {
-        ins.operators[i].avekf_20 = data[0 + !i];
-        ins.operators[i].ksl_l_40 = data[2 + !i];
-        ins.operators[i].atdec_60 = data[4 + !i];
-        ins.operators[i].susrel_80 = data[6 + !i];
-        ins.operators[i].waveform_E0 = data[8 + !i];
-    }
+    // Each operator pair is stored carrier first.
+    const auto load_operator_pair = [&ins](const std::uint8_t *pair, unsigned first) {
+        for (unsigned i = 0; i < 2; ++i) {
+            const std::size_t j = (i == 0) ? 1 : 0;
+            ADL_Operator &op = ins.operators[first + i];
+            op.avekf_20 = pair[0 + j];
+            op.ksl_l_40 = pair[2 + j];
+            op.atdec_60 = pair[4 + j];
+            op.susrel_80 = pair[6 + j];
+            op.waveform_E0 = pair[8 + j];
+        }
+    };
+
+    load_operator_pair(data, 0);
     ins.fb_conn1_C0 = data[10];
     data += 11;
     length -= 11;
 
     switch (kind) {
-    case SBI_Dos:
+    case Kind::Dos:
         if (length > 1)
-            ins.note_offset1 = (int8_t)data[1];
+            ins.note_offset1 = static_cast<std::int8_t>(data[1]);
         if (length > 2)
             ins.percussion_key_number = data[2];
         break;
 
-    case SBI_Unix4OP:
+    case Kind::Unix4op:
         ins.four_op(true);
-        for (unsigned i = 0; i < 2; ++i) {
-            ins.operators[2 + i].avekf_20 = data[0 + !i];
-            ins.operators[2 + i].ksl_l_40 = data[2 + !i];
-            ins.operators[2 + i].atdec_60 = data[4 + !i];
-            ins.operators[2 + i].susrel_80 = data[6 + !i];
-            ins.operators[2 + i].waveform_E0 = data[8 + !i];
-        }
+        load_operator_pair(data, 2);
         ins.fb_conn2_C0 = data[10];
-        /* fall through */
-    case SBI_Unix2OP:
+        [[fallthrough]];
+    case Kind::Unix2op:
         ins.percussion_key_number = name_field[31];
         break;
 
-    default:
+    case Kind::Other:
         break;
     }
 
@@ -157,79 +157,93 @@ Instrument Instrument::from_sbi(const uint8_t *data, size_t length) noexcept
     return ins;
 }
 
-void Instrument::describe(FILE *out) const noexcept
+void Instrument::describe(std::FILE *out) const noexcept
 {
-    fprintf(out,
-            "Instrument\n"
-            " - 4Op %u Ps4Op %u Blank %u\n"
-            " - 1-2 Feedback %u Conn %u Tune %d\n"
-            " - 3-4 Feedback %u Conn %u Tune %d\n"
-            " - Velocity offset %d\n"
-            " - Second voice fine tune %d\n"
-            " - Percussion note %u\n",
-            four_op(), pseudo_four_op(), blank(),
-            fb12(), con12(), note_offset1,
-            fb34(), con34(), note_offset2,
-            midi_velocity_offset, second_voice_detune, percussion_key_number);
+    std::fprintf(out,
+                 "Instrument\n"
+                 " - 4Op %d Ps4Op %d Blank %d\n"
+                 " - 1-2 Feedback %d Conn %d Tune %d\n"
+                 " - 3-4 Feedback %d Conn %d Tune %d\n"
+                 " - Velocity offset %d\n"
+                 " - Second voice fine tune %d\n"
+                 " - Percussion note %d\n",
+                 four_op(), pseudo_four_op(), blank(),
+                 fb12(), con12(), note_offset1,
+                 fb34(), con34(), note_offset2,
+                 midi_velocity_offset, second_voice_detune, percussion_key_number);
     for (unsigned op = 0; op < 4; ++op)
         describe_operator(op, out, "    ");
 }
 
-void Instrument::describe_operator(unsigned op, FILE *out, const char *indent) const noexcept
+void Instrument::describe_operator(unsigned op, std::FILE *out, const char *indent) const noexcept
 {
-    const char *text = nullptr;
+    const char *text = "?";
     switch (op) {
     case WOPL_OP_MODULATOR1: text = "Modulator 1"; break;
     case WOPL_OP_CARRIER1: text = "Carrier 1"; break;
     case WOPL_OP_MODULATOR2: text = "Modulator 2"; break;
     case WOPL_OP_CARRIER2: text = "Carrier 2"; break;
+    default: break;
     }
-    fprintf(out,
-            "%sOperator %u: %s\n"
-            "%s - ADSR %u %u %u %u\n"
-            "%s - Level %u FMul %u KSL %u\n"
-            "%s - Trem %u Vib %u Sus %u Env %u\n"
-            "%s - Wave %u\n",
-            indent, op, text,
-            indent, attack(op), decay(op), sustain(op), release(op),
-            indent, level(op), fmul(op), ksl(op),
-            indent, trem(op), vib(op), sus(op), env(op),
-            indent, wave(op));
+    std::fprintf(out,
+                 "%sOperator %u: %s\n"
+                 "%s - ADSR %d %d %d %d\n"
+                 "%s - Level %d FMul %d KSL %d\n"
+                 "%s - Trem %d Vib %d Sus %d Env %d\n"
+                 "%s - Wave %d\n",
+                 indent, op, text,
+                 indent, attack(op), decay(op), sustain(op), release(op),
+                 indent, level(op), fmul(op), ksl(op),
+                 indent, trem(op), vib(op), sus(op), env(op),
+                 indent, wave(op));
 }
 
+// Compares field by field. The structs have padding, so memcmp could tell
+// apart two instruments that are the same.
 bool Instrument::equal_instrument(const ADL_Instrument &o) const noexcept
 {
-    return !std::memcmp(static_cast<const ADL_Instrument *>(this), &o, sizeof(ADL_Instrument));
+    if (version != o.version)
+        return false;
+
+    #define F(x) if (x != o.x) return false;
+    EACH_INS_FIELD(F)
+    #undef F
+
+    for (unsigned op = 0; op < 4; ++op) {
+        #define F(x) if (operators[op].x != o.operators[op].x) return false;
+        EACH_OP_FIELD(F)
+        #undef F
+    }
+
+    return true;
 }
 
 bool Instrument::equal_instrument_except_delays(const ADL_Instrument &o) const noexcept
 {
-    ADL_Instrument samedelay = o;
-    samedelay.delay_on_ms = this->delay_on_ms;
-    samedelay.delay_off_ms = this->delay_off_ms;
-    return equal_instrument(samedelay);
+    ADL_Instrument same_delays = o;
+    same_delays.delay_on_ms = delay_on_ms;
+    same_delays.delay_off_ms = delay_off_ms;
+    return equal_instrument(same_delays);
 }
 
 void Midi_Bank::from_wopl(const WOPLFile &wopl, std::vector<Midi_Bank> &banks, Instrument_Global_Parameters &igp)
 {
+    const unsigned nm = wopl.banks_count_melodic;
+    const unsigned np = wopl.banks_count_percussion;
     banks.clear();
-
-    unsigned nm = wopl.banks_count_melodic;
-    unsigned np = wopl.banks_count_percussion;
     banks.resize(nm + np);
 
-    for (unsigned i = 0; i < nm + np; ++i) {
-        Midi_Bank &bank = banks[i];
-        bool percussive = i >= nm;
-        const WOPLBank &src = percussive ?
-            wopl.banks_percussive[i - nm] : wopl.banks_melodic[i];
+    for (unsigned b = 0; b < nm + np; ++b) {
+        Midi_Bank &bank = banks[b];
+        const bool percussive = b >= nm;
+        const WOPLBank &src = percussive ? wopl.banks_percussive[b - nm] : wopl.banks_melodic[b];
         bank.id = Bank_Id(src.bank_midi_msb, src.bank_midi_lsb, percussive);
-        for (unsigned i = 0; i < 128; ++i)
-            bank.ins[i] = Instrument::from_wopl(src.ins[i]);
-        memcpy(bank.name, src.bank_name, 32);
+        for (std::size_t p = 0; p < bank.ins.size(); ++p)
+            bank.ins[p] = Instrument::from_wopl(src.ins[p]);
+        std::memcpy(bank.name, src.bank_name, sizeof bank.name);
     }
 
     igp.volume_model = wopl.volume_model;
-    igp.deep_tremolo = wopl.opl_flags & WOPL_FLAG_DEEP_TREMOLO;
-    igp.deep_vibrato = wopl.opl_flags & WOPL_FLAG_DEEP_VIBRATO;
+    igp.deep_tremolo = (wopl.opl_flags & WOPL_FLAG_DEEP_TREMOLO) != 0;
+    igp.deep_vibrato = (wopl.opl_flags & WOPL_FLAG_DEEP_VIBRATO) != 0;
 }

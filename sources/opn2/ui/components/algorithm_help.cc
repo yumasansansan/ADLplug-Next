@@ -7,6 +7,9 @@
   now maintained by hand. The "//[...]" markers left behind are ordinary
   section comments and no longer carry any special meaning -- edit anywhere.
 
+  Modified for ADLplug-Next. The modifications are distributed under the
+  GNU GPL v3 or later (see the accompanying file LICENSE).
+
   ==============================================================================
 */
 
@@ -18,6 +21,8 @@
 
 #include "algorithm_help.h"
 
+#include <memory>
+
 
 //[MiscUserDefs] You can add your own user definitions and misc code here...
 //[/MiscUserDefs]
@@ -28,49 +33,49 @@ Algorithm_Help::Algorithm_Help ()
     //[Constructor_pre] You can add your own custom stuff here..
     //[/Constructor_pre]
 
-    component.reset (new Algorithm_Component (Algorithms::algorithm_0));
+    component = std::make_unique<Algorithm_Component> (Algorithms::algorithm_0);
     addAndMakeVisible (component.get());
     component->setName ("new component");
 
     component->setBounds (16, 32, 120, 152);
 
-    component2.reset (new Algorithm_Component (Algorithms::algorithm_1));
+    component2 = std::make_unique<Algorithm_Component> (Algorithms::algorithm_1);
     addAndMakeVisible (component2.get());
     component2->setName ("new component");
 
     component2->setBounds (168, 32, 120, 152);
 
-    component3.reset (new Algorithm_Component (Algorithms::algorithm_4));
+    component3 = std::make_unique<Algorithm_Component> (Algorithms::algorithm_4);
     addAndMakeVisible (component3.get());
     component3->setName ("new component");
 
     component3->setBounds (16, 216, 120, 90);
 
-    component4.reset (new Algorithm_Component (Algorithms::algorithm_5));
+    component4 = std::make_unique<Algorithm_Component> (Algorithms::algorithm_5);
     addAndMakeVisible (component4.get());
     component4->setName ("new component");
 
     component4->setBounds (168, 216, 120, 90);
 
-    component5.reset (new Algorithm_Component (Algorithms::algorithm_6));
+    component5 = std::make_unique<Algorithm_Component> (Algorithms::algorithm_6);
     addAndMakeVisible (component5.get());
     component5->setName ("new component");
 
     component5->setBounds (320, 216, 120, 90);
 
-    component6.reset (new Algorithm_Component (Algorithms::algorithm_7));
+    component6 = std::make_unique<Algorithm_Component> (Algorithms::algorithm_7);
     addAndMakeVisible (component6.get());
     component6->setName ("new component");
 
     component6->setBounds (472, 216, 160, 90);
 
-    component7.reset (new Algorithm_Component (Algorithms::algorithm_2));
+    component7 = std::make_unique<Algorithm_Component> (Algorithms::algorithm_2);
     addAndMakeVisible (component7.get());
     component7->setName ("new component");
 
     component7->setBounds (320, 32, 120, 152);
 
-    component8.reset (new Algorithm_Component (Algorithms::algorithm_3));
+    component8 = std::make_unique<Algorithm_Component> (Algorithms::algorithm_3);
     addAndMakeVisible (component8.get());
     component8->setName ("new component");
 

@@ -2,6 +2,10 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #pragma once
 #include "adl/instrument.h"
@@ -9,52 +13,75 @@
 #include "utility/simple_fifo.h"
 #include "utility/counting_bitset.h"
 #include "definitions.h"
-#include <thread>
+#include <bitset>
+#include <cassert>
+#include <cstddef>
 #include <cstdint>
+#include <type_traits>
+#include <utility>
 
-enum class User_Message;
-enum class Fx_Message;
-enum class Worker_Message;
+enum class User_Message : unsigned;
+enum class Fx_Message : unsigned;
+enum class Worker_Message : unsigned;
 
 struct Message_Header {
-    unsigned tag {};
+    unsigned tag = 0;
     unsigned size = 0;
-    Message_Header(User_Message tag, unsigned size)
-        : tag((unsigned)tag), size(size) {}
-    Message_Header(Fx_Message tag, unsigned size)
-        : tag((unsigned)tag), size(size) {}
-    Message_Header(Worker_Message tag, unsigned size)
-        : tag((unsigned)tag), size(size) {}
 };
 
+// A message laid out in a Simple_Fifo: a header, then `header->size` bytes of
+// body, both padded to alignof(std::max_align_t).
 struct Buffered_Message {
     Message_Header *header = nullptr;
-    uint8_t *data = nullptr;
+    std::uint8_t *data = nullptr;
     unsigned offset = 0;
-    explicit operator bool() const
-        { return data; }
+    explicit operator bool() const noexcept
+        { return data != nullptr; }
 };
 
 namespace Messages {
+    // Bodies are plain structs placed directly in the FIFO's byte buffer. An
+    // array of unsigned char implicitly creates objects of such types, and
+    // the FIFO keeps every header and body aligned for them.
+    template <class T>
+    concept Body = std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T> &&
+                   alignof(T) <= alignof(std::max_align_t);
+
     Buffered_Message read(Simple_Fifo &fifo) noexcept;
     void finish_read(Simple_Fifo &fifo, const Buffered_Message &msg) noexcept;
 
-    Buffered_Message write(Simple_Fifo &fifo, const Message_Header &hdr) noexcept;
-    void finish_write(Simple_Fifo &fifo, Buffered_Message &msg) noexcept;
+    Buffered_Message write(Simple_Fifo &fifo, unsigned tag, unsigned size) noexcept;
+    void finish_write(Simple_Fifo &fifo, const Buffered_Message &msg) noexcept;
 
-    template <class R, class P>
-    Buffered_Message write_retrying(
-        Simple_Fifo &fifo, const Message_Header &hdr, std::chrono::duration<R, P> delay)
+    // Reserves a message whose body is a T.
+    template <Body T>
+    Buffered_Message write(Simple_Fifo &fifo) noexcept
+        { return write(fifo, std::to_underlying(T::tag), sizeof(T)); }
+
+    // The body of a message that carries a T.
+    template <Body T>
+    T &body(const Buffered_Message &msg) noexcept
     {
-        Buffered_Message msg;
-        while (!(msg = write(fifo, hdr)))
-            std::this_thread::sleep_for(delay);
-        return msg;
+        assert(msg.header->tag == std::to_underlying(T::tag) && msg.header->size == sizeof(T));
+        assert(reinterpret_cast<std::uintptr_t>(msg.data) % alignof(T) == 0);
+        return *static_cast<T *>(static_cast<void *>(msg.data));
+    }
+
+    // Sends a T filled in by `fill(body)`; false if the FIFO has no room.
+    template <Body T, class Fill>
+    bool send(Simple_Fifo &fifo, Fill &&fill)
+    {
+        const Buffered_Message msg = write<T>(fifo);
+        if (!msg)
+            return false;
+        std::forward<Fill>(fill)(body<T>(msg));
+        finish_write(fifo, msg);
+        return true;
     }
 }  // namespace Messages
 
 //------------------------------------------------------------------------------
-enum class User_Message {
+enum class User_Message : unsigned {
     Midi = 0x1000,  // midi event
     RequestBankSlots,  // requests the layout of banks and instruments
     RequestFullBankState,  // requests all the managed bank state
@@ -78,8 +105,7 @@ enum class User_Message {
 #endif
 };
 
-namespace Messages {
-namespace User {
+namespace Messages::User {
 
 struct RequestBankSlots {
     static constexpr User_Message tag = User_Message::RequestBankSlots;
@@ -121,7 +147,7 @@ struct LoadInstrument {
     static constexpr User_Message tag = User_Message::LoadInstrument;
     unsigned part = 0;
     Bank_Id bank;
-    uint8_t program = 0;
+    std::uint8_t program = 0;
     Instrument instrument;
     bool need_measurement = false;
     bool notify_back = false;
@@ -130,14 +156,14 @@ struct LoadInstrument {
 struct CreateInstrument {
     static constexpr User_Message tag = User_Message::CreateInstrument;
     Bank_Id bank;
-    uint8_t program = 0;
+    std::uint8_t program = 0;
     bool notify_back = false;
 };
 
 struct DeleteInstrument {
     static constexpr User_Message tag = User_Message::DeleteInstrument;
     Bank_Id bank;
-    uint8_t program = 0;
+    std::uint8_t program = 0;
     bool notify_back = false;
 };
 
@@ -157,7 +183,7 @@ struct RenameBank {
 struct RenameProgram {
     static constexpr User_Message tag = User_Message::RenameProgram;
     Bank_Id bank;
-    uint8_t program = 0;
+    std::uint8_t program = 0;
     bool notify_back = false;
     char name[32] {};
 };
@@ -166,7 +192,7 @@ struct SelectProgram {
     static constexpr User_Message tag = User_Message::SelectProgram;
     unsigned part = 0;
     Bank_Id bank;
-    uint8_t program = 0;
+    std::uint8_t program = 0;
 };
 
 struct SetActivePart {
@@ -185,11 +211,10 @@ struct SelectOptimal4Ops {
 };
 #endif
 
-}  // namespace User
-}  // namespace Messages
+}  // namespace Messages::User
 
 //------------------------------------------------------------------------------
-enum class Fx_Message {
+enum class Fx_Message : unsigned {
     NotifyReady = 0x2000,  // notifies readiness
     NotifyBankSlots,  // notifies the layout of banks and instruments
     NotifyGlobalParameters,  // notifies the global parameters
@@ -202,8 +227,7 @@ enum class Fx_Message {
     RequestChipSettings,  // request a change of chip settings
 };
 
-namespace Messages {
-namespace Fx {
+namespace Messages::Fx {
 
 struct NotifyReady {
     static constexpr Fx_Message tag = Fx_Message::NotifyReady;
@@ -216,7 +240,7 @@ struct NotifyBankSlots {
         counting_bitset<128> used;
         char name[32] {};
     };
-    unsigned count;
+    unsigned count = 0;
     Entry entry[bank_reserve_size];
 };
 
@@ -228,7 +252,7 @@ struct NotifyGlobalParameters {
 struct NotifyInstrument {
     static constexpr Fx_Message tag = Fx_Message::NotifyInstrument;
     Bank_Id bank;
-    uint8_t program = 0;
+    std::uint8_t program = 0;
     Instrument instrument;
 };
 
@@ -241,7 +265,7 @@ struct NotifySelection {
     static constexpr Fx_Message tag = Fx_Message::NotifySelection;
     unsigned part = 0;
     Bank_Id bank;
-    uint8_t program = 0;
+    std::uint8_t program = 0;
 };
 
 struct NotifyActivePart {
@@ -257,7 +281,7 @@ struct NotifyBankTitle {
 struct RequestMeasurement {
     static constexpr Fx_Message tag = Fx_Message::RequestMeasurement;
     Bank_Id bank;
-    uint8_t program = 0;
+    std::uint8_t program = 0;
     Instrument instrument;
 };
 
@@ -266,25 +290,22 @@ struct RequestChipSettings {
     Chip_Settings cs;
 };
 
-}  // namespace Fx
-}  // namespace Messages
+}  // namespace Messages::Fx
 
 //------------------------------------------------------------------------------
-enum class Worker_Message {
+enum class Worker_Message : unsigned {
     MeasurementResult = 0x3000,  // result of a measurement operation
 };
 
-namespace Messages {
-namespace Worker {
+namespace Messages::Worker {
 
 struct MeasurementResult {
     static constexpr Worker_Message tag = Worker_Message::MeasurementResult;
     Bank_Id bank;
-    uint8_t program = 0;
+    std::uint8_t program = 0;
     Instrument instrument;
-    uint16_t ms_sound_kon = 0;
-    uint16_t ms_sound_koff = 0;
+    std::uint16_t ms_sound_kon = 0;
+    std::uint16_t ms_sound_koff = 0;
 };
 
-}  // namespace Worker
-}  // namespace Messages
+}  // namespace Messages::Worker

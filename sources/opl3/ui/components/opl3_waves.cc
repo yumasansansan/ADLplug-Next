@@ -14,11 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later (see the accompanying file LICENSE).
 
 #include "opl3_waves.h"
+#include <cmath>
 #include <cstdint>
 
-static const uint16_t logsinrom[256] =
+static constexpr std::uint16_t logsinrom[256] =
 {
     0x859, 0x6c3, 0x607, 0x58b, 0x52e, 0x4e4, 0x4a6, 0x471, 0x443, 0x41a, 0x3f5, 0x3d3, 0x3b5, 0x398, 0x37e, 0x365,
     0x34e, 0x339, 0x324, 0x311, 0x2ff, 0x2ed, 0x2dc, 0x2cd, 0x2bd, 0x2af, 0x2a0, 0x293, 0x286, 0x279, 0x26d, 0x261,
@@ -38,7 +42,7 @@ static const uint16_t logsinrom[256] =
     0x002, 0x001, 0x001, 0x001, 0x001, 0x001, 0x001, 0x001, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000
 };
 
-static const uint16_t exprom[256] =
+static constexpr std::uint16_t exprom[256] =
 {
     0x000, 0x003, 0x006, 0x008, 0x00b, 0x00e, 0x011, 0x014, 0x016, 0x019, 0x01c, 0x01f, 0x022, 0x025, 0x028, 0x02a,
     0x02d, 0x030, 0x033, 0x036, 0x039, 0x03c, 0x03f, 0x042, 0x045, 0x048, 0x04b, 0x04e, 0x051, 0x054, 0x057, 0x05a,
@@ -58,21 +62,21 @@ static const uint16_t exprom[256] =
     0x3a9, 0x3ae, 0x3b4, 0x3b9, 0x3bf, 0x3c4, 0x3c9, 0x3cf, 0x3d4, 0x3da, 0x3df, 0x3e4, 0x3ea, 0x3ef, 0x3f5, 0x3fa
 };
 
-static int16_t calcexp(uint32_t level)
+static std::int16_t calcexp(std::uint32_t level)
 {
     if (level > 0x1fff) {
         level = 0x1fff;
     }
-    return ((exprom[(level & 0xff) ^ 0xff] | 0x400) << 1) >> (level >> 8);
+    return static_cast<std::int16_t>(((exprom[(level & 0xff) ^ 0xff] | 0x400) << 1) >> (level >> 8));
 }
 
-static int16_t calcsin0(uint16_t phase, uint16_t envelope)
+static std::int16_t calcsin0(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
-    uint16_t out = 0;
-    uint16_t neg = 0;
+    std::uint16_t out = 0;
+    std::uint16_t neg = 0;
     if (phase & 0x200) {
-        neg = ~0;
+        neg = 0xffff;
     }
     if (phase & 0x100) {
         out = logsinrom[(phase & 0xff) ^ 0xff];
@@ -80,13 +84,13 @@ static int16_t calcsin0(uint16_t phase, uint16_t envelope)
     else {
         out = logsinrom[phase & 0xff];
     }
-    return calcexp(out + (envelope << 3)) ^ neg;
+    return static_cast<std::int16_t>(calcexp(static_cast<std::uint32_t>(out + (envelope << 3))) ^ neg);
 }
 
-static int16_t calcsin1(uint16_t phase, uint16_t envelope)
+static std::int16_t calcsin1(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
-    uint16_t out = 0;
+    std::uint16_t out = 0;
     if (phase & 0x200) {
         out = 0x1000;
     }
@@ -96,42 +100,42 @@ static int16_t calcsin1(uint16_t phase, uint16_t envelope)
     else {
         out = logsinrom[phase & 0xff];
     }
-    return calcexp(out + (envelope << 3));
+    return calcexp(static_cast<std::uint32_t>(out + (envelope << 3)));
 }
 
-static int16_t calcsin2(uint16_t phase, uint16_t envelope)
+static std::int16_t calcsin2(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
-    uint16_t out = 0;
+    std::uint16_t out = 0;
     if (phase & 0x100) {
         out = logsinrom[(phase & 0xff) ^ 0xff];
     }
     else {
         out = logsinrom[phase & 0xff];
     }
-    return calcexp(out + (envelope << 3));
+    return calcexp(static_cast<std::uint32_t>(out + (envelope << 3)));
 }
 
-static int16_t calcsin3(uint16_t phase, uint16_t envelope)
+static std::int16_t calcsin3(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
-    uint16_t out = 0;
+    std::uint16_t out = 0;
     if (phase & 0x100) {
         out = 0x1000;
     }
     else {
         out = logsinrom[phase & 0xff];
     }
-    return calcexp(out + (envelope << 3));
+    return calcexp(static_cast<std::uint32_t>(out + (envelope << 3)));
 }
 
-static int16_t calcsin4(uint16_t phase, uint16_t envelope)
+static std::int16_t calcsin4(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
-    uint16_t out = 0;
-    uint16_t neg = 0;
+    std::uint16_t out = 0;
+    std::uint16_t neg = 0;
     if ((phase & 0x300) == 0x100) {
-        neg = ~0;
+        neg = 0xffff;
     }
     if (phase & 0x200) {
         out = 0x1000;
@@ -142,13 +146,13 @@ static int16_t calcsin4(uint16_t phase, uint16_t envelope)
     else {
         out = logsinrom[(phase << 1) & 0xff];
     }
-    return calcexp(out + (envelope << 3)) ^ neg;
+    return static_cast<std::int16_t>(calcexp(static_cast<std::uint32_t>(out + (envelope << 3))) ^ neg);
 }
 
-static int16_t calcsin5(uint16_t phase, uint16_t envelope)
+static std::int16_t calcsin5(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
-    uint16_t out = 0;
+    std::uint16_t out = 0;
     if (phase & 0x200) {
         out = 0x1000;
     }
@@ -158,33 +162,33 @@ static int16_t calcsin5(uint16_t phase, uint16_t envelope)
     else {
         out = logsinrom[(phase << 1) & 0xff];
     }
-    return calcexp(out + (envelope << 3));
+    return calcexp(static_cast<std::uint32_t>(out + (envelope << 3)));
 }
 
-static int16_t calcsin6(uint16_t phase, uint16_t envelope)
+static std::int16_t calcsin6(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
-    uint16_t neg = 0;
+    std::uint16_t neg = 0;
     if (phase & 0x200) {
-        neg = ~0;
+        neg = 0xffff;
     }
-    return calcexp(envelope << 3) ^ neg;
+    return static_cast<std::int16_t>(calcexp(static_cast<std::uint32_t>(envelope << 3)) ^ neg);
 }
 
-static int16_t calcsin7(uint16_t phase, uint16_t envelope)
+static std::int16_t calcsin7(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
-    uint16_t out = 0;
-    uint16_t neg = 0;
+    std::uint16_t out = 0;
+    std::uint16_t neg = 0;
     if (phase & 0x200) {
-        neg = ~0;
+        neg = 0xffff;
         phase = (phase & 0x1ff) ^ 0x1ff;
     }
-    out = phase << 3;
-    return calcexp(out + (envelope << 3)) ^ neg;
+    out = static_cast<std::uint16_t>(phase << 3);
+    return static_cast<std::int16_t>(calcexp(static_cast<std::uint32_t>(out + (envelope << 3))) ^ neg);
 }
 
-static int16_t(*const calcsin[8])(uint16_t phase, uint16_t envelope) =
+static std::int16_t (*const calcsin[8])(std::uint16_t phase, std::uint16_t envelope) =
 {
     &calcsin0,
     &calcsin1,
@@ -199,13 +203,14 @@ static int16_t(*const calcsin[8])(uint16_t phase, uint16_t envelope) =
 double OPL3_Waves::compute_wave(unsigned wave, double phase) const
 {
     wave &= 0x7;
-    phase -= (long)phase;
-    phase += (phase < 0) ? 1 : 0;
+    // std::floor rather than a cast to long, which is undefined when the phase
+    // does not fit.
+    phase -= std::floor(phase);
     phase *= 1024;
-    unsigned index1 = (unsigned)phase;
-    unsigned index2 = index1 + 1;
-    double sample1 = calcsin[wave](index1 % 1024, 0) * (1.0 / 4096);
-    double sample2 = calcsin[wave](index2 % 1024, 0) * (1.0 / 4096);
-    double mu = phase - (long)phase;
+    const auto index1 = static_cast<unsigned>(phase);
+    const unsigned index2 = index1 + 1;
+    const double sample1 = calcsin[wave](static_cast<std::uint16_t>(index1 % 1024), 0) * (1.0 / 4096);
+    const double sample2 = calcsin[wave](static_cast<std::uint16_t>(index2 % 1024), 0) * (1.0 / 4096);
+    const double mu = phase - index1;
     return mu * sample2 + (1 - mu) * sample1;
 }

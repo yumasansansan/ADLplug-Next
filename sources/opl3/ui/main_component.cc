@@ -7,6 +7,9 @@
   now maintained by hand. The "//[...]" markers left behind are ordinary
   section comments and no longer carry any special meaning -- edit anywhere.
 
+  Modified for ADLplug-Next. The modifications are distributed under the
+  GNU GPL v3 or later (see the accompanying file LICENSE).
+
   ==============================================================================
 */
 
@@ -33,8 +36,6 @@
 
 
 //[MiscUserDefs] You can add your own user definitions and misc code here...
-RESOURCE(Res, emoji_u1f4a1);
-
 #if 1
 #   define trace(fmt, ...)
 #else
@@ -55,13 +56,13 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     //[Constructor_pre] You can add your own custom stuff here..
     //[/Constructor_pre]
 
-    ed_op2.reset (new Operator_Editor (WOPL_OP_CARRIER1, pb));
+    ed_op2 = std::make_unique<Operator_Editor> (WOPL_OP_CARRIER1, pb);
     addAndMakeVisible (ed_op2.get());
     ed_op2->setName ("new component");
 
     ed_op2->setBounds (300, 160, 264, 128);
 
-    btn_4op.reset (new TextButton ("new button"));
+    btn_4op = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_4op.get());
     btn_4op->setButtonText (TRANS("4 op"));
     btn_4op->setConnectedEdges (Button::ConnectedOnRight);
@@ -70,7 +71,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_4op->setBounds (598, 174, 56, 24);
 
-    btn_pseudo4op.reset (new TextButton ("new button"));
+    btn_pseudo4op = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_pseudo4op.get());
     btn_pseudo4op->setButtonText (TRANS("2x2 op"));
     btn_pseudo4op->setConnectedEdges (Button::ConnectedOnLeft | Button::ConnectedOnRight);
@@ -79,7 +80,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_pseudo4op->setBounds (653, 174, 56, 24);
 
-    btn_2op.reset (new TextButton ("new button"));
+    btn_2op = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_2op.get());
     btn_2op->setButtonText (TRANS("2 op"));
     btn_2op->setConnectedEdges (Button::ConnectedOnLeft);
@@ -88,7 +89,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_2op->setBounds (708, 174, 56, 24);
 
-    btn_fm12.reset (new TextButton ("new button"));
+    btn_fm12 = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_fm12.get());
     btn_fm12->setButtonText (String());
     btn_fm12->addListener (this);
@@ -96,7 +97,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_fm12->setBounds (606, 208, 15, 15);
 
-    btn_am12.reset (new TextButton ("new button"));
+    btn_am12 = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_am12.get());
     btn_am12->setButtonText (String());
     btn_am12->addListener (this);
@@ -104,19 +105,19 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_am12->setBounds (606, 225, 15, 15);
 
-    ed_op1.reset (new Operator_Editor (WOPL_OP_MODULATOR1, pb));
+    ed_op1 = std::make_unique<Operator_Editor> (WOPL_OP_MODULATOR1, pb);
     addAndMakeVisible (ed_op1.get());
     ed_op1->setName ("new component");
 
     ed_op1->setBounds (16, 160, 264, 128);
 
-    ed_op4.reset (new Operator_Editor (WOPL_OP_CARRIER2, pb));
+    ed_op4 = std::make_unique<Operator_Editor> (WOPL_OP_CARRIER2, pb);
     addAndMakeVisible (ed_op4.get());
     ed_op4->setName ("new component");
 
     ed_op4->setBounds (300, 316, 264, 128);
 
-    btn_fm34.reset (new TextButton ("new button"));
+    btn_fm34 = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_fm34.get());
     btn_fm34->setButtonText (String());
     btn_fm34->addListener (this);
@@ -124,7 +125,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_fm34->setBounds (686, 208, 15, 15);
 
-    btn_am34.reset (new TextButton ("new button"));
+    btn_am34 = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_am34.get());
     btn_am34->setButtonText (String());
     btn_am34->addListener (this);
@@ -132,13 +133,13 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_am34->setBounds (686, 225, 15, 15);
 
-    ed_op3.reset (new Operator_Editor (WOPL_OP_MODULATOR2, pb));
+    ed_op3 = std::make_unique<Operator_Editor> (WOPL_OP_MODULATOR2, pb);
     addAndMakeVisible (ed_op3.get());
     ed_op3->setName ("new component");
 
     ed_op3->setBounds (16, 316, 264, 128);
 
-    sl_tune12.reset (new Slider ("new slider"));
+    sl_tune12 = std::make_unique<Slider> ("new slider");
     addAndMakeVisible (sl_tune12.get());
     sl_tune12->setRange (-127, 127, 1);
     sl_tune12->setSliderStyle (Slider::IncDecButtons);
@@ -149,7 +150,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     sl_tune12->setBounds (696, 324, 76, 20);
 
-    sl_tune34.reset (new Slider ("new slider"));
+    sl_tune34 = std::make_unique<Slider> ("new slider");
     addAndMakeVisible (sl_tune34.get());
     sl_tune34->setRange (-127, 127, 1);
     sl_tune34->setSliderStyle (Slider::IncDecButtons);
@@ -160,25 +161,25 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     sl_tune34->setBounds (696, 348, 76, 20);
 
-    kn_fb12.reset (new Styled_Knob_DefaultSmall());
+    kn_fb12 = std::make_unique<Styled_Knob_DefaultSmall> ();
     addAndMakeVisible (kn_fb12.get());
     kn_fb12->setName ("new component");
 
     kn_fb12->setBounds (648, 245, 32, 32);
 
-    kn_fb34.reset (new Styled_Knob_DefaultSmall());
+    kn_fb34 = std::make_unique<Styled_Knob_DefaultSmall> ();
     addAndMakeVisible (kn_fb34.get());
     kn_fb34->setName ("new component");
 
     kn_fb34->setBounds (736, 245, 32, 32);
 
-    midi_kb.reset (new Midi_Keyboard_Ex (midi_kb_state_, Midi_Keyboard_Ex::horizontalKeyboard));
+    midi_kb = std::make_unique<Midi_Keyboard_Ex> (midi_kb_state_, Midi_Keyboard_Ex::horizontalKeyboard);
     addAndMakeVisible (midi_kb.get());
     midi_kb->setName ("new component");
 
     midi_kb->setBounds (16, 520, 730, 64);
 
-    btn_about.reset (new ImageButton ("new button"));
+    btn_about = std::make_unique<ImageButton> ("new button");
     addAndMakeVisible (btn_about.get());
     btn_about->setButtonText (String());
     btn_about->addListener (this);
@@ -189,8 +190,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
                           Image(), 1.0f, Colour (0x00000000));
     btn_about->setBounds (16, 8, 232, 40);
 
-    label2.reset (new Label ("new label",
-                             TRANS("FM synthesizer with YMF262 chip emulation")));
+    label2 = std::make_unique<Label> ("new label",
+                             TRANS("FM synthesizer with YMF262 chip emulation"));
     addAndMakeVisible (label2.get());
     label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centred);
@@ -201,20 +202,20 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label2->setBounds (264, 8, 192, 40);
 
-    vu_left.reset (new Vu_Meter());
+    vu_left = std::make_unique<Vu_Meter> ();
     addAndMakeVisible (vu_left.get());
     vu_left->setName ("new component");
 
     vu_left->setBounds (578, 8, 92, 12);
 
-    vu_right.reset (new Vu_Meter());
+    vu_right = std::make_unique<Vu_Meter> ();
     addAndMakeVisible (vu_right.get());
     vu_right->setName ("new component");
 
     vu_right->setBounds (578, 24, 92, 12);
 
-    label3.reset (new Label ("new label",
-                             TRANS("CPU")));
+    label3 = std::make_unique<Label> ("new label",
+                             TRANS("CPU"));
     addAndMakeVisible (label3.get());
     label3->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label3->setJustificationType (Justification::centredRight);
@@ -225,8 +226,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label3->setBounds (684, 8, 40, 24);
 
-    lbl_cpu.reset (new Label ("new label",
-                              TRANS("100%")));
+    lbl_cpu = std::make_unique<Label> ("new label",
+                              TRANS("100%"));
     addAndMakeVisible (lbl_cpu.get());
     lbl_cpu->setFont (legacy_font (15.0f).withStyle ("Regular"));
     lbl_cpu->setJustificationType (Justification::centred);
@@ -238,13 +239,13 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     lbl_cpu->setBounds (724, 8, 48, 24);
 
-    ind_midi_activity.reset (new Indicator_NxM (2, 8));
+    ind_midi_activity = std::make_unique<Indicator_NxM> (2, 8);
     addAndMakeVisible (ind_midi_activity.get());
     ind_midi_activity->setName ("new component");
 
     ind_midi_activity->setBounds (466, 8, 102, 28);
 
-    btn_panic.reset (new TextButton ("new button"));
+    btn_panic = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_panic.get());
     btn_panic->setButtonText (TRANS("Panic"));
     btn_panic->addListener (this);
@@ -252,7 +253,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_panic->setBounds (308, 102, 48, 24);
 
-    edt_bank_name.reset (new TextEditor ("new text editor"));
+    edt_bank_name = std::make_unique<TextEditor> ("new text editor");
     addAndMakeVisible (edt_bank_name.get());
     edt_bank_name->setMultiLine (false);
     edt_bank_name->setReturnKeyStartsNewLine (false);
@@ -265,7 +266,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     edt_bank_name->setBounds (16, 74, 215, 24);
 
-    cb_program.reset (new ComboBox ("new combo box"));
+    cb_program = std::make_unique<ComboBox> ("new combo box");
     addAndMakeVisible (cb_program.get());
     cb_program->setEditableText (false);
     cb_program->setJustificationType (Justification::centredLeft);
@@ -275,8 +276,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     cb_program->setBounds (16, 104, 215, 24);
 
-    label4.reset (new Label ("new label",
-                             TRANS("Part")));
+    label4 = std::make_unique<Label> ("new label",
+                             TRANS("Part"));
     addAndMakeVisible (label4.get());
     label4->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label4->setJustificationType (Justification::centredLeft);
@@ -287,7 +288,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label4->setBounds (304, 78, 56, 20);
 
-    btn_bank_load.reset (new TextButton ("new button"));
+    btn_bank_load = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_bank_load.get());
     btn_bank_load->setButtonText (String());
     btn_bank_load->setConnectedEdges (Button::ConnectedOnRight);
@@ -295,7 +296,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_bank_load->setBounds (235, 74, 23, 24);
 
-    btn_bank_save.reset (new TextButton ("new button"));
+    btn_bank_save = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_bank_save.get());
     btn_bank_save->setButtonText (String());
     btn_bank_save->setConnectedEdges (Button::ConnectedOnLeft);
@@ -303,8 +304,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_bank_save->setBounds (257, 74, 23, 24);
 
-    label6.reset (new Label ("new label",
-                             TRANS("FM 1-2")));
+    label6 = std::make_unique<Label> ("new label",
+                             TRANS("FM 1-2"));
     addAndMakeVisible (label6.get());
     label6->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label6->setJustificationType (Justification::centredLeft);
@@ -315,8 +316,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label6->setBounds (622, 208, 56, 15);
 
-    label7.reset (new Label ("new label",
-                             TRANS("FM 3-4")));
+    label7 = std::make_unique<Label> ("new label",
+                             TRANS("FM 3-4"));
     addAndMakeVisible (label7.get());
     label7->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label7->setJustificationType (Justification::centredLeft);
@@ -327,8 +328,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label7->setBounds (702, 208, 56, 15);
 
-    label8.reset (new Label ("new label",
-                             TRANS("AM 1-2")));
+    label8 = std::make_unique<Label> ("new label",
+                             TRANS("AM 1-2"));
     addAndMakeVisible (label8.get());
     label8->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label8->setJustificationType (Justification::centredLeft);
@@ -339,8 +340,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label8->setBounds (622, 225, 56, 15);
 
-    label9.reset (new Label ("new label",
-                             TRANS("AM 3-4")));
+    label9 = std::make_unique<Label> ("new label",
+                             TRANS("AM 3-4"));
     addAndMakeVisible (label9.get());
     label9->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label9->setJustificationType (Justification::centredLeft);
@@ -351,9 +352,9 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label9->setBounds (702, 225, 56, 15);
 
-    label10.reset (new Label ("new label",
+    label10 = std::make_unique<Label> ("new label",
                               TRANS("Feedback\n"
-                              "1-2")));
+                              "1-2"));
     addAndMakeVisible (label10.get());
     label10->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label10->setJustificationType (Justification::centred);
@@ -364,9 +365,9 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label10->setBounds (584, 248, 72, 24);
 
-    label12.reset (new Label ("new label",
+    label12 = std::make_unique<Label> ("new label",
                               TRANS("Feedback\n"
-                              "3-4")));
+                              "3-4"));
     addAndMakeVisible (label12.get());
     label12->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label12->setJustificationType (Justification::centred);
@@ -377,8 +378,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label12->setBounds (672, 248, 72, 24);
 
-    label11.reset (new Label ("new label",
-                              TRANS("Note offset 1-2")));
+    label11 = std::make_unique<Label> ("new label",
+                              TRANS("Note offset 1-2"));
     addAndMakeVisible (label11.get());
     label11->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label11->setJustificationType (Justification::centredLeft);
@@ -389,8 +390,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label11->setBounds (590, 324, 104, 20);
 
-    label13.reset (new Label ("new label",
-                              TRANS("Note offset 3-4")));
+    label13 = std::make_unique<Label> ("new label",
+                              TRANS("Note offset 3-4"));
     addAndMakeVisible (label13.get());
     label13->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label13->setJustificationType (Justification::centredLeft);
@@ -401,7 +402,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label13->setBounds (590, 348, 104, 20);
 
-    btn_emulator.reset (new ImageButton ("new button"));
+    btn_emulator = std::make_unique<ImageButton> ("new button");
     addAndMakeVisible (btn_emulator.get());
     btn_emulator->addListener (this);
 
@@ -411,8 +412,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
                              Image(), 1.0f, Colour (0x00000000));
     btn_emulator->setBounds (659, 56, 76, 20);
 
-    label14.reset (new Label ("new label",
-                              TRANS("Core")));
+    label14 = std::make_unique<Label> ("new label",
+                              TRANS("Core"));
     addAndMakeVisible (label14.get());
     label14->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label14->setJustificationType (Justification::centredLeft);
@@ -423,7 +424,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label14->setBounds (611, 56, 48, 20);
 
-    sl_num_chips.reset (new Slider ("new slider"));
+    sl_num_chips = std::make_unique<Slider> ("new slider");
     addAndMakeVisible (sl_num_chips.get());
     sl_num_chips->setRange (1, 100, 1);
     sl_num_chips->setSliderStyle (Slider::IncDecButtons);
@@ -435,8 +436,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     sl_num_chips->setBounds (659, 80, 76, 20);
 
-    label15.reset (new Label ("new label",
-                              TRANS("Chips")));
+    label15 = std::make_unique<Label> ("new label",
+                              TRANS("Chips"));
     addAndMakeVisible (label15.get());
     label15->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label15->setJustificationType (Justification::centredLeft);
@@ -447,8 +448,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label15->setBounds (611, 80, 48, 20);
 
-    label16.reset (new Label ("new label",
-                              TRANS("4 ops")));
+    label16 = std::make_unique<Label> ("new label",
+                              TRANS("4 ops"));
     addAndMakeVisible (label16.get());
     label16->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label16->setJustificationType (Justification::centredLeft);
@@ -459,7 +460,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label16->setBounds (611, 104, 48, 20);
 
-    sl_num_4ops.reset (new Slider ("new slider"));
+    sl_num_4ops = std::make_unique<Slider> ("new slider");
     addAndMakeVisible (sl_num_4ops.get());
     sl_num_4ops->setRange (1, 600, 1);
     sl_num_4ops->setSliderStyle (Slider::IncDecButtons);
@@ -470,8 +471,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     sl_num_4ops->setBounds (659, 104, 76, 20);
 
-    label5.reset (new Label ("new label",
-                             TRANS("Percussion key")));
+    label5 = std::make_unique<Label> ("new label",
+                             TRANS("Percussion key"));
     addAndMakeVisible (label5.get());
     label5->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label5->setJustificationType (Justification::centredLeft);
@@ -481,7 +482,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label5->setBounds (590, 372, 104, 20);
 
-    cb_percussion_key.reset (new ComboBox ("new combo box"));
+    cb_percussion_key = std::make_unique<ComboBox> ("new combo box");
     addAndMakeVisible (cb_percussion_key.get());
     cb_percussion_key->setEditableText (false);
     cb_percussion_key->setJustificationType (Justification::centredLeft);
@@ -491,8 +492,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     cb_percussion_key->setBounds (696, 372, 74, 20);
 
-    label17.reset (new Label ("new label",
-                              TRANS("Percussion key")));
+    label17 = std::make_unique<Label> ("new label",
+                              TRANS("Percussion key"));
     addAndMakeVisible (label17.get());
     label17->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label17->setJustificationType (Justification::centredLeft);
@@ -503,8 +504,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label17->setBounds (590, 372, 104, 20);
 
-    label18.reset (new Label ("new label",
-                              TRANS("Fine tune 3-4")));
+    label18 = std::make_unique<Label> ("new label",
+                              TRANS("Fine tune 3-4"));
     addAndMakeVisible (label18.get());
     label18->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label18->setJustificationType (Justification::centredLeft);
@@ -515,7 +516,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label18->setBounds (590, 396, 104, 20);
 
-    sl_finetune34.reset (new Slider ("new slider"));
+    sl_finetune34 = std::make_unique<Slider> ("new slider");
     addAndMakeVisible (sl_finetune34.get());
     sl_finetune34->setRange (-2, 2, 0.015625);
     sl_finetune34->setSliderStyle (Slider::IncDecButtons);
@@ -526,7 +527,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     sl_finetune34->setBounds (696, 396, 76, 20);
 
-    sl_veloffset.reset (new Slider ("new slider"));
+    sl_veloffset = std::make_unique<Slider> ("new slider");
     addAndMakeVisible (sl_veloffset.get());
     sl_veloffset->setRange (-127, 127, 1);
     sl_veloffset->setSliderStyle (Slider::IncDecButtons);
@@ -537,8 +538,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     sl_veloffset->setBounds (410, 482, 76, 20);
 
-    label19.reset (new Label ("new label",
-                              TRANS("Velocity offset")));
+    label19 = std::make_unique<Label> ("new label",
+                              TRANS("Velocity offset"));
     addAndMakeVisible (label19.get());
     label19->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label19->setJustificationType (Justification::centredLeft);
@@ -549,7 +550,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label19->setBounds (304, 482, 104, 20);
 
-    sl_midi_channel.reset (new Slider ("new slider"));
+    sl_midi_channel = std::make_unique<Slider> ("new slider");
     addAndMakeVisible (sl_midi_channel.get());
     sl_midi_channel->setRange (1, 16, 1);
     sl_midi_channel->setSliderStyle (Slider::IncDecButtons);
@@ -560,7 +561,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     sl_midi_channel->setBounds (364, 79, 76, 46);
 
-    btn_deep_tremolo.reset (new TextButton ("new button"));
+    btn_deep_tremolo = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_deep_tremolo.get());
     btn_deep_tremolo->setButtonText (String());
     btn_deep_tremolo->addListener (this);
@@ -568,8 +569,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_deep_tremolo->setBounds (552, 486, 15, 15);
 
-    label20.reset (new Label ("new label",
-                              TRANS("Deep tremolo")));
+    label20 = std::make_unique<Label> ("new label",
+                              TRANS("Deep tremolo"));
     addAndMakeVisible (label20.get());
     label20->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label20->setJustificationType (Justification::centredLeft);
@@ -580,7 +581,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label20->setBounds (568, 486, 94, 15);
 
-    btn_deep_vibrato.reset (new TextButton ("new button"));
+    btn_deep_vibrato = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_deep_vibrato.get());
     btn_deep_vibrato->setButtonText (String());
     btn_deep_vibrato->addListener (this);
@@ -588,8 +589,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_deep_vibrato->setBounds (664, 486, 15, 15);
 
-    label21.reset (new Label ("new label",
-                              TRANS("Deep vibrato")));
+    label21 = std::make_unique<Label> ("new label",
+                              TRANS("Deep vibrato"));
     addAndMakeVisible (label21.get());
     label21->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label21->setJustificationType (Justification::centredLeft);
@@ -600,8 +601,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label21->setBounds (680, 486, 94, 15);
 
-    label22.reset (new Label ("new label",
-                              TRANS("Volume model")));
+    label22 = std::make_unique<Label> ("new label",
+                              TRANS("Volume model"));
     addAndMakeVisible (label22.get());
     label22->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label22->setJustificationType (Justification::centredLeft);
@@ -612,7 +613,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label22->setBounds (552, 458, 106, 20);
 
-    cb_volmodel.reset (new ComboBox ("new combo box"));
+    cb_volmodel = std::make_unique<ComboBox> ("new combo box");
     addAndMakeVisible (cb_volmodel.get());
     cb_volmodel->setEditableText (false);
     cb_volmodel->setJustificationType (Justification::centredLeft);
@@ -622,14 +623,14 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     cb_volmodel->setBounds (664, 457, 104, 20);
 
-    btn_algo_help.reset (new TextButton ("new button"));
+    btn_algo_help = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_algo_help.get());
     btn_algo_help->setButtonText (TRANS("?"));
     btn_algo_help->addListener (this);
 
     btn_algo_help->setBounds (754, 136, 20, 20);
 
-    btn_auto4ops.reset (new TextButton ("new button"));
+    btn_auto4ops = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_auto4ops.get());
     btn_auto4ops->setTooltip (TRANS("Choose a recommended value"));
     btn_auto4ops->setButtonText (String());
@@ -637,13 +638,13 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_auto4ops->setBounds (739, 102, 24, 24);
 
-    btn_keymap.reset (new TextButton (String()));
+    btn_keymap = std::make_unique<TextButton> (String());
     addAndMakeVisible (btn_keymap.get());
     btn_keymap->addListener (this);
 
     btn_keymap->setBounds (750, 520, 24, 24);
 
-    btn_octave_up.reset (new TextButton ("new button"));
+    btn_octave_up = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_octave_up.get());
     btn_octave_up->setTooltip (TRANS("Octave"));
     btn_octave_up->setButtonText (TRANS("+"));
@@ -652,7 +653,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_octave_up->setBounds (750, 549, 24, 18);
 
-    btn_octave_down.reset (new TextButton ("new button"));
+    btn_octave_down = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_octave_down.get());
     btn_octave_down->setTooltip (TRANS("Octave"));
     btn_octave_down->setButtonText (TRANS("-"));
@@ -661,7 +662,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_octave_down->setBounds (750, 566, 24, 18);
 
-    btn_pgm_edit.reset (new TextButton ("new button"));
+    btn_pgm_edit = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_pgm_edit.get());
     btn_pgm_edit->setButtonText (String());
     btn_pgm_edit->setConnectedEdges (Button::ConnectedOnRight);
@@ -669,7 +670,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_pgm_edit->setBounds (235, 104, 23, 24);
 
-    btn_pgm_add.reset (new TextButton ("new button"));
+    btn_pgm_add = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_pgm_add.get());
     btn_pgm_add->setButtonText (String());
     btn_pgm_add->setConnectedEdges (Button::ConnectedOnLeft);
@@ -677,14 +678,14 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_pgm_add->setBounds (257, 104, 23, 24);
 
-    kn_mastervol.reset (new Styled_Knob_Default());
+    kn_mastervol = std::make_unique<Styled_Knob_Default> ();
     addAndMakeVisible (kn_mastervol.get());
     kn_mastervol->setName ("new component");
 
     kn_mastervol->setBounds (510, 78, 48, 48);
 
-    label23.reset (new Label ("new label",
-                              TRANS("Volume")));
+    label23 = std::make_unique<Label> ("new label",
+                              TRANS("Volume"));
     addAndMakeVisible (label23.get());
     label23->setFont (legacy_font (14.0f).withStyle ("Regular"));
     label23->setJustificationType (Justification::centredLeft);
@@ -695,8 +696,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     label23->setBounds (464, 78, 56, 22);
 
-    lbl_mastervol.reset (new Label ("new label",
-                                    TRANS("-20 dB")));
+    lbl_mastervol = std::make_unique<Label> ("new label",
+                                    TRANS("-20 dB"));
     addAndMakeVisible (lbl_mastervol.get());
     lbl_mastervol->setFont (legacy_font (12.0f).withStyle ("Regular"));
     lbl_mastervol->setJustificationType (Justification::centredRight);
@@ -708,8 +709,8 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     lbl_mastervol->setBounds (468, 102, 44, 22);
 
-    lbl_info.reset (new Label ("new label",
-                               TRANS("OPL Ready")));
+    lbl_info = std::make_unique<Label> ("new label",
+                               TRANS("OPL Ready"));
     addAndMakeVisible (lbl_info.get());
     lbl_info->setFont (legacy_font (Font::getDefaultMonospacedFontName(), 15.0f));
     lbl_info->setJustificationType (Justification::centred);
@@ -739,20 +740,19 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     //[Constructor] You can add your own custom stuff here..
     for (TextButton *btn : {btn_4op.get(), btn_pseudo4op.get(), btn_2op.get()}) {
         btn->setClickingTogglesState(true);
-        btn->setRadioGroupId((int)Radio_Button_Group::Fm_Mode);
+        btn->setRadioGroupId(static_cast<int>(Radio_Button_Group::Fm_Mode));
     }
     for (TextButton *btn : {btn_fm12.get(), btn_am12.get()}) {
         btn->setClickingTogglesState(true);
-        btn->setRadioGroupId((int)Radio_Button_Group::Algo_12);
+        btn->setRadioGroupId(static_cast<int>(Radio_Button_Group::Algo_12));
     }
     for (TextButton *btn : {btn_fm34.get(), btn_am34.get()}) {
         btn->setClickingTogglesState(true);
-        btn->setRadioGroupId((int)Radio_Button_Group::Algo_34);
+        btn->setRadioGroupId(static_cast<int>(Radio_Button_Group::Algo_34));
     }
 
-    Label *lbl_midi_channel = (Label *)(intptr_t)(int64)sl_midi_channel->getProperties()["X-Slider-Text-Box"];
-    Font fnt_midi_channel(legacy_font(Font::getDefaultSansSerifFontName(), 30.0f));
-    lbl_midi_channel->setFont(fnt_midi_channel);
+    if (Label *lbl_midi_channel = slider_text_box(*sl_midi_channel))
+        lbl_midi_channel->setFont(legacy_font(Font::getDefaultSansSerifFontName(), 30.0f));
 
     sl_num_4ops->setNumDecimalPlacesToDisplay(0);
     sl_num_chips->setNumDecimalPlacesToDisplay(0);
@@ -766,11 +766,11 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     btn_deep_tremolo->setClickingTogglesState(true);
     btn_deep_vibrato->setClickingTogglesState(true);
 
-    create_image_overlay(*btn_auto4ops, ImageCache::getFromMemory(Res::emoji_u1f4a1.data, Res::emoji_u1f4a1.size), 0.7f);
+    create_image_overlay(*btn_auto4ops, image_from_resource(Res::emoji_u1f4a1), 0.7);
 
     {
-        StringArray strings = pb.p_volmodel->getAllValueStrings();
-        for (unsigned i = 0, n = strings.size(); i < n; ++i)
+        const StringArray strings = pb.p_volmodel->getAllValueStrings();
+        for (int i = 0; i < strings.size(); ++i)
             cb_volmodel->addItem(strings[i], i + 1);
     }
     cb_volmodel->setScrollWheelEnabled(true);
@@ -870,11 +870,11 @@ void Main_Component::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setGradientFill (ColourGradient (fillColour1,
-                                       150.0f - 0.0f + x,
-                                       50.0f - 0.0f + y,
+                                       150.0f - 0.0f + static_cast<float> (x),
+                                       50.0f - 0.0f + static_cast<float> (y),
                                        fillColour2,
-                                       800.0f - 0.0f + x,
-                                       600.0f - 0.0f + y,
+                                       800.0f - 0.0f + static_cast<float> (x),
+                                       600.0f - 0.0f + static_cast<float> (y),
                                        true));
         g.fillRect (x, y, width, height);
     }
@@ -1211,7 +1211,7 @@ void Main_Component::buttonClicked (Button* buttonThatWasClicked)
         select_emulator_by_menu([safe, &pb](int selection) mutable {
             if (safe == nullptr || selection == 0)
                 return;
-            if ((unsigned)(selection - 1) == safe->chip_settings_.emulator)
+            if (static_cast<unsigned>(selection - 1) == safe->chip_settings_.emulator)
                 return;
             AudioParameterChoice &p = *pb.p_emulator;
             p.beginChangeGesture();
@@ -1247,8 +1247,7 @@ void Main_Component::buttonClicked (Button* buttonThatWasClicked)
     else if (buttonThatWasClicked == btn_auto4ops.get())
     {
         //[UserButtonCode_btn_auto4ops] -- add your button handler code here..
-        Messages::User::SelectOptimal4Ops msg;
-        write_to_processor(msg.tag, &msg, sizeof(msg));
+        write_to_processor(Messages::User::SelectOptimal4Ops{});
         //[/UserButtonCode_btn_auto4ops]
     }
     else if (buttonThatWasClicked == btn_keymap.get())
@@ -1300,28 +1299,28 @@ void Main_Component::sliderValueChanged (Slider* sliderThatWasMoved)
     {
         //[UserSliderCode_sl_tune12] -- add your slider handling code here..
         AudioParameterInt &p = *part.p_tune12;
-        p = sl->getValue();
+        p = static_cast<int>(std::lround(sl->getValue()));
         //[/UserSliderCode_sl_tune12]
     }
     else if (sliderThatWasMoved == sl_tune34.get())
     {
         //[UserSliderCode_sl_tune34] -- add your slider handling code here..
         AudioParameterInt &p = *part.p_tune34;
-        p = sl->getValue();
+        p = static_cast<int>(std::lround(sl->getValue()));
         //[/UserSliderCode_sl_tune34]
     }
     else if (sliderThatWasMoved == sl_num_chips.get())
     {
         //[UserSliderCode_sl_num_chips] -- add your slider handling code here..
         AudioParameterInt &p = *pb.p_nchip;
-        set_int_parameter_with_delay(500, p, sl->getValue());
+        set_int_parameter_with_delay(500, p, static_cast<int>(std::lround(sl->getValue())));
         //[/UserSliderCode_sl_num_chips]
     }
     else if (sliderThatWasMoved == sl_num_4ops.get())
     {
         //[UserSliderCode_sl_num_4ops] -- add your slider handling code here..
         AudioParameterInt &p = *pb.p_n4op;
-        set_int_parameter_with_delay(500, p, sl->getValue());
+        set_int_parameter_with_delay(500, p, static_cast<int>(std::lround(sl->getValue())));
         //[/UserSliderCode_sl_num_4ops]
     }
     else if (sliderThatWasMoved == sl_finetune34.get())
@@ -1335,7 +1334,7 @@ void Main_Component::sliderValueChanged (Slider* sliderThatWasMoved)
         else if(finetune34 < 0 && finetune34 >= -0.000025)
             value = -1;
         else {
-            value = (int)std::lround(finetune34 * (1000.0 / 15.625));
+            value = static_cast<int>(std::lround(finetune34 * (1000.0 / 15.625)));
             value = (value < -127) ? -127 : value;
             value = (value > +127) ? +127 : value;
         }
@@ -1346,15 +1345,15 @@ void Main_Component::sliderValueChanged (Slider* sliderThatWasMoved)
     {
         //[UserSliderCode_sl_veloffset] -- add your slider handling code here..
         AudioParameterInt &p = *part.p_veloffset;
-        p = sl->getValue();
+        p = static_cast<int>(std::lround(sl->getValue()));
         //[/UserSliderCode_sl_veloffset]
     }
     else if (sliderThatWasMoved == sl_midi_channel.get())
     {
         //[UserSliderCode_sl_midi_channel] -- add your slider handling code here..
         Messages::User::SetActivePart msg;
-        msg.part = (unsigned)sl->getValue() - 1;
-        write_to_processor(msg.tag, &msg, sizeof(msg));
+        msg.part = static_cast<unsigned>(std::lround(sl->getValue()) - 1);
+        write_to_processor(msg);
         //[/UserSliderCode_sl_midi_channel]
     }
 
@@ -1461,16 +1460,16 @@ void Main_Component::knob_value_changed(Knob *k)
 
     if (k == kn_mastervol.get()) {
         AudioParameterFloat &p = *pb.p_mastervol;
-        p = get_volume_knob_value();
+        p = static_cast<float>(get_volume_knob_value());
         update_master_volume_label();
     }
     else if (k == kn_fb12.get()) {
         AudioParameterInt &p = *part.p_fb12;
-        p = (int)std::lround(k->value());
+        p = static_cast<int>(std::lround(k->value()));
     }
     else if (k == kn_fb34.get()) {
         AudioParameterInt &p = *part.p_fb34;
-        p = (int)std::lround(k->value());
+        p = static_cast<int>(std::lround(k->value()));
     }
 
     display_info_for_component(k);
@@ -1593,13 +1592,13 @@ void Main_Component::on_change_midi_channel(unsigned channel)
     for (Operator_Editor *oped : op_editors)
         oped->set_midi_channel(channel);
 
-    midi_kb->setMidiChannel(channel + 1);
+    midi_kb->setMidiChannel(static_cast<int>(channel) + 1);
     sl_midi_channel->setValue(channel + 1, dontSendNotification);
 
     if (is_percussion_channel(channel) != is_percussion_channel(old_channel))
         update_instrument_choices();
 
-    set_program_selection(midiprogram_[channel] + 1, dontSendNotification);
+    set_program_selection(static_cast<int>(midiprogram_[channel]) + 1, dontSendNotification);
     reload_selected_instrument(dontSendNotification);
 }
 
@@ -1625,11 +1624,11 @@ bool Main_Component::display_info_for_component(Component *c)
 
     if (c == kn_fb12.get()) {
         param = "Feedback 1-2";
-        val = (int)std::lround(kn->value());
+        val = static_cast<int>(std::lround(kn->value()));
     }
     else if (c == kn_fb34.get()) {
         param = "Feedback 3-4";
-        val = (int)std::lround(kn->value());
+        val = static_cast<int>(std::lround(kn->value()));
     }
 
     if (param.isEmpty()) {
@@ -1789,7 +1788,7 @@ static const unsigned char resource_Main_Component_logo_png[] = { 137,80,78,71,1
 70,103,98,188,0,194,23,106,35,195,33,147,106,24,244,26,224,93,82,63,95,99,11,41,8,32,8,74,131,49,129,209,39,84,173,215,57,38,123,79,159,62,29,61,105,126,60,241,175,24,254,87,129,212,149,78,33,140,5,166,
 233,40,151,52,60,252,64,64,96,96,136,0,130,128,192,240,233,66,246,162,106,189,158,128,232,57,117,234,84,208,158,193,197,197,255,7,45,51,80,138,69,148,252,106,0,0,0,0,73,69,78,68,174,66,96,130,0,0};
 
-const char* Main_Component::logo_png = (const char*) resource_Main_Component_logo_png;
+const char* Main_Component::logo_png = reinterpret_cast<const char*>(resource_Main_Component_logo_png);
 const int Main_Component::logo_pngSize = 7636;
 
 

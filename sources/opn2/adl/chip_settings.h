@@ -2,6 +2,10 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #pragma once
 #include "JuceHeader.h"
@@ -29,16 +33,8 @@ struct Chip_Settings {
     unsigned chip_count = 2;
     unsigned chip_type = 0;
 
+    bool operator==(const Chip_Settings &) const = default;
+
     PropertySet to_properties() const;
     static Chip_Settings from_properties(const PropertySet &set);
 };
-
-inline bool operator==(const Chip_Settings &a, const Chip_Settings &b)
-{
-    return a.emulator == b.emulator && a.chip_count == b.chip_count && a.chip_type == b.chip_type;
-}
-
-inline bool operator!=(const Chip_Settings &a, const Chip_Settings &b)
-{
-    return !operator==(a, b);
-}

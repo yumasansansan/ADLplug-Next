@@ -7,6 +7,9 @@
   now maintained by hand. The "//[...]" markers left behind are ordinary
   section comments and no longer carry any special meaning -- edit anywhere.
 
+  Modified for ADLplug-Next. The modifications are distributed under the
+  GNU GPL v3 or later (see the accompanying file LICENSE).
+
   ==============================================================================
 */
 
@@ -16,6 +19,8 @@
 //[/Headers]
 
 #include "about_component.h"
+
+#include <memory>
 
 
 //[MiscUserDefs] You can add your own user definitions and misc code here...
@@ -27,17 +32,17 @@ About_Component::About_Component ()
     //[Constructor_pre] You can add your own custom stuff here..
     //[/Constructor_pre]
 
-    hyperlinkButton.reset (new HyperlinkButton (TRANS("Home page"),
-                                                URL ("https://github.com/jpcima/ADLplug")));
+    hyperlinkButton = std::make_unique<HyperlinkButton> (TRANS("Home page"),
+                                                URL ("https://github.com/jpcima/ADLplug"));
     addAndMakeVisible (hyperlinkButton.get());
     hyperlinkButton->setTooltip (TRANS("https://github.com/jpcima/ADLplug"));
     hyperlinkButton->setButtonText (TRANS("Home page"));
 
     hyperlinkButton->setBounds (8, 56, 88, 24);
 
-    label.reset (new Label ("new label",
+    label = std::make_unique<Label> ("new label",
                             CharPointer_UTF8 ("This program is free software developed by Jean Pierre Cimalando. \xc2\xa9 2018\n"
-                            "Many thanks to people who make this program possible.")));
+                            "Many thanks to people who make this program possible."));
     addAndMakeVisible (label.get());
     label->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label->setJustificationType (Justification::centredLeft);
@@ -48,13 +53,13 @@ About_Component::About_Component ()
 
     label->setBounds (8, 88, 488, 40);
 
-    label2.reset (new Label ("new label",
+    label2 = std::make_unique<Label> ("new label",
                              TRANS("Vitaly Novichkov for the ADLMIDI library\n"
                              "Joel Yliluoma for the original ADLMIDI software\n"
                              "Alexey Khokholov for Nuked OPL3\n"
                              "The DOSBox Team for DOSBox OPL\n"
                              "Reality for Opal OPL3\n"
-                             "Robson Cozendey for Java OPL3")));
+                             "Robson Cozendey for Java OPL3"));
     addAndMakeVisible (label2.get());
     label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centredLeft);
@@ -65,8 +70,8 @@ About_Component::About_Component ()
 
     label2->setBounds (8, 136, 488, 96);
 
-    lbl_prog_version.reset (new Label ("new label",
-                                       TRANS("Foobar 1.0")));
+    lbl_prog_version = std::make_unique<Label> ("new label",
+                                       TRANS("Foobar 1.0"));
     addAndMakeVisible (lbl_prog_version.get());
     lbl_prog_version->setFont (legacy_font (15.0f).withStyle ("Bold"));
     lbl_prog_version->setJustificationType (Justification::centredLeft);
@@ -77,8 +82,8 @@ About_Component::About_Component ()
 
     lbl_prog_version->setBounds (8, 8, 150, 20);
 
-    lbl_prog_version_extra.reset (new Label ("new label",
-                                             TRANS("Final")));
+    lbl_prog_version_extra = std::make_unique<Label> ("new label",
+                                             TRANS("Final"));
     addAndMakeVisible (lbl_prog_version_extra.get());
     lbl_prog_version_extra->setFont (legacy_font (15.0f).withStyle ("Bold"));
     lbl_prog_version_extra->setJustificationType (Justification::centredLeft);
@@ -139,12 +144,12 @@ void About_Component::paint (Graphics& g)
     Label *lbl = lbl_prog_version_extra.get();
     Rectangle<float> bounds = lbl->getBounds().toFloat();
     float textw = GlyphArrangement::getStringWidth(lbl->getFont(), lbl->getText());
-    Rectangle<float> rect =
-        bounds.withWidth(textw + lbl->getBorderSize().getLeftAndRight());
+    const Rectangle<float> rect =
+        bounds.withWidth(textw + static_cast<float>(lbl->getBorderSize().getLeftAndRight()));
     g.setColour(Colour(0x52, 0x94, 0x58));
-    g.fillRoundedRectangle(rect, 2.0);
+    g.fillRoundedRectangle(rect, 2.0f);
     g.setColour(Colour(0xf0, 0xf8, 0xff));
-    g.drawRoundedRectangle(rect, 2.0, 1.0);
+    g.drawRoundedRectangle(rect, 2.0f, 1.0f);
 #endif
     //[/UserPaint]
 }

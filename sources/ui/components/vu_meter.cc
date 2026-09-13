@@ -2,18 +2,25 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #include "ui/components/vu_meter.h"
+#include <algorithm>
 #include <cmath>
 
-static const double default_hue_start = 210.0;
-static const double default_hue_range = -240.0;
+namespace {
+
+constexpr double default_hue_start = 210.0;
+constexpr double default_hue_range = -240.0;
+
+}  // namespace
 
 Vu_Meter::Vu_Meter()
-    : hue_start_(default_hue_start / 360.0)
-    , hue_range_(default_hue_range / 360.0)
+    : Vu_Meter(String())
 {
-    update_gradient();
 }
 
 Vu_Meter::Vu_Meter(const String &name)
@@ -64,45 +71,37 @@ void Vu_Meter::set_num_stops(unsigned num_stops)
 
 void Vu_Meter::paint(Graphics &g)
 {
-    Rectangle<int> bounds = getLocalBounds();
-    double value = value_;
+    const Rectangle<int> bounds = getLocalBounds().reduced(1, 1);
+    const int w = bounds.getWidth();
+    if (w <= 0)
+        return;
 
+    const double value = value_;
     double logvalue = 0;
     if (!logarithmic_)
         logvalue = value;
     else if (value > 0) {
-        double db = 20 * std::log10(value);
-        const double dbmin = -60.0;
+        const double db = 20 * std::log10(value);
+        constexpr double dbmin = -60.0;
         logvalue = (db - dbmin) / (0 - dbmin);
     }
 
-    bounds.reduce(1, 1);
-    int w = bounds.getWidth();
+    const int w2 = std::min(w, static_cast<int>(std::lround(w * logvalue)));
 
-    if (w <= 0)
-        return;
-
-    int w2 = (int)std::lround(w * logvalue);
-    w2 = (w2 > w) ? w : w2;
-
+    const Rectangle<float> area = bounds.toFloat();
     ColourGradient gradient = gradient_;
-    gradient.point1.setXY(bounds.getX(), bounds.getY());
-    gradient.point2.setXY(bounds.getRight(), bounds.getY());
+    gradient.point1 = area.getTopLeft();
+    gradient.point2 = area.getTopRight();
     g.setGradientFill(gradient);
     g.fillRect(bounds.withWidth(w2));
 }
 
 void Vu_Meter::update_gradient()
 {
-    ColourGradient &gradient = gradient_;
-    const unsigned num_stops = num_stops_;
-    const double hue_start = hue_start_;
-    const double hue_range = hue_range_;
-
-    gradient.clearColours();
-    for (unsigned s = 0; s < num_stops; ++s) {
-        double r = s / (double)(num_stops - 1);
-        double hue = hue_start + r * hue_range;
-        gradient.addColour(r, Colour::fromHSV((float)hue, 0.75f, 0.75f, (uint8)0xff));
+    gradient_.clearColours();
+    for (unsigned s = 0; s < num_stops_; ++s) {
+        const double r = s / static_cast<double>(num_stops_ - 1);
+        const double hue = hue_start_ + r * hue_range_;
+        gradient_.addColour(r, Colour::fromHSV(static_cast<float>(hue), 0.75f, 0.75f, 1.0f));
     }
 }

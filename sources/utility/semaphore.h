@@ -2,19 +2,25 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #pragma once
 #if defined(__APPLE__)
 #include <mach/mach.h>
 #elif defined(_WIN32)
-#include <limits.h>
+#include <climits>
 #include <windows.h>
 #else
+#include <cerrno>
 #include <semaphore.h>
-#include <errno.h>
 #endif
 #include <stdexcept>
 
+// A counting semaphore. post() only makes a system call and never blocks, so
+// the audio thread may use it to wake a worker.
 class Semaphore {
 public:
     explicit Semaphore(unsigned value = 0);
@@ -40,7 +46,7 @@ private:
 #if defined(__APPLE__)
 inline Semaphore::Semaphore(unsigned value)
 {
-    if (semaphore_create(mach_task_self(), &sem_, SYNC_POLICY_FIFO, value) != 0)
+    if (semaphore_create(mach_task_self(), &sem_, SYNC_POLICY_FIFO, static_cast<int>(value)) != KERN_SUCCESS)
         throw std::runtime_error("Semaphore::Semaphore");
 }
 
@@ -57,7 +63,7 @@ inline void Semaphore::post()
 
 inline void Semaphore::wait()
 {
-    do {
+    for (;;) {
         switch (semaphore_wait(sem_)) {
         case KERN_SUCCESS:
             return;
@@ -66,12 +72,12 @@ inline void Semaphore::wait()
         default:
             throw std::runtime_error("Semaphore::wait");
         }
-    } while (1);
+    }
 }
 
 inline bool Semaphore::try_wait()
 {
-    do {
+    for (;;) {
         const mach_timespec_t timeout = {0, 0};
         switch (semaphore_timedwait(sem_, timeout)) {
         case KERN_SUCCESS:
@@ -83,13 +89,13 @@ inline bool Semaphore::try_wait()
         default:
             throw std::runtime_error("Semaphore::try_wait");
         }
-    } while (1);
+    }
 }
 #elif defined(_WIN32)
 inline Semaphore::Semaphore(unsigned value)
+    : sem_(CreateSemaphore(nullptr, static_cast<LONG>(value), LONG_MAX, nullptr))
 {
-    sem_ = CreateSemaphore(nullptr, value, LONG_MAX, nullptr);
-    if (!sem_)
+    if (sem_ == nullptr)
         throw std::runtime_error("Semaphore::Semaphore");
 }
 
@@ -151,7 +157,7 @@ inline void Semaphore::wait()
 
 inline bool Semaphore::try_wait()
 {
-    do {
+    for (;;) {
         if (sem_trywait(&sem_) == 0)
             return true;
         switch (errno) {
@@ -162,6 +168,6 @@ inline bool Semaphore::try_wait()
         default:
             throw std::runtime_error("Semaphore::try_wait");
         }
-    } while (1);
+    }
 }
 #endif

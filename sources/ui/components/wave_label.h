@@ -2,6 +2,10 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #pragma once
 #include "JuceHeader.h"
@@ -20,16 +24,12 @@ public:
 
     class Listener {
     public:
-        virtual ~Listener() {}
+        virtual ~Listener() = default;
         virtual void wave_changed([[maybe_unused]] Wave_Label *k) {}
     };
 
     void add_listener(Listener *l);
     void remove_listener(Listener *l);
-
-#if 0
-    std::function<void()> on_wave_change;
-#endif
 
 protected:
     void handleAsyncUpdate() override;

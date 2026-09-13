@@ -7,6 +7,9 @@
   now maintained by hand. The "//[...]" markers left behind are ordinary
   section comments and no longer carry any special meaning -- edit anywhere.
 
+  Modified for ADLplug-Next. The modifications are distributed under the
+  GNU GPL v3 or later (see the accompanying file LICENSE).
+
   ==============================================================================
 */
 
@@ -48,7 +51,7 @@ class Main_Component  : public Generic_Main_Component<Main_Component>,
 public:
     //==============================================================================
     Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb, Configuration &conf);
-    ~Main_Component();
+    ~Main_Component() override;
 
     //==============================================================================
     //[UserMethods]     -- You can add your own custom methods in this section.
@@ -148,4 +151,6 @@ private:
 };
 
 //[EndFile] You can add extra defines here...
+// Instantiated at the end of main_component.cc.
+extern template class Generic_Main_Component<Main_Component>;
 //[/EndFile]

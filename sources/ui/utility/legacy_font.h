@@ -1,4 +1,4 @@
-//          Part of ADLplug, distributed under the GNU GPL v3.
+//     Part of ADLplug, distributed under the GNU GPL v3 or later.
 //               (See accompanying file LICENSE.)
 //
 // ADLplug's layouts were drawn against JUCE 5/6 font metrics. JUCE 8 moved its

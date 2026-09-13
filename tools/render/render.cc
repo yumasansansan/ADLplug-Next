@@ -1,10 +1,10 @@
-//          Part of ADLplug, distributed under the GNU GPL v3.
+//     Part of ADLplug, distributed under the GNU GPL v3 or later.
 //               (See accompanying file LICENSE.)
 //
 // Offline render of a fixed MIDI sequence through a VST3 build of the plugin.
 //
 //     ADLplug_render <plugin.vst3> <output.f32> [seconds] [warm-up ms]
-//                    [--editor] [--no-teardown]
+//                    [--editor] [--no-teardown] [--state <file>]
 //
 // Writes the plugin's output as interleaved 32-bit float samples and prints a
 // one-line summary with a hash, so two builds -- Debug against Release with
@@ -35,6 +35,10 @@
 // straight after the summary, which separates a teardown problem from a
 // rendering one. Timestamped progress goes to stderr, so a stall shows where
 // it happened.
+//
+// --state <file> writes the saved state as it stands after the warm-up -- the
+// data behind the state hash -- so that two builds whose hashes differ can be
+// compared field by field.
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -182,17 +186,20 @@ int main(int argc, char *argv[])
     std::vector<std::string> args;
     bool open_editor = false;
     bool teardown = true;
+    std::string state_file;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--editor")
             open_editor = true;
         else if (arg == "--no-teardown")
             teardown = false;
+        else if (arg == "--state" && i + 1 < argc)
+            state_file = argv[++i];
         else
             args.push_back(arg);
     }
     if (args.size() < 2) {
-        print_line("usage: ADLplug_render <plugin.vst3> <output.f32> [seconds] [warm-up ms] [--editor] [--no-teardown]");
+        print_line("usage: ADLplug_render <plugin.vst3> <output.f32> [seconds] [warm-up ms] [--editor] [--no-teardown] [--state <file>]");
         return 2;
     }
     const double seconds = args.size() > 2 ? juce::String(args[2]).getDoubleValue() : 20.0;
@@ -264,6 +271,17 @@ int main(int argc, char *argv[])
         }
         milestone("warm-up done: " + std::to_string(warm_blocks) + " blocks, state last changed after block " +
                   std::to_string(settled_after));
+
+        if (!state_file.empty()) {
+            juce::MemoryBlock saved;
+            plugin->getStateInformation(saved);
+            std::ofstream state_out(state_file, std::ios::binary);
+            state_out.write(static_cast<const char *>(saved.getData()), static_cast<std::streamsize>(saved.getSize()));
+            if (!state_out) {
+                print_line("error: cannot write " + state_file);
+                return 1;
+            }
+        }
 
         std::string emulator = "?";
         for (auto *parameter : plugin->getParameters())

@@ -2,25 +2,27 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #include "ui/components/indicator_NxM.h"
 
 Indicator_NxM::Indicator_NxM(unsigned rows, unsigned cols)
-    : rows_(rows), bits_(rows * cols)
+    : rows_(rows), columns_(cols), bits_(std::size_t{rows} * cols)
 {
 }
 
-bool Indicator_NxM::value(unsigned row, unsigned col)
+bool Indicator_NxM::value(unsigned row, unsigned column) const
 {
-    unsigned index = index_from(row, col);
-    if (index >= bits_.size())
-        return false;
-    return bits_[index];
+    const std::size_t index = index_from(row, column);
+    return index < bits_.size() && bits_[index];
 }
 
-void Indicator_NxM::set_value(unsigned row, unsigned col, bool value)
+void Indicator_NxM::set_value(unsigned row, unsigned column, bool value)
 {
-    unsigned index = index_from(row, col);
+    const std::size_t index = index_from(row, column);
     if (index >= bits_.size())
         return;
     if (bits_[index] != value) {
@@ -31,29 +33,24 @@ void Indicator_NxM::set_value(unsigned row, unsigned col, bool value)
 
 void Indicator_NxM::paint(Graphics &g)
 {
-    Rectangle<float> bounds = getLocalBounds().toType<float>();
-    LookAndFeel &lnf = getLookAndFeel();
-
-    Colour colour_on = Colour::fromRGBA(0xdf, 0xf0, 0xff, 0xff);
-    Colour colour_off = lnf.findColour(Label::backgroundColourId);
-    Colour colour_outline = Colour::fromRGBA(0x8e, 0x98, 0x9b, 0xff);
-
-    unsigned rows = this->rows();
-    unsigned columns = this->columns();
+    const unsigned rows = rows_;
+    const unsigned columns = columns_;
     if (rows == 0 || columns == 0)
         return;
 
-    float w1 = bounds.getWidth() / columns;
-    float h1 = bounds.getHeight() / rows;
+    LookAndFeel &lnf = getLookAndFeel();
+    const Colour colour_on = Colour::fromRGBA(0xdf, 0xf0, 0xff, 0xff);
+    const Colour colour_off = lnf.findColour(Label::backgroundColourId);
+    const Colour colour_outline = Colour::fromRGBA(0x8e, 0x98, 0x9b, 0xff);
+
+    const Rectangle<double> bounds = getLocalBounds().toDouble();
+    const double w1 = bounds.getWidth() / columns;
+    const double h1 = bounds.getHeight() / rows;
     for (unsigned r = 0; r < rows; ++r) {
         for (unsigned c = 0; c < columns; ++c) {
-            Point<float> origin =
-                bounds.getTopLeft() + Point<float>(c * w1, r * h1);
-            Rectangle<float> rect(origin.getX(), origin.getY(), w1, h1);
-            rect.reduce(1, 1);
-            bool value = this->value(r, c);
-            Colour colour = value ? colour_on : colour_off;
-            g.setColour(colour);
+            const Rectangle<float> rect = Rectangle<double>(
+                bounds.getX() + c * w1, bounds.getY() + r * h1, w1, h1).reduced(1.0).toFloat();
+            g.setColour(value(r, c) ? colour_on : colour_off);
             g.fillRect(rect);
             g.setColour(colour_outline);
             g.drawRect(rect);
@@ -61,7 +58,9 @@ void Indicator_NxM::paint(Graphics &g)
     }
 }
 
-unsigned Indicator_NxM::index_from(unsigned row, unsigned column)
+std::size_t Indicator_NxM::index_from(unsigned row, unsigned column) const
 {
-    return rows_ * column + row;
+    if (row >= rows_ || column >= columns_)
+        return bits_.size();
+    return std::size_t{rows_} * column + row;
 }

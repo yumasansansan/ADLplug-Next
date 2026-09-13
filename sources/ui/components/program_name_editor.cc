@@ -7,12 +7,17 @@
   now maintained by hand. The "//[...]" markers left behind are ordinary
   section comments and no longer carry any special meaning -- edit anywhere.
 
+  Modified for ADLplug-Next. The modifications are distributed under the
+  GNU GPL v3 or later (see the accompanying file LICENSE).
+
   ==============================================================================
 */
 
 //[Headers] You can add your own extra header files here...
 #include "midi/insnames.h"
-#include <fmt/format.h>
+#include <format>
+
+#include <memory>
 #include "ui/utility/legacy_font.h"
 //[/Headers]
 
@@ -28,7 +33,7 @@ Program_Name_Editor::Program_Name_Editor ()
     //[Constructor_pre] You can add your own custom stuff here..
     //[/Constructor_pre]
 
-    edt_pgm_name.reset (new TextEditor ("new text editor"));
+    edt_pgm_name = std::make_unique<TextEditor> ("new text editor");
     addAndMakeVisible (edt_pgm_name.get());
     edt_pgm_name->setMultiLine (false);
     edt_pgm_name->setReturnKeyStartsNewLine (false);
@@ -40,7 +45,7 @@ Program_Name_Editor::Program_Name_Editor ()
 
     edt_pgm_name->setBounds (88, 106, 200, 24);
 
-    edt_bank_name.reset (new TextEditor ("new text editor"));
+    edt_bank_name = std::make_unique<TextEditor> ("new text editor");
     addAndMakeVisible (edt_bank_name.get());
     edt_bank_name->setMultiLine (false);
     edt_bank_name->setReturnKeyStartsNewLine (false);
@@ -52,8 +57,8 @@ Program_Name_Editor::Program_Name_Editor ()
 
     edt_bank_name->setBounds (88, 34, 200, 24);
 
-    label.reset (new Label ("new label",
-                            TRANS("Program")));
+    label = std::make_unique<Label> ("new label",
+                            TRANS("Program"));
     addAndMakeVisible (label.get());
     label->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label->setJustificationType (Justification::centredLeft);
@@ -64,8 +69,8 @@ Program_Name_Editor::Program_Name_Editor ()
 
     label->setBounds (8, 80, 64, 24);
 
-    label2.reset (new Label ("new label",
-                             TRANS("Bank")));
+    label2 = std::make_unique<Label> ("new label",
+                             TRANS("Bank"));
     addAndMakeVisible (label2.get());
     label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centredLeft);
@@ -76,7 +81,7 @@ Program_Name_Editor::Program_Name_Editor ()
 
     label2->setBounds (8, 8, 64, 24);
 
-    edt_pgm_id.reset (new TextEditor ("new text editor"));
+    edt_pgm_id = std::make_unique<TextEditor> ("new text editor");
     addAndMakeVisible (edt_pgm_id.get());
     edt_pgm_id->setMultiLine (false);
     edt_pgm_id->setReturnKeyStartsNewLine (false);
@@ -88,7 +93,7 @@ Program_Name_Editor::Program_Name_Editor ()
 
     edt_pgm_id->setBounds (88, 80, 60, 24);
 
-    edt_bank_id.reset (new TextEditor ("new text editor"));
+    edt_bank_id = std::make_unique<TextEditor> ("new text editor");
     addAndMakeVisible (edt_bank_id.get());
     edt_bank_id->setMultiLine (false);
     edt_bank_id->setReturnKeyStartsNewLine (false);
@@ -100,14 +105,14 @@ Program_Name_Editor::Program_Name_Editor ()
 
     edt_bank_id->setBounds (88, 8, 60, 24);
 
-    btn_ok.reset (new TextButton ("new button"));
+    btn_ok = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_ok.get());
     btn_ok->setButtonText (TRANS("OK"));
     btn_ok->addListener (this);
 
     btn_ok->setBounds (130, 150, 70, 24);
 
-    btn_cancel.reset (new TextButton ("new button"));
+    btn_cancel = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_cancel.get());
     btn_cancel->setButtonText (TRANS("Cancel"));
     btn_cancel->addListener (this);
@@ -116,7 +121,7 @@ Program_Name_Editor::Program_Name_Editor ()
 
 
     //[UserPreSize]
-#if JUCE_MAC
+#if defined(JUCE_MAC)
     {
         Rectangle<int> bounds_ok = btn_ok->getBounds();
         Rectangle<int> bounds_cancel = btn_cancel->getBounds();
@@ -219,14 +224,14 @@ void Program_Name_Editor::set_program(
     bank_ = bank;
     pgm_ = pgm;
 
-    edt_bank_id->setText(fmt::format("{:03d}:{:03d}", bank.msb, bank.lsb));
-    edt_pgm_id->setText(fmt::format("{:c}{:03d}", bank.percussive ? 'P' : 'M', pgm));
+    edt_bank_id->setText(std::format("{:03d}:{:03d}", bank.msb, bank.lsb));
+    edt_pgm_id->setText(std::format("{:c}{:03d}", bank.percussive ? 'P' : 'M', pgm));
     edt_bank_name->setText(bank_name);
     edt_pgm_name->setText(pgm_name);
 
-    const Midi_Program_Ex *ex = midi_db.find_ex(bank.msb, bank.lsb, pgm + (bank.percussive ? 128 : 0));
-    const char *name = ex ? ex->name : bank.percussive ?
-        midi_db.perc(pgm).name : midi_db.inst(pgm);
+    const Midi_Db &db = midi_db();
+    const Midi_Program_Ex *ex = db.find_ex(bank.msb, bank.lsb, pgm + (bank.percussive ? 128 : 0));
+    const char *name = ex ? ex->name : bank.percussive ? db.perc(pgm).name : db.inst(pgm);
 
     Colour label_color = findColour(TextEditor::backgroundColourId).contrasting(0.5f);
     edt_pgm_name->setTextToShowWhenEmpty(name, label_color);

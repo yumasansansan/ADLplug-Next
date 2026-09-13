@@ -2,6 +2,10 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #include "plugin_state.h"
 #include "parameter_block.h"
@@ -21,6 +25,8 @@ Chip_Settings get_player_chip_settings(const Player &pl)
     return cs;
 }
 
+// The player numbers volume models from 1, with 0 meaning automatic; the
+// parameter and the WOPL/WOPN files number them from 0.
 Instrument_Global_Parameters get_player_global_parameters(const Player &pl)
 {
     Instrument_Global_Parameters gp;

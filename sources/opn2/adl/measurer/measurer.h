@@ -14,25 +14,29 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Modified for ADLplug-Next. The modifications are distributed under the
+ * GNU GPL v3 or later, as above.
  */
 
 #pragma once
-#include <stdint.h>
+#include <cstdint>
 struct Instrument;
 
 namespace Measurer
 {
     struct DurationInfo
     {
-        uint64_t    peak_amplitude_time;
-        double      peak_amplitude_value;
-        double      quarter_amplitude_time;
-        double      begin_amplitude;
-        double      interval;
-        double      keyoff_out_time;
-        int64_t     ms_sound_kon;
-        int64_t     ms_sound_koff;
-        bool        nosound;
+        std::uint64_t peak_amplitude_time = 0;
+        double peak_amplitude_value = 0;
+        double quarter_amplitude_time = 0;
+        double begin_amplitude = 0;
+        double interval = 0;
+        double keyoff_out_time = 0;
+        std::uint64_t ms_sound_kon = 0;
+        std::uint64_t ms_sound_koff = 0;
+        bool nosound = false;
     };
+
     void ComputeDurations(const Instrument &in, DurationInfo &result);
-};
+}

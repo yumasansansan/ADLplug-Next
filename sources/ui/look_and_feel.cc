@@ -2,22 +2,14 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #include "ui/look_and_feel.h"
 #include "resources.h"
-
-RESOURCE(Res, Mono_BoldItalic)
-RESOURCE(Res, Mono_Bold)
-RESOURCE(Res, Mono_Italic)
-RESOURCE(Res, Mono_Regular)
-RESOURCE(Res, Sans_BoldItalic)
-RESOURCE(Res, Sans_Bold)
-RESOURCE(Res, Sans_Italic)
-RESOURCE(Res, Sans_Regular)
-RESOURCE(Res, Serif_BoldItalic)
-RESOURCE(Res, Serif_Bold)
-RESOURCE(Res, Serif_Italic)
-RESOURCE(Res, Serif_Regular)
+#include <algorithm>
 
 #if 1
 #   define trace(fmt, ...)
@@ -28,8 +20,7 @@ RESOURCE(Res, Serif_Regular)
 //==============================================================================
 void Custom_Look_And_Feel::add_custom_tooltip(const String &key, Component *component, bool owned)
 {
-    OptionalScopedPointer<Component> ptr(component, owned);
-    custom_tooltips_[key].component = std::move(ptr);
+    custom_tooltips_[key].component = OptionalScopedPointer<Component>(component, owned);
 }
 
 //==============================================================================
@@ -79,22 +70,18 @@ Typeface::Ptr Custom_Look_And_Feel::getTypefaceForFont(const Font &font)
     }
 
     return tf;
-
-#undef BINARY_FONT
 }
 
-Typeface::Ptr Custom_Look_And_Feel::getOrCreateFont(
-    Typeface::Ptr &font, const Res::Data &data)
+Typeface::Ptr Custom_Look_And_Feel::getOrCreateFont(Typeface::Ptr &font, const Res_Data &data)
 {
     if (!font) {
-        MemoryInputStream memStream(data.data, data.size, false);
-        GZIPDecompressorInputStream gzStream(&memStream, false, GZIPDecompressorInputStream::gzipFormat);
+        MemoryInputStream mem_stream(data.data, data.size, false);
+        GZIPDecompressorInputStream gz_stream(&mem_stream, false, GZIPDecompressorInputStream::gzipFormat);
 
-        MemoryBlock memBlock;
-        gzStream.readIntoMemoryBlock(memBlock);
+        MemoryBlock mem_block;
+        gz_stream.readIntoMemoryBlock(mem_block);
 
-        font = Typeface::createSystemTypefaceFor(
-            memBlock.getData(), memBlock.getSize());
+        font = Typeface::createSystemTypefaceFor(mem_block.getData(), mem_block.getSize());
 
         if (!font)
             trace("Could not load font data.");
@@ -107,8 +94,8 @@ Typeface::Ptr Custom_Look_And_Feel::getOrCreateFont(
 
 void Custom_Look_And_Feel::drawButtonBackground(Graphics &g, Button &button, const Colour &background_colour, bool is_mouse_over_button, bool is_button_down)
 {
-    float corner_size = 6.0f;
-    Rectangle<float> bounds = button.getLocalBounds().toFloat().reduced(0.5f, 0.5f);
+    const float corner_size = 6.0f;
+    const Rectangle<float> bounds = button.getLocalBounds().toFloat().reduced(0.5f, 0.5f);
 
     auto base_colour = background_colour
         .withMultipliedSaturation(button.hasKeyboardFocus(true) ? 1.3f : 0.9f)
@@ -140,26 +127,18 @@ void Custom_Look_And_Feel::drawButtonBackground(Graphics &g, Button &button, con
 
 Font Custom_Look_And_Feel::getComboBoxFont(ComboBox &box)
 {
-    return withDefaultMetrics (FontOptions (jmin (15.0f, box.getHeight() * 0.85f)));
-}
-
-Label *Custom_Look_And_Feel::createSliderTextBox(Slider &slider)
-{
-    std::unique_ptr<Label> label(Base::createSliderTextBox(slider));
-    NamedValueSet &props = slider.getProperties();
-    props.set("X-Slider-Text-Box", (int64)(intptr_t)label.get());
-    return label.release();
+    return withDefaultMetrics(FontOptions(static_cast<float>(std::min(15.0, box.getHeight() * 0.85))));
 }
 
 Rectangle<int> Custom_Look_And_Feel::getTooltipBounds(const String &text, Point<int> pos, Rectangle<int> parent_area)
 {
     if (text.startsWith("<<") && text.endsWith(">>")) {
-        String key = text.substring(2, text.length() - 2);
-        auto it = custom_tooltips_.find(key);
+        const String key = text.substring(2, text.length() - 2);
+        const auto it = custom_tooltips_.find(key);
         if (it != custom_tooltips_.end()) {
-            Component *comp = it->second.component.get();
-            int w = comp->getWidth() + 14;
-            int h = comp->getHeight() + 6;
+            const Component *comp = it->second.component.get();
+            const int w = comp->getWidth() + 14;
+            const int h = comp->getHeight() + 6;
             return Rectangle<int>(pos.x > parent_area.getCentreX() ? pos.x - (w + 12) : pos.x + 24,
                                   pos.y > parent_area.getCentreY() ? pos.y - (h + 6) : pos.y + 6,
                                   w, h).constrainedWithin(parent_area);
@@ -171,20 +150,20 @@ Rectangle<int> Custom_Look_And_Feel::getTooltipBounds(const String &text, Point<
 void Custom_Look_And_Feel::drawTooltip(Graphics &g, const String &text, int width, int height)
 {
     if (text.startsWith("<<") && text.endsWith(">>")) {
-        String key = text.substring(2, text.length() - 2);
-        auto it = custom_tooltips_.find(key);
+        const String key = text.substring(2, text.length() - 2);
+        const auto it = custom_tooltips_.find(key);
         if (it != custom_tooltips_.end()) {
             Component *comp = it->second.component.get();
-            Rectangle<int> bounds(width, height);
-            float cornerSize = 5.0f;
+            const Rectangle<int> bounds(width, height);
+            const float corner_size = 5.0f;
             g.setColour(findColour(TooltipWindow::backgroundColourId));
-            g.fillRoundedRectangle(bounds.toFloat(), cornerSize);
+            g.fillRoundedRectangle(bounds.toFloat(), corner_size);
             g.setColour(findColour(TooltipWindow::outlineColourId));
-            g.drawRoundedRectangle(bounds.toFloat().reduced(0.5f, 0.5f), cornerSize, 1.0f);
+            g.drawRoundedRectangle(bounds.toFloat().reduced(0.5f, 0.5f), corner_size, 1.0f);
             g.setOrigin((width - comp->getWidth()) / 2, (height - comp->getHeight()) / 2);
             comp->paintEntireComponent(g, false);
             return;
         }
     }
-    return Base::drawTooltip(g, text, width, height);
+    Base::drawTooltip(g, text, width, height);
 }

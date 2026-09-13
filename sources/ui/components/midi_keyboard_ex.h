@@ -2,9 +2,15 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #pragma once
 #include "JuceHeader.h"
+#include <array>
+#include <cstdint>
 
 class Midi_Keyboard_Ex : public MidiKeyboardComponent {
 public:
@@ -18,7 +24,7 @@ protected:
     void drawBlackNote(int note, Graphics &g, Rectangle<float> area, bool is_down, bool is_over, Colour note_fill_colour) override;
 
 private:
-    uint8_t highlight_value_[128] = {};
+    std::array<std::uint8_t, 128> highlight_value_ {};
     int designated_note_ = -1;
     Colour designated_note_color_;
     bool block_colour_changed_callback_ = false; // stops excessive repaints

@@ -2,6 +2,10 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #include "ssgeg_waves.h"
 
@@ -18,7 +22,7 @@ double SSGEG_Waves::compute_wave(unsigned wave, double phase) const
     phase = (phase > 1) ? 1 : phase;
 
     phase *= num_periods;
-    unsigned period = (unsigned)phase;
+    unsigned period = static_cast<unsigned>(phase);
     period = (period < num_periods) ? period : (num_periods - 1);
     phase -= period;
 

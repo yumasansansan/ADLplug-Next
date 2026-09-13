@@ -2,45 +2,53 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #include "chip_settings.h"
 #include "player.h"
 #include "resources.h"
 #include <algorithm>
-#include <cstring>
+#include <cstddef>
 #include <string>
+#include <string_view>
 #include <vector>
 
-RESOURCE(Res, emu_mame);
-RESOURCE(Res, emu_nuked);
-RESOURCE(Res, emu_gens);
-RESOURCE(Res, emu_neko);
+namespace {
 
-static Emulator_Defaults make_emulator_defaults()
+bool starts_with_ignoring_ascii_case(std::string_view text, std::string_view lowercase_prefix) noexcept
+{
+    const auto lower = [](char c) { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c; };
+    return text.size() >= lowercase_prefix.size() &&
+           std::ranges::equal(text.substr(0, lowercase_prefix.size()), lowercase_prefix,
+                              [&lower](char a, char b) { return lower(a) == b; });
+}
+
+Emulator_Defaults make_emulator_defaults()
 {
     Emulator_Defaults defaults;
 
-    //
-    std::vector<std::string> choices = Player::enumerate_emulators();
-    unsigned count = (unsigned)choices.size();
-    defaults.choices.ensureStorageAllocated(count);
+    const std::vector<std::string> choices = Player::enumerate_emulators();
+    defaults.choices.ensureStorageAllocated(static_cast<int>(choices.size()));
     for (const std::string &choice : choices)
         defaults.choices.add(choice);
 
-    //
-    unsigned default_index = ~0u;
-    for (unsigned i = 0; i < count && default_index == ~0u; ++i) {
-        std::string name = choices[i];
-        std::transform(name.begin(), name.end(), name.begin(),
-                       [](unsigned char c) -> unsigned char
-                           { return (c >= 'A' && c <= 'Z') ? (c - 'A' + 'a') : c; });
-        if (name.size() >= 4 && !memcmp(name.data(), "mame", 4))
-            default_index = i;
-    }
-    defaults.default_index = (default_index != ~0u) ? default_index : 0;
+    const auto it = std::ranges::find_if(choices, [](const std::string &name) {
+        return starts_with_ignoring_ascii_case(name, "mame");
+    });
+    defaults.default_index = (it != choices.end()) ? static_cast<unsigned>(it - choices.begin()) : 0;
 
     return defaults;
 }
+
+unsigned non_negative(int value) noexcept
+{
+    return static_cast<unsigned>(std::max(0, value));
+}
+
+}  // namespace
 
 const Emulator_Defaults &get_emulator_defaults()
 {
@@ -51,23 +59,23 @@ const Emulator_Defaults &get_emulator_defaults()
 Emulator_Icons::Emulator_Icons()
 {
     const Emulator_Defaults &defaults = get_emulator_defaults();
-    unsigned count = (unsigned)defaults.choices.size();
+    const auto load = [](const Res::Data &res) { return ImageFileFormat::loadFrom(res.data, res.size); };
 
-    images.resize(count);
-    Image icon_mame = ImageFileFormat::loadFrom(Res::emu_mame.data, Res::emu_mame.size);
-    Image icon_nuked = ImageFileFormat::loadFrom(Res::emu_nuked.data, Res::emu_nuked.size);
-    Image icon_gens = ImageFileFormat::loadFrom(Res::emu_gens.data, Res::emu_gens.size);
-    Image icon_neko = ImageFileFormat::loadFrom(Res::emu_neko.data, Res::emu_neko.size);
-    for (unsigned i = 0; i < count; ++i) {
-        const String &name = defaults.choices[i];
-        String lowerName = name.toLowerCase();
-        if (lowerName.startsWith("mame"))
+    const Image icon_mame = load(Res::emu_mame);
+    const Image icon_nuked = load(Res::emu_nuked);
+    const Image icon_gens = load(Res::emu_gens);
+    const Image icon_neko = load(Res::emu_neko);
+
+    images.resize(static_cast<std::size_t>(defaults.choices.size()));
+    for (std::size_t i = 0; i < images.size(); ++i) {
+        const String name = defaults.choices[static_cast<int>(i)].toLowerCase();
+        if (name.startsWith("mame"))
             images[i] = icon_mame;
-        else if (lowerName.startsWith("nuked"))
+        else if (name.startsWith("nuked"))
             images[i] = icon_nuked;
-        else if (lowerName.startsWith("gens"))
+        else if (name.startsWith("gens"))
             images[i] = icon_gens;
-        else if (lowerName.startsWith("neko"))
+        else if (name.startsWith("neko"))
             images[i] = icon_neko;
     }
 }
@@ -75,17 +83,17 @@ Emulator_Icons::Emulator_Icons()
 PropertySet Chip_Settings::to_properties() const
 {
     PropertySet set;
-    set.setValue("emulator", (int)emulator);
-    set.setValue("chip_count", (int)chip_count);
-    set.setValue("chip_type", (int)chip_type);
+    set.setValue("emulator", static_cast<int>(emulator));
+    set.setValue("chip_count", static_cast<int>(chip_count));
+    set.setValue("chip_type", static_cast<int>(chip_type));
     return set;
 }
 
 Chip_Settings Chip_Settings::from_properties(const PropertySet &set)
 {
     Chip_Settings cs;
-    cs.emulator = set.getIntValue("emulator");
-    cs.chip_count = set.getIntValue("chip_count");
-    cs.chip_type = set.getIntValue("chip_type");
+    cs.emulator = non_negative(set.getIntValue("emulator"));
+    cs.chip_count = non_negative(set.getIntValue("chip_count"));
+    cs.chip_type = non_negative(set.getIntValue("chip_type"));
     return cs;
 }

@@ -7,6 +7,9 @@
   now maintained by hand. The "//[...]" markers left behind are ordinary
   section comments and no longer carry any special meaning -- edit anywhere.
 
+  Modified for ADLplug-Next. The modifications are distributed under the
+  GNU GPL v3 or later (see the accompanying file LICENSE).
+
   ==============================================================================
 */
 
@@ -18,6 +21,8 @@
 
 #include "algorithm_help.h"
 
+#include <memory>
+
 
 //[MiscUserDefs] You can add your own user definitions and misc code here...
 //[/MiscUserDefs]
@@ -28,37 +33,37 @@ Algorithm_Help::Algorithm_Help ()
     //[Constructor_pre] You can add your own custom stuff here..
     //[/Constructor_pre]
 
-    component.reset (new Algorithm_Component (Algorithms::algorithm_2fm));
+    component = std::make_unique<Algorithm_Component> (Algorithms::algorithm_2fm);
     addAndMakeVisible (component.get());
     component->setName ("new component");
 
     component->setBounds (16, 32, 120, 104);
 
-    component2.reset (new Algorithm_Component (Algorithms::algorithm_2am));
+    component2 = std::make_unique<Algorithm_Component> (Algorithms::algorithm_2am);
     addAndMakeVisible (component2.get());
     component2->setName ("new component");
 
     component2->setBounds (168, 32, 120, 104);
 
-    component3.reset (new Algorithm_Component (Algorithms::algorithm_4fmfm));
+    component3 = std::make_unique<Algorithm_Component> (Algorithms::algorithm_4fmfm);
     addAndMakeVisible (component3.get());
     component3->setName ("new component");
 
     component3->setBounds (16, 168, 120, 200);
 
-    component4.reset (new Algorithm_Component (Algorithms::algorithm_4amfm));
+    component4 = std::make_unique<Algorithm_Component> (Algorithms::algorithm_4amfm);
     addAndMakeVisible (component4.get());
     component4->setName ("new component");
 
     component4->setBounds (168, 168, 120, 200);
 
-    component5.reset (new Algorithm_Component (Algorithms::algorithm_4fmam));
+    component5 = std::make_unique<Algorithm_Component> (Algorithms::algorithm_4fmam);
     addAndMakeVisible (component5.get());
     component5->setName ("new component");
 
     component5->setBounds (320, 168, 120, 200);
 
-    component6.reset (new Algorithm_Component (Algorithms::algorithm_4amam));
+    component6 = std::make_unique<Algorithm_Component> (Algorithms::algorithm_4amam);
     addAndMakeVisible (component6.get());
     component6->setName ("new component");
 

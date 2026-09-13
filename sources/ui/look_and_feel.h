@@ -2,17 +2,21 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #pragma once
 #include "JuceHeader.h"
 #include <unordered_map>
 class Custom_Tooltips;
-namespace Res { struct Data; }
+struct Res_Data;
 
 class Custom_Look_And_Feel : public LookAndFeel_V4
 {
 public:
-    typedef LookAndFeel_V4 Base;
+    using Base = LookAndFeel_V4;
 
     //==========================================================================
     void add_custom_tooltip(const String &key, Component *component, bool owned);
@@ -26,29 +30,17 @@ public:
 
     Font getComboBoxFont(ComboBox &box) override;
 
-    Label *createSliderTextBox(Slider &slider) override;
-
     Rectangle<int> getTooltipBounds(const String &text, Point<int> pos, Rectangle<int> parent_area) override;
     void drawTooltip(Graphics &g, const String &text, int width, int height) override;
 
 private:
     struct Custom_Tooltip_Entry {
-        Custom_Tooltip_Entry()
-            {}
-        Custom_Tooltip_Entry(Custom_Tooltip_Entry &&other)
-            : component(std::move(other.component)) {}
-        Custom_Tooltip_Entry &operator=(Custom_Tooltip_Entry &&other)
-            { component = std::move(other.component); return *this; }
         OptionalScopedPointer<Component> component;
-        JUCE_DECLARE_NON_COPYABLE(Custom_Tooltip_Entry)
     };
     std::unordered_map<String, Custom_Tooltip_Entry> custom_tooltips_;
 
-private:
-    static Typeface::Ptr getOrCreateFont(
-        Typeface::Ptr &font, const Res::Data &data);
+    static Typeface::Ptr getOrCreateFont(Typeface::Ptr &font, const Res_Data &data);
 
-private:
     Typeface::Ptr fontSansRegular;
     Typeface::Ptr fontSansItalic;
     Typeface::Ptr fontSansBold;

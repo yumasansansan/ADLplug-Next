@@ -57,7 +57,7 @@ You can find automatic builds of the development branch [here](https://github.co
 
 Install required dependencies:
 - CMake 3.25 or newer, and Ninja
-- a C23 / C++23 compiler (Clang 19+ or GCC 14+ recommended)
+- Clang 19 or newer, for C23 / C++23 (GCC is not supported)
 - development packages for Linux: ALSA, Freetype, Fontconfig, X11
 
 ### Compiling
@@ -201,34 +201,40 @@ ADLplug as a whole is distributed under the **GNU General Public License v3**
 (see `LICENSE`). It combines parts under several different free software
 licenses; the strongest of those governs the combined work.
 
-The parts developed exclusively for this project remain available from their
-authors under the **Boost Software License 1.0** (see `LICENSE.BSL-1.0.txt`),
-which is what the per-file notices in `sources/` refer to. Boost is
-GPL-compatible, so those files may be redistributed as part of this GPLv3 work
-with their notices intact.
+Code written for ADLplug-Next — new files, and the changes made to files that
+came from upstream — is licensed under the **GNU GPL v3 or (at your option) any
+later version**. New files say so in their header; upstream files keep their
+original notice, followed by a note that their ADLplug-Next modifications are
+under the GNU GPL v3 or later.
 
-Note that JUCE is used under the **AGPLv3** option of its dual licence. GPLv3
-§13 explicitly permits combining a GPLv3 work with an AGPLv3 work; the AGPL's
+The parts developed for the original ADLplug remain available from their
+authors under the **Boost Software License 1.0** (see `LICENSE.BSL-1.0.txt`),
+which is what the Boost notices in `sources/` refer to. Boost is
+GPL-compatible, so those parts may be redistributed as part of this work with
+their notices intact.
+
+The binaries themselves are distributed under version 3 of the GPL: the bundled
+ASIO and AAX SDKs are available under the GPL v3 with no later-version option,
+and JUCE is used under the **AGPLv3** option of its dual licence. GPLv3 §13
+explicitly permits combining a GPLv3 work with an AGPLv3 work; the AGPL's
 network-interaction clause then applies to the combination. For an audio plugin
 this has no practical effect, but it is why the binary cannot be described as
 "GPLv3 only".
 
 | Files                                      | License                                                    |
 | ------------------------------------------ | ---------------------------------------------------------- |
-| `sources/` (except as noted below)         | Boost Software License 1.0                                 |
+| `sources/`, `tools/` — ADLplug-Next code   | GNU GPL v3 or later                                        |
+| `sources/` — original ADLplug parts        | Boost Software License 1.0, except as noted below          |
 | `thirdparty/JUCE`                          | GNU AGPL v3 (or commercial)                                |
 | `thirdparty/JUCE` — bundled ASIO SDK       | Steinberg ASIO License **or GNU GPL v3**                   |
 | `thirdparty/JUCE` — bundled AAX SDK        | Avid AAX SDK License **or GNU GPL v3**                     |
-| `thirdparty/JUCE` — bundled VST3 SDK       | Steinberg VST3 License or GNU GPL v3                       |
-| `thirdparty/fmt`                           | MIT                                                        |
+| `thirdparty/JUCE` — bundled VST3 SDK       | MIT                                                        |
 | `thirdparty/libADLMIDI`                    | GNU LGPL v2.1+, GNU GPL v2+, GNU GPL v3+, MIT, BSD, Boost  |
 | `thirdparty/libOPNMIDI`                    | GNU LGPL v2.1+, GNU GPL v2+, GNU GPL v3+, MIT              |
 | `thirdparty/simpleini`                     | MIT                                                        |
-| `sources/opl3/adl/measurer`                | GNU GPL v3                                                 |
-| `sources/opl3/adl/measurer/chips/dosbox`   | GNU GPL v2+                                                |
-| `sources/opn2/adl/measurer`                | GNU GPL v3                                                 |
-| `sources/opn2/adl/measurer/chips/mame`     | GNU GPL v2+                                                |
-| `sources/opl3/ui/components/opl3_waves.cc` | GNU LGPL v2.1                                              |
+| `sources/opl3/adl/measurer`                | GNU GPL v3+                                                |
+| `sources/opn2/adl/measurer`                | GNU GPL v3+                                                |
+| `sources/opl3/ui/components/opl3_waves.cc` | GNU LGPL v2.1+                                             |
 | `resources/ui/fonts`                       | SIL Open Font License 1.1 (Liberation)                     |
 | `resources/ui/noto-emoji`                  | Apache License 2.0                                         |
 

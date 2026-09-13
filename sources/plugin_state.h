@@ -2,17 +2,18 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #pragma once
-#include <memory>
 class Player;
-struct Parameter_Block;
-struct Instrument;
 struct Chip_Settings;
 struct Instrument_Global_Parameters;
-namespace juce { class XmlElement; }
 
-enum State_Change_Bit
+// Bits for the parts of the state that have changed and wait to be sent.
+enum State_Change_Bit : unsigned
 {
     Cb_ChipSettings,
     Cb_GlobalParameters,

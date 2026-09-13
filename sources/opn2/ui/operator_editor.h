@@ -7,6 +7,9 @@
   now maintained by hand. The "//[...]" markers left behind are ordinary
   section comments and no longer carry any special meaning -- edit anywhere.
 
+  Modified for ADLplug-Next. The modifications are distributed under the
+  GNU GPL v3 or later (see the accompanying file LICENSE).
+
   ==============================================================================
 */
 
@@ -40,7 +43,7 @@ class Operator_Editor  : public Component,
 public:
     //==============================================================================
     Operator_Editor (unsigned op_id, Parameter_Block &pb);
-    ~Operator_Editor();
+    ~Operator_Editor() override;
 
     //==============================================================================
     //[UserMethods]     -- You can add your own custom methods in this section.
