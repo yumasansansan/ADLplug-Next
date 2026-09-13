@@ -4,7 +4,8 @@
 // Offline render of a fixed MIDI sequence through a VST3 build of the plugin.
 //
 //     ADLplug_render <plugin.vst3> <output.f32> [seconds] [warm-up ms]
-//                    [--editor] [--no-teardown] [--state <file>]
+//                    [--editor] [--snapshot <file.png>] [--no-teardown]
+//                    [--state <file>] [--restore <file>] [--emulator <number>]
 //
 // Writes the plugin's output as interleaved 32-bit float samples and prints a
 // one-line summary with a hash, so two builds -- Debug against Release with
@@ -31,7 +32,9 @@
 // changed. If that is near the end of the warm-up, the warm-up was too short.
 //
 // --editor opens the editor in a window after rendering and closes it again,
-// so the teardown also covers what the editor allocates. --no-teardown exits
+// so the teardown also covers what the editor allocates. --snapshot <file.png>
+// does the same and, on Windows, saves a picture of the editor's window
+// before closing it. --no-teardown exits
 // straight after the summary, which separates a teardown problem from a
 // rendering one. Timestamped progress goes to stderr, so a stall shows where
 // it happened.
@@ -39,8 +42,20 @@
 // --state <file> writes the saved state as it stands after the warm-up -- the
 // data behind the state hash -- so that two builds whose hashes differ can be
 // compared field by field.
+//
+// --restore <file> loads a state, such as one written by --state, before the
+// warm-up. --emulator <number> then selects an emulator the way a project
+// saved with it does: the plug-in's state is restored with the emulator number
+// in its chip settings changed. Both happen on this thread before the warm-up,
+// so renders with other emulators are reproducible as well. The summary names
+// the emulator the plug-in reports afterwards, which for a number the build
+// lacks is the one it plays instead.
 
 #include <juce_audio_processors/juce_audio_processors.h>
+
+#if defined(JUCE_WINDOWS)
+ #include <windows.h>
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -101,6 +116,103 @@ std::uint64_t state_hash(juce::AudioPluginInstance &plugin)
     fnv1a64_add(hash, state.getData(), state.getSize());
     return hash;
 }
+
+// Sets the emulator number in the plug-in's state as the host keeps it.
+// VST3PluginInstance saves copyXmlToBinary() of a <VST3PluginState> element
+// whose children hold, in base64, the streams of the component and of the
+// controller. A stream from the plug-in starts with copyXmlToBinary() of its
+// <ADLMIDI-state>, and JUCE's VST3 wrapper may add data of its own after that,
+// which is kept.
+bool set_emulator_in_state(juce::MemoryBlock &state, int emulator)
+{
+    const std::unique_ptr<juce::XmlElement> host =
+        juce::AudioProcessor::getXmlFromBinary(state.getData(), static_cast<int>(state.getSize()));
+    if (host == nullptr)
+        return false;
+
+    bool changed = false;
+    for (juce::XmlElement *element : host->getChildIterator()) {
+        juce::MemoryBlock stream;
+        if (!stream.fromBase64Encoding(element->getAllSubText()) || stream.getSize() <= 8)
+            continue;
+        const std::unique_ptr<juce::XmlElement> own =
+            juce::AudioProcessor::getXmlFromBinary(stream.getData(), static_cast<int>(stream.getSize()));
+        juce::XmlElement *const chip = (own != nullptr) ? own->getChildByName("chip") : nullptr;
+        juce::XmlElement *const value = (chip != nullptr) ? chip->getChildByAttribute("name", "emulator") : nullptr;
+        if (value == nullptr)
+            continue;
+        value->setAttribute("val", emulator);
+
+        // copyXmlToBinary() writes a magic number, the length of the text, the
+        // text and a terminating zero.
+        const auto *const bytes = static_cast<const char *>(stream.getData());
+        const std::size_t own_size = 9u + juce::ByteOrder::littleEndianInt(bytes + 4);
+        juce::MemoryBlock patched;
+        juce::AudioProcessor::copyXmlToBinary(*own, patched);
+        if (own_size < stream.getSize())
+            patched.append(bytes + own_size, stream.getSize() - own_size);
+
+        element->deleteAllTextElements();
+        element->addTextElement(patched.toBase64Encoding());
+        changed = true;
+    }
+
+    if (changed)
+        juce::AudioProcessor::copyXmlToBinary(*host, state);
+    return changed;
+}
+
+#if defined(JUCE_WINDOWS)
+// A hosted editor draws into the plug-in's own native window, which
+// Component::createComponentSnapshot() does not see: it gives a black picture.
+// PrintWindow() has Windows draw the whole window, child windows included.
+juce::Image capture_window(juce::Component &window)
+{
+    const auto hwnd = static_cast<HWND>(window.getWindowHandle());
+    RECT rect {};
+    if (hwnd == nullptr || GetClientRect(hwnd, &rect) == FALSE)
+        return {};
+    const int width = rect.right - rect.left;
+    const int height = rect.bottom - rect.top;
+    if (width <= 0 || height <= 0)
+        return {};
+
+    const HDC screen = GetDC(nullptr);
+    const HDC memory = CreateCompatibleDC(screen);
+    const HBITMAP bitmap = CreateCompatibleBitmap(screen, width, height);
+    const HGDIOBJ previous = SelectObject(memory, bitmap);
+    // PW_CLIENTONLY | PW_RENDERFULLCONTENT: the client area, without the frame,
+    // and with what is drawn through DirectX.
+    const bool printed = PrintWindow(hwnd, memory, 1 | 2) != FALSE;
+
+    BITMAPINFO info {};
+    info.bmiHeader.biSize = static_cast<DWORD>(sizeof(BITMAPINFOHEADER));
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height;  // rows from the top
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    std::vector<std::uint8_t> pixels(4 * static_cast<std::size_t>(width) * static_cast<std::size_t>(height));
+    const bool copied = printed &&
+        GetDIBits(memory, bitmap, 0, static_cast<UINT>(height), pixels.data(), &info, DIB_RGB_COLORS) == height;
+
+    SelectObject(memory, previous);
+    DeleteObject(bitmap);
+    DeleteDC(memory);
+    ReleaseDC(nullptr, screen);
+    if (!copied)
+        return {};
+
+    juce::Image picture(juce::Image::RGB, width, height, false, juce::SoftwareImageType());
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const std::size_t i = 4 * (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x));
+            picture.setPixelAt(x, y, juce::Colour(pixels[i + 2], pixels[i + 1], pixels[i]));
+        }
+    }
+    return picture;
+}
+#endif
 
 struct Scheduled_Event {
     int sample = 0;
@@ -187,19 +299,29 @@ int main(int argc, char *argv[])
     bool open_editor = false;
     bool teardown = true;
     std::string state_file;
+    std::string restore_file;
+    std::string snapshot_file;
+    int emulator_number = -1;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--editor")
             open_editor = true;
+        else if (arg == "--snapshot" && i + 1 < argc)
+            snapshot_file = argv[++i];
         else if (arg == "--no-teardown")
             teardown = false;
         else if (arg == "--state" && i + 1 < argc)
             state_file = argv[++i];
+        else if (arg == "--restore" && i + 1 < argc)
+            restore_file = argv[++i];
+        else if (arg == "--emulator" && i + 1 < argc)
+            emulator_number = juce::String(argv[++i]).getIntValue();
         else
             args.push_back(arg);
     }
     if (args.size() < 2) {
-        print_line("usage: ADLplug_render <plugin.vst3> <output.f32> [seconds] [warm-up ms] [--editor] [--no-teardown] [--state <file>]");
+        print_line("usage: ADLplug_render <plugin.vst3> <output.f32> [seconds] [warm-up ms] [--editor] "
+                   "[--snapshot <file.png>] [--no-teardown] [--state <file>] [--restore <file>] [--emulator <number>]");
         return 2;
     }
     const double seconds = args.size() > 2 ? juce::String(args[2]).getDoubleValue() : 20.0;
@@ -234,6 +356,28 @@ int main(int argc, char *argv[])
         plugin->enableAllBuses();
         plugin->prepareToPlay(sample_rate, block_size);
         milestone("prepared");
+
+        if (!restore_file.empty()) {
+            juce::MemoryBlock restored;
+            const juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(juce::String(restore_file));
+            if (!file.loadFileAsData(restored)) {
+                print_line("error: cannot read " + restore_file);
+                return 1;
+            }
+            plugin->setStateInformation(restored.getData(), static_cast<int>(restored.getSize()));
+            milestone("state restored from " + restore_file);
+        }
+
+        if (emulator_number >= 0) {
+            juce::MemoryBlock current;
+            plugin->getStateInformation(current);
+            if (!set_emulator_in_state(current, emulator_number)) {
+                print_line("error: the plug-in's state has no emulator setting");
+                return 1;
+            }
+            plugin->setStateInformation(current.getData(), static_cast<int>(current.getSize()));
+            milestone("emulator " + std::to_string(emulator_number) + " selected through the state");
+        }
 
         const std::string plugin_name = types[0]->name.toStdString();
         const int out_channels = plugin->getTotalNumOutputChannels();
@@ -347,7 +491,7 @@ int main(int argc, char *argv[])
                       static_cast<unsigned long long>(hash));
         print_line(summary);
 
-        if (open_editor) {
+        if (open_editor || !snapshot_file.empty()) {
             std::unique_ptr<juce::AudioProcessorEditor> editor(plugin->createEditorAndMakeActive());
             if (editor == nullptr) {
                 print_line("error: the plug-in did not create an editor");
@@ -357,6 +501,23 @@ int main(int argc, char *argv[])
             editor->addToDesktop(juce::ComponentPeer::windowHasTitleBar);
             editor->setVisible(true);
             pump_messages(1500);
+            if (!snapshot_file.empty()) {
+               #if defined(JUCE_WINDOWS)
+                const juce::Image picture = capture_window(*editor);
+               #else
+                const juce::Image picture;  // no capture of native windows elsewhere yet
+               #endif
+                const juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(juce::String(snapshot_file));
+                bool written = false;
+                if (picture.isValid() && file.deleteFile()) {
+                    juce::FileOutputStream stream(file);
+                    written = stream.openedOk() && juce::PNGImageFormat().writeImageToStream(picture, stream);
+                }
+                if (!written) {
+                    print_line("error: cannot capture the editor into " + snapshot_file);
+                    return 1;
+                }
+            }
             editor.reset();
             milestone("editor opened and closed");
             pump_messages(200);

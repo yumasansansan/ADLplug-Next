@@ -15,9 +15,20 @@ struct Emulator_Defaults;
 const Emulator_Defaults &get_emulator_defaults();
 
 struct Emulator_Defaults {
+    // Names by emulator number, empty for the emulators this build lacks.
     StringArray choices;
     unsigned default_index = 0;
+
+    bool is_built(unsigned index) const noexcept
+    {
+        return index < static_cast<unsigned>(choices.size()) && choices[static_cast<int>(index)].isNotEmpty();
+    }
 };
+
+// The emulator to run for a number from a saved state or from the parameter.
+// A number this build lacks -- a core left out by a build option, say -- is
+// replaced by the default emulator for the same chip.
+unsigned available_emulator(unsigned index);
 
 // Icons for the emulator choices, by index. Only the editor shows them, and it
 // holds them through a SharedResourcePointer, so they go away with the last

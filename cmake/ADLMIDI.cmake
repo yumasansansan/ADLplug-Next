@@ -30,6 +30,20 @@ if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
   set(ADLplug_UPSTREAM_RELEASE_OPTS $<$<CONFIG:Release>:-O3> $<$<CONFIG:Release>:-fomit-frame-pointer>)
 endif()
 
+# Emulator cores: each library builds a core when its USE_*_EMULATOR option is
+# ON, and README lists them. ADLplug builds every core: the choice of chips and
+# cores matters more than how fast the slowest of them runs. The libraries
+# already build all but the low-level (LLE) ones by default, and leave those
+# out as too slow for real time on ordinary processors, so they are turned on
+# here. These are cache defaults: -D on the command line takes precedence, and
+# a build directory configured earlier keeps the value in its cache. Leaving a
+# core out saves only its code; a project saved with it plays on the default
+# core for the same chip (available_emulator() in sources/*/adl/chip_settings.cc).
+set(USE_NUKED_OPL2_LLE_EMULATOR ON CACHE BOOL "Use Nuked OPL2-LLE emulator [!EXTRA HEAVY!]")
+set(USE_NUKED_OPL3_LLE_EMULATOR ON CACHE BOOL "Use Nuked OPL3-LLE emulator [!EXTRA HEAVY!]")
+set(USE_NUKED_OPN2_LLE_EMULATOR ON CACHE BOOL "Use Nuked OPN2-LLE emulator [!EXTRA HEAVY!]")
+set(USE_NUKED_OPNA_LLE_EMULATOR ON CACHE BOOL "Use Nuked OPNA-LLE emulator [!EXTRA HEAVY!]")
+
 set(libADLMIDI_STATIC ON CACHE BOOL "" FORCE)
 set(libADLMIDI_SHARED OFF CACHE BOOL "" FORCE)
 add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/libADLMIDI" EXCLUDE_FROM_ALL SYSTEM)
@@ -44,6 +58,14 @@ add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/libOPNMIDI" EXCLUDE_FROM_ALL 
 target_compile_definitions(OPNMIDI_static PRIVATE "OPNMIDI_EXPORT=" ${ADLplug_UPSTREAM_CRT_DEFS})
 target_compile_definitions(OPNMIDI_static PUBLIC "OPNMIDI_UNSTABLE_API=")
 target_compile_options(OPNMIDI_static PRIVATE ${ADLplug_UPSTREAM_RELEASE_OPTS})
+
+# The measurers (sources/*/adl/measurer) run on these cores, and the plugins
+# select them by default.
+if(ADLplug_CHIP STREQUAL "OPL3" AND NOT USE_DOSBOX_EMULATOR)
+  message(FATAL_ERROR "ADLplug needs USE_DOSBOX_EMULATOR: its measurer runs on the DOSBox OPL3 core.")
+elseif(ADLplug_CHIP STREQUAL "OPN2" AND NOT USE_MAME_EMULATOR)
+  message(FATAL_ERROR "OPNplug needs USE_MAME_EMULATOR: its measurer runs on the MAME YM2612 core.")
+endif()
 
 set(CMAKE_POLICY_VERSION_MINIMUM "${_ADLplug_saved_policy_min}")
 unset(_ADLplug_saved_policy_min)

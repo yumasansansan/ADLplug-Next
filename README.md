@@ -37,21 +37,57 @@ You can find automatic builds of the development branch [here](https://github.co
 
 ## FM core characteristics
 
-| Core      | Chip | Accuracy | Speed  | Rhythm-mode channels | Extended panning |
-|-----------|------|----------|--------|----------------------|------------------|
-| DOSBox    | OPL3 | ★★★★★    | ★★★★★  | ★★                   | ★                |
-| Nuked 1.8 | OPL3 | ★★★★★ +  | ★☆☆☆☆  | ★★                   | ★                |
-| Nuked 1.7 | OPL3 | ★★★★★ +  | ★★★☆☆  | ★★                   | ★                |
-| Opal      | OPL3 | ★★★★☆    | ★★★☆☆  | ☆☆                   | ★                |
-| Java      | OPL3 | ★★★★☆    | ☆☆☆☆☆  | ★☆                   | ★                |
+ADLplug builds every emulator core that libADLMIDI and libOPNMIDI provide, and
+each one can be left out with a build option (see
+[Build instructions](#build-instructions)). The names are those of the
+plugins' emulator menu, and the notes summarise what the libraries and the
+cores document about themselves.
 
-| Core                | Chip | Accuracy | Speed  | SSG-EG   | Extended panning |
-|---------------------|------|----------|--------|----------|------------------|
-| MAME                | OPN2 | ★★★★★    | ★★★★☆  | ★★★★☆    | ★                |
-| Nuked               | OPN2 | ★★★★★ +  | ☆☆☆☆☆  | ★★★★★    | ★                |
-| Gens                | OPN2 | ★★★☆☆    | ★★★★☆  | ★☆☆☆☆    | ★                |
-| Neko Project II Kai | OPNA | ★★★★☆    | ★★★☆☆  | ★????    | ★                |
-| MAME FM             | OPNA | ★★★★★    | ★★★☆☆  | ★????    | ★                |
+*Speed* is how many times faster than real time a core played nine notes on
+one chip at 44.1 kHz, built with `-O3`, on an Intel Core i7-1360P. An instance
+runs two chips by default. With *full panning*, a voice can sit anywhere
+between left and right; without it, a voice is on the left, in the centre or
+on the right, and the OPL2 has no stereo at all.
+
+The low-level (LLE) cores reproduce a chip's circuits as read from its die
+shots. They are the most faithful, and too slow to play in real time on most
+computers: use them to render.
+
+**ADLplug**
+
+| Core                             | Chip           | Notes                                                                                                  | Speed | Full panning | Build option                  |
+|----------------------------------|----------------|--------------------------------------------------------------------------------------------------------|------:|--------------|-------------------------------|
+| DOSBox 0.74-r4111 OPL3 (default) | OPL3 (YMF262)  | Accurate and fast, per libADLMIDI                                                                      |  346× | yes          | `USE_DOSBOX_EMULATOR`, needed |
+| Nuked OPL3 (v 1.8)               | OPL3 (YMF262)  | Very accurate, and needs more CPU power, per libADLMIDI                                                |   57× | yes          | `USE_NUKED_EMULATOR`          |
+| Nuked OPL3 Fast (by tgies)       | OPL3 (YMF262)  | An optimised fork of Nuked OPL3 whose output is identical to it bit for bit; replaces Nuked OPL3 1.7.4 |   73× | yes          | `USE_NUKED_EMULATOR`          |
+| YMFM OPL3                        | OPL3 (YMF262)  | Aims to be indistinguishable by ear rather than exact to the bit, at a reasonable speed, per ymfm      |  101× | no           | `USE_YMFM_EMULATOR`           |
+| Opal OPL3                        | OPL3 (YMF262)  | Inaccurate, per libADLMIDI; written for Reality Adlib Tracker tunes, and has no percussion mode        |  109× | yes          | `USE_OPAL_EMULATOR`           |
+| Java 1.0.6 OPL3                  | OPL3 (YMF262)  | Partly accurate, per libADLMIDI                                                                        |   76× | yes          | `USE_JAVA_EMULATOR`           |
+| YMF262-LLE OPL3                  | OPL3 (YMF262)  | Low-level; too heavy for ordinary processors, per libADLMIDI                                           |  1.7× | no           | `USE_NUKED_OPL3_LLE_EMULATOR` |
+| DOSBox 0.74-r4111 OPL2           | OPL2 (YM3812)  | DOSBox's core run as an OPL2                                                                           |  515× | mono         | `USE_DOSBOX_EMULATOR`         |
+| MAME OPL2                        | OPL2 (YM3812)  | MAME's YM3812 core                                                                                     |  214× | mono         | `USE_MAME_EMULATOR`           |
+| YMFM OPL2                        | OPL2 (YM3812)  | As YMFM OPL3                                                                                           |  184× | mono         | `USE_YMFM_EMULATOR`           |
+| Nuked OPL2 Lite                  | OPL2 (YM3812)  | By Nuke.YKT, version 0.9 beta                                                                          |   88× | mono         | `USE_NUKED_EMULATOR`          |
+| YM3812-LLE OPL2                  | OPL2 (YM3812)  | As YMF262-LLE                                                                                          |  3.5× | mono         | `USE_NUKED_OPL2_LLE_EMULATOR` |
+| ESFMu                            | ESFM (ESS)     | ESS's extended OPL3 clone, emulated on the basis of Nuked OPL3; libADLMIDI plays it as an OPL3         |  9.7× | yes          | `USE_ESFMU_EMULATOR`          |
+| Nuked CQM                        | CQM (Creative) | Creative's OPL3 clone chip, by Nuke.YKT, version 0.9 beta                                              |   22× | no           | `USE_NUKED_EMULATOR`          |
+
+**OPNplug**
+
+| Core                     | Chip           | Notes                                                                                                   | Speed | Full panning | Build option                  |
+|--------------------------|----------------|---------------------------------------------------------------------------------------------------------|------:|--------------|-------------------------------|
+| MAME YM2612 (default)    | OPN2 (YM2612)  | Accurate, and fast even on slow devices, per libOPNMIDI                                                 |  247× | yes          | `USE_MAME_EMULATOR`, needed   |
+| Nuked OPN2 (2612)        | OPN2 (YM2612)  | Very accurate, and needs a very powerful CPU, per libOPNMIDI                                            |   21× | yes          | `USE_NUKED_EMULATOR`          |
+| Nuked OPN2 (3438)        | OPN2C (YM3438) | The same core as a YM3438                                                                               |   21× | yes          | `USE_NUKED_EMULATOR`          |
+| GENS/GS II OPN2          | OPN2 (YM2612)  | The fastest, but very outdated and inaccurate, per libOPNMIDI                                           |  321× | yes          | `USE_GENS_EMULATOR`           |
+| YMFM OPN2                | OPN2 (YM2612)  | As YMFM OPL3                                                                                            |  107× | yes          | `USE_YMFM_EMULATOR`           |
+| YM2612-LLE OPN2          | OPN2 (YM2612)  | Low-level; very accurate, and so heavy that slow machines can only render with it, per libOPNMIDI       |  1.4× | no           | `USE_NUKED_OPN2_LLE_EMULATOR` |
+| YM3438-LLE OPN2          | OPN2C (YM3438) | As YM2612-LLE                                                                                           |  2.3× | no           | `USE_NUKED_OPN2_LLE_EMULATOR` |
+| YMF276-LLE OPN2          | OPN2L (YMF276) | As YM2612-LLE                                                                                           |  2.0× | no           | `USE_NUKED_OPN2_LLE_EMULATOR` |
+| MAME YM2608              | OPNA (YM2608)  | Accurate, and fast even on slow devices, per libOPNMIDI                                                 |  175× | yes          | `USE_MAME_2608_EMULATOR`      |
+| Neko Project II Kai OPNA | OPNA (YM2608)  | Partly accurate, and fast on slow devices, per libOPNMIDI; its SSG-EG is an experimental libOPNMIDI addition |  325× | yes          | `USE_NP2_EMULATOR`            |
+| YMFM OPNA                | OPNA (YM2608)  | As YMFM OPL3                                                                                            |   66× | no           | `USE_YMFM_EMULATOR`           |
+| YM2608-LLE OPNA          | OPNA (YM2608)  | As YM2612-LLE                                                                                           |  0.3× | no           | `USE_NUKED_OPNA_LLE_EMULATOR` |
 
 ## Build instructions
 
@@ -90,6 +126,15 @@ This package is able to build several plugins from a single source:
 | -DADLplug_ASSERTIONS=ON/OFF                   | Force building with assertions regardless of build type         |
 | -DADLplug_WERROR=ON/OFF                       | Treat warnings in ADLplug's own code as errors (presets: ON)    |
 | -DADLplug_BUILD_TOOLS=ON/OFF                  | Build developer tools (offline VST3 renderer)                   |
+
+Every emulator core is built by default. Each has an option of the library it
+comes from, `-DUSE_<core>_EMULATOR=ON/OFF`, named in the tables under
+[FM core characteristics](#fm-core-characteristics). Some names, such as
+`USE_NUKED_EMULATOR`, exist in both libraries; only the library of the chip
+being built is affected. `USE_DOSBOX_EMULATOR` (ADLplug) and
+`USE_MAME_EMULATOR` (OPNplug) have to stay on, because the plugins measure
+their instruments on those cores. A project saved with a core that a build
+leaves out plays on that build's default core for the same chip.
 
 ### Installing
 
@@ -237,6 +282,7 @@ this has no practical effect, but it is why the binary cannot be described as
 | `sources/opl3/ui/components/opl3_waves.cc` | GNU LGPL v2.1+                                             |
 | `resources/ui/fonts`                       | SIL Open Font License 1.1 (Liberation)                     |
 | `resources/ui/noto-emoji`                  | Apache License 2.0                                         |
+| `resources/ui/cores/ESFMu.png`             | GNU LGPL v2.1+ (ESFMu's logo, from its repository)         |
 
 ASIO is a trademark and software of Steinberg Media Technologies GmbH.
 AAX is a trademark of Avid Technology, Inc.

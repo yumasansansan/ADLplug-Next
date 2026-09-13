@@ -43,7 +43,7 @@ Instrument_Global_Parameters get_player_global_parameters(const Player &pl)
 
 void set_player_chip_settings(Player &pl, const Chip_Settings &cs)
 {
-    pl.set_emulator(cs.emulator);
+    pl.set_emulator(available_emulator(cs.emulator));
     pl.set_num_chips(cs.chip_count);
 #if defined(ADLPLUG_OPL3)
     pl.set_num_4ops(cs.fourop_count);

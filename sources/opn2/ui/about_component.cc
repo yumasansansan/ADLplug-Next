@@ -56,9 +56,11 @@ About_Component::About_Component ()
     label2 = std::make_unique<Label> ("new label",
                              CharPointer_UTF8 ("Vitaly Novichkov for the OPNMIDI library\n"
                              "Joel Yliluoma for the original ADLMIDI software\n"
-                             "Alexey Khokholov for Nuked OPN2\n"
-                             "MAMEDev and contributors for MAME YM2612\n"
-                             "St\xc3\xa9phane Dallongeville and Shay Green for GENS OPN2"));
+                             "Alexey Khokholov (Nuke.YKT) for the Nuked cores\n"
+                             "MAMEDev and contributors for MAME YM2612 and YM2608\n"
+                             "St\xc3\xa9phane Dallongeville and Shay Green for GENS OPN2\n"
+                             "cisc for fmgen, the Neko Project II Kai OPNA core\n"
+                             "Aaron Giles for YMFM"));
     addAndMakeVisible (label2.get());
     label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centredLeft);
@@ -67,7 +69,7 @@ About_Component::About_Component ()
     label2->setColour (TextEditor::textColourId, Colours::black);
     label2->setColour (TextEditor::backgroundColourId, Colour (0x00000000));
 
-    label2->setBounds (8, 136, 488, 80);
+    label2->setBounds (8, 136, 488, 112);
 
     lbl_prog_version = std::make_unique<Label> ("new label",
                                        TRANS("Foobar 1.0"));
@@ -97,7 +99,7 @@ About_Component::About_Component ()
     //[UserPreSize]
     //[/UserPreSize]
 
-    setSize (500, 228);
+    setSize (500, 260);
 
 
     //[Constructor] You can add your own custom stuff here..

@@ -56,8 +56,12 @@ About_Component::About_Component ()
     label2 = std::make_unique<Label> ("new label",
                              TRANS("Vitaly Novichkov for the ADLMIDI library\n"
                              "Joel Yliluoma for the original ADLMIDI software\n"
-                             "Alexey Khokholov for Nuked OPL3\n"
+                             "Alexey Khokholov (Nuke.YKT) for the Nuked cores\n"
+                             "Tony Gies for Nuked OPL3 Fast\n"
                              "The DOSBox Team for DOSBox OPL\n"
+                             "Jarek Burczynski and Tatsuyuki Satoh for MAME OPL2\n"
+                             "Aaron Giles for YMFM\n"
+                             "Kagamiin~ for ESFMu\n"
                              "Reality for Opal OPL3\n"
                              "Robson Cozendey for Java OPL3"));
     addAndMakeVisible (label2.get());
@@ -68,7 +72,7 @@ About_Component::About_Component ()
     label2->setColour (TextEditor::textColourId, Colours::black);
     label2->setColour (TextEditor::backgroundColourId, Colour (0x00000000));
 
-    label2->setBounds (8, 136, 488, 96);
+    label2->setBounds (8, 136, 488, 160);
 
     lbl_prog_version = std::make_unique<Label> ("new label",
                                        TRANS("Foobar 1.0"));
@@ -98,7 +102,7 @@ About_Component::About_Component ()
     //[UserPreSize]
     //[/UserPreSize]
 
-    setSize (500, 240);
+    setSize (500, 304);
 
 
     //[Constructor] You can add your own custom stuff here..

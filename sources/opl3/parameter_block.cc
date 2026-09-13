@@ -142,7 +142,7 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
 Chip_Settings Parameter_Block::chip_settings() const
 {
     Chip_Settings cs;
-    cs.emulator = static_cast<unsigned>(p_emulator->getIndex());
+    cs.emulator = available_emulator(static_cast<unsigned>(p_emulator->getIndex()));
     cs.chip_count = static_cast<unsigned>(p_nchip->get());
     cs.fourop_count = static_cast<unsigned>(p_n4op->get());
     return cs;

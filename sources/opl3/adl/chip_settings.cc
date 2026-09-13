@@ -10,21 +10,14 @@
 #include "chip_settings.h"
 #include "player.h"
 #include "resources.h"
+#include "ui/utility/image.h"
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace {
-
-bool starts_with_ignoring_ascii_case(std::string_view text, std::string_view lowercase_prefix) noexcept
-{
-    const auto lower = [](char c) { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c; };
-    return text.size() >= lowercase_prefix.size() &&
-           std::ranges::equal(text.substr(0, lowercase_prefix.size()), lowercase_prefix,
-                              [&lower](char a, char b) { return lower(a) == b; });
-}
 
 Emulator_Defaults make_emulator_defaults()
 {
@@ -35,10 +28,9 @@ Emulator_Defaults make_emulator_defaults()
     for (const std::string &choice : choices)
         defaults.choices.add(choice);
 
-    const auto it = std::ranges::find_if(choices, [](const std::string &name) {
-        return starts_with_ignoring_ascii_case(name, "dosbox");
-    });
-    defaults.default_index = (it != choices.end()) ? static_cast<unsigned>(it - choices.begin()) : 0;
+    // Always built: the measurer runs on it (see cmake/ADLMIDI.cmake).
+    defaults.default_index = static_cast<unsigned>(ADLMIDI_EMU_DOSBOX);
+    assert(defaults.is_built(defaults.default_index));
 
     return defaults;
 }
@@ -56,6 +48,28 @@ const Emulator_Defaults &get_emulator_defaults()
     return defaults;
 }
 
+unsigned available_emulator(unsigned index)
+{
+    const Emulator_Defaults &defaults = get_emulator_defaults();
+    if (defaults.is_built(index))
+        return index;
+
+    // An OPL2 core is replaced by DOSBox in OPL2 mode, which emulates the same
+    // chip; any other core by the default, an OPL3 one.
+    switch (static_cast<int>(index)) {
+    case ADLMIDI_EMU_MAME_OPL2:
+    case ADLMIDI_EMU_YMFM_OPL2:
+    case ADLMIDI_EMU_NUKED_OPL2_LLE:
+    case ADLMIDI_EMU_NUKED_OPL2_LITE:
+        if (defaults.is_built(static_cast<unsigned>(ADLMIDI_EMU_DOSBOX_OPL2)))
+            return static_cast<unsigned>(ADLMIDI_EMU_DOSBOX_OPL2);
+        break;
+    default:
+        break;
+    }
+    return defaults.default_index;
+}
+
 Emulator_Icons::Emulator_Icons()
 {
     const Emulator_Defaults &defaults = get_emulator_defaults();
@@ -66,19 +80,50 @@ Emulator_Icons::Emulator_Icons()
     const Image icon_nuked2 = load(Res::emu_nuked2);
     const Image icon_opal = load(Res::emu_opal);
     const Image icon_java = load(Res::emu_java);
+    const Image icon_esfmu = load(Res::emu_esfmu);
+    const Image icon_mame = load(Res::emu_mame);
 
     images.resize(static_cast<std::size_t>(defaults.choices.size()));
-    unsigned nth_icon_nuked = 0;
     for (std::size_t i = 0; i < images.size(); ++i) {
-        const String name = defaults.choices[static_cast<int>(i)].toLowerCase();
-        if (name.startsWith("dosbox"))
+        const String &name = defaults.choices[static_cast<int>(i)];
+        if (name.isEmpty())
+            continue;
+        switch (static_cast<int>(i)) {
+        case ADLMIDI_EMU_DOSBOX:
+        case ADLMIDI_EMU_DOSBOX_OPL2:
             images[i] = icon_dosbox;
-        else if (name.startsWith("nuked"))
-            images[i] = (nth_icon_nuked++ == 0) ? icon_nuked : icon_nuked2;
-        else if (name.startsWith("opal"))
+            break;
+        // Nuke.YKT's cores, including the low-level ones.
+        case ADLMIDI_EMU_NUKED:
+        case ADLMIDI_EMU_NUKED_OPL2_LITE:
+        case ADLMIDI_EMU_NUKED_CQM:
+        case ADLMIDI_EMU_NUKED_OPL2_LLE:
+        case ADLMIDI_EMU_NUKED_OPL3_LLE:
+            images[i] = icon_nuked;
+            break;
+        // tgies' fork of Nuked OPL3 took the place of Nuked OPL3 1.7.4 in
+        // libADLMIDI, and takes the second icon that one had.
+        case ADLMIDI_EMU_NUKED_FAST:
+            images[i] = icon_nuked2;
+            break;
+        case ADLMIDI_EMU_OPAL:
             images[i] = icon_opal;
-        else if (name.startsWith("java"))
+            break;
+        case ADLMIDI_EMU_JAVA:
             images[i] = icon_java;
+            break;
+        case ADLMIDI_EMU_ESFMu:
+            images[i] = icon_esfmu;
+            break;
+        case ADLMIDI_EMU_MAME_OPL2:
+            images[i] = icon_mame;
+            break;
+        default:
+            // Cores without a logo among the resources -- ymfm has none in its
+            // repository -- show the first word of their name.
+            images[i] = Image_Utils::make_text_icon(name.upToFirstOccurrenceOf(" ", false, false));
+            break;
+        }
     }
 }
 

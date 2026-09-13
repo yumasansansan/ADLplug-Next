@@ -29,6 +29,8 @@ extern const struct Res_Data adlplug_res_emu_nuked;
 extern const struct Res_Data adlplug_res_emu_nuked2;
 extern const struct Res_Data adlplug_res_emu_opal;
 extern const struct Res_Data adlplug_res_emu_java;
+extern const struct Res_Data adlplug_res_emu_esfmu;
+extern const struct Res_Data adlplug_res_emu_mame;
 extern const struct Res_Data adlplug_res_emoji_u1f4a1;
 #elif defined(ADLPLUG_OPN2)
 extern const struct Res_Data adlplug_res_opn2_banks_pak;
@@ -71,6 +73,8 @@ namespace Res {
     inline constexpr const Data &emu_nuked2 = adlplug_res_emu_nuked2;
     inline constexpr const Data &emu_opal = adlplug_res_emu_opal;
     inline constexpr const Data &emu_java = adlplug_res_emu_java;
+    inline constexpr const Data &emu_esfmu = adlplug_res_emu_esfmu;
+    inline constexpr const Data &emu_mame = adlplug_res_emu_mame;
     inline constexpr const Data &emoji_u1f4a1 = adlplug_res_emoji_u1f4a1;
 #elif defined(ADLPLUG_OPN2)
     inline constexpr const Data &banks_pak = adlplug_res_opn2_banks_pak;

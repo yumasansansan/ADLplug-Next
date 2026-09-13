@@ -2,10 +2,43 @@
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
+//
+// Modified for ADLplug-Next. The modifications are distributed under the
+// GNU GPL v3 or later; see the accompanying file LICENSE, and
+// LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #include "ui/utility/image.h"
+#include "ui/utility/legacy_font.h"
+#include <algorithm>
+#include <cmath>
 
 namespace Image_Utils {
+
+Image make_text_icon(const String &text)
+{
+    // Twice the height the editor shows the emulator icons at, so the label
+    // stays sharp on high-density displays; opaque, so it reads on any
+    // background.
+    constexpr int height = 40;
+    constexpr float padding = 10.0f;
+    constexpr float corner = 6.0f;
+    const Font font(legacy_font(26.0f, Font::bold));
+    const int width = static_cast<int>(std::ceil(GlyphArrangement::getStringWidth(font, text) + 2.0f * padding));
+
+    Image image(Image::ARGB, std::max(width, height), height, true);
+    {
+        Graphics g(image);
+        const Rectangle<float> frame = image.getBounds().toFloat().reduced(1.0f);
+        g.setColour(Colour(0xff4f5d64));
+        g.fillRoundedRectangle(frame, corner);
+        g.setColour(Colour(0xffa3b3ba));
+        g.drawRoundedRectangle(frame, corner, 2.0f);
+        g.setColour(Colours::white);
+        g.setFont(font);
+        g.drawText(text, image.getBounds(), Justification::centred, false);
+    }
+    return image;
+}
 
 Rectangle<int> get_image_solid_area(const Image &img)
 {

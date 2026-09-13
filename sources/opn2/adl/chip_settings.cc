@@ -10,21 +10,14 @@
 #include "chip_settings.h"
 #include "player.h"
 #include "resources.h"
+#include "ui/utility/image.h"
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace {
-
-bool starts_with_ignoring_ascii_case(std::string_view text, std::string_view lowercase_prefix) noexcept
-{
-    const auto lower = [](char c) { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c; };
-    return text.size() >= lowercase_prefix.size() &&
-           std::ranges::equal(text.substr(0, lowercase_prefix.size()), lowercase_prefix,
-                              [&lower](char a, char b) { return lower(a) == b; });
-}
 
 Emulator_Defaults make_emulator_defaults()
 {
@@ -35,10 +28,9 @@ Emulator_Defaults make_emulator_defaults()
     for (const std::string &choice : choices)
         defaults.choices.add(choice);
 
-    const auto it = std::ranges::find_if(choices, [](const std::string &name) {
-        return starts_with_ignoring_ascii_case(name, "mame");
-    });
-    defaults.default_index = (it != choices.end()) ? static_cast<unsigned>(it - choices.begin()) : 0;
+    // Always built: the measurer runs on it (see cmake/ADLMIDI.cmake).
+    defaults.default_index = static_cast<unsigned>(OPNMIDI_EMU_MAME);
+    assert(defaults.is_built(defaults.default_index));
 
     return defaults;
 }
@@ -56,6 +48,27 @@ const Emulator_Defaults &get_emulator_defaults()
     return defaults;
 }
 
+unsigned available_emulator(unsigned index)
+{
+    const Emulator_Defaults &defaults = get_emulator_defaults();
+    if (defaults.is_built(index))
+        return index;
+
+    // An OPNA core is replaced by MAME's YM2608 core, which emulates the same
+    // chip; any other core by the default, an OPN2 one.
+    switch (static_cast<int>(index)) {
+    case OPNMIDI_EMU_NP2:
+    case OPNMIDI_EMU_YMFM_OPNA:
+    case OPNMIDI_EMU_NUKED_YM2608_LLE:
+        if (defaults.is_built(static_cast<unsigned>(OPNMIDI_EMU_MAME_2608)))
+            return static_cast<unsigned>(OPNMIDI_EMU_MAME_2608);
+        break;
+    default:
+        break;
+    }
+    return defaults.default_index;
+}
+
 Emulator_Icons::Emulator_Icons()
 {
     const Emulator_Defaults &defaults = get_emulator_defaults();
@@ -68,15 +81,35 @@ Emulator_Icons::Emulator_Icons()
 
     images.resize(static_cast<std::size_t>(defaults.choices.size()));
     for (std::size_t i = 0; i < images.size(); ++i) {
-        const String name = defaults.choices[static_cast<int>(i)].toLowerCase();
-        if (name.startsWith("mame"))
+        const String &name = defaults.choices[static_cast<int>(i)];
+        if (name.isEmpty())
+            continue;
+        switch (static_cast<int>(i)) {
+        case OPNMIDI_EMU_MAME:
+        case OPNMIDI_EMU_MAME_2608:
             images[i] = icon_mame;
-        else if (name.startsWith("nuked"))
+            break;
+        // Nuke.YKT's cores, including the low-level ones.
+        case OPNMIDI_EMU_NUKED_YM3438:
+        case OPNMIDI_EMU_NUKED_YM2612:
+        case OPNMIDI_EMU_NUKED_YM2612_LLE:
+        case OPNMIDI_EMU_NUKED_YM2608_LLE:
+        case OPNMIDI_EMU_NUKED_YM3438_LLE:
+        case OPNMIDI_EMU_NUKED_YMF276_LLE:
             images[i] = icon_nuked;
-        else if (name.startsWith("gens"))
+            break;
+        case OPNMIDI_EMU_GENS:
             images[i] = icon_gens;
-        else if (name.startsWith("neko"))
+            break;
+        case OPNMIDI_EMU_NP2:
             images[i] = icon_neko;
+            break;
+        default:
+            // Cores without a logo among the resources -- ymfm has none in its
+            // repository -- show the first word of their name.
+            images[i] = Image_Utils::make_text_icon(name.upToFirstOccurrenceOf(" ", false, false));
+            break;
+        }
     }
 }
 
