@@ -29,7 +29,6 @@
 #include <cstring>
 #include <cmath>
 #include <cassert>
-#include "ui/utility/legacy_font.h"
 //[/Headers]
 
 #include "main_component.h"
@@ -193,7 +192,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label2 = std::make_unique<Label> ("new label",
                              TRANS("FM synthesizer with YMF262 chip emulation"));
     addAndMakeVisible (label2.get());
-    label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    label2->setFont (FontOptions (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centred);
     label2->setEditable (false, false, false);
     label2->setColour (Label::textColourId, Colours::aliceblue);
@@ -217,7 +216,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label3 = std::make_unique<Label> ("new label",
                              TRANS("CPU"));
     addAndMakeVisible (label3.get());
-    label3->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    label3->setFont (FontOptions (15.0f).withStyle ("Regular"));
     label3->setJustificationType (Justification::centredRight);
     label3->setEditable (false, false, false);
     label3->setColour (Label::textColourId, Colours::aliceblue);
@@ -229,7 +228,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     lbl_cpu = std::make_unique<Label> ("new label",
                               TRANS("100%"));
     addAndMakeVisible (lbl_cpu.get());
-    lbl_cpu->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    lbl_cpu->setFont (FontOptions (15.0f).withStyle ("Regular"));
     lbl_cpu->setJustificationType (Justification::centred);
     lbl_cpu->setEditable (false, false, false);
     lbl_cpu->setColour (Label::textColourId, Colours::aliceblue);
@@ -279,7 +278,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label4 = std::make_unique<Label> ("new label",
                              TRANS("Part"));
     addAndMakeVisible (label4.get());
-    label4->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label4->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label4->setJustificationType (Justification::centredLeft);
     label4->setEditable (false, false, false);
     label4->setColour (Label::textColourId, Colours::aliceblue);
@@ -307,7 +306,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label6 = std::make_unique<Label> ("new label",
                              TRANS("FM 1-2"));
     addAndMakeVisible (label6.get());
-    label6->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label6->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label6->setJustificationType (Justification::centredLeft);
     label6->setEditable (false, false, false);
     label6->setColour (Label::textColourId, Colours::aliceblue);
@@ -319,7 +318,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label7 = std::make_unique<Label> ("new label",
                              TRANS("FM 3-4"));
     addAndMakeVisible (label7.get());
-    label7->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label7->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label7->setJustificationType (Justification::centredLeft);
     label7->setEditable (false, false, false);
     label7->setColour (Label::textColourId, Colours::aliceblue);
@@ -331,7 +330,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label8 = std::make_unique<Label> ("new label",
                              TRANS("AM 1-2"));
     addAndMakeVisible (label8.get());
-    label8->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label8->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label8->setJustificationType (Justification::centredLeft);
     label8->setEditable (false, false, false);
     label8->setColour (Label::textColourId, Colours::aliceblue);
@@ -343,7 +342,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label9 = std::make_unique<Label> ("new label",
                              TRANS("AM 3-4"));
     addAndMakeVisible (label9.get());
-    label9->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label9->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label9->setJustificationType (Justification::centredLeft);
     label9->setEditable (false, false, false);
     label9->setColour (Label::textColourId, Colours::aliceblue);
@@ -356,7 +355,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
                               TRANS("Feedback\n"
                               "1-2"));
     addAndMakeVisible (label10.get());
-    label10->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label10->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label10->setJustificationType (Justification::centred);
     label10->setEditable (false, false, false);
     label10->setColour (Label::textColourId, Colours::aliceblue);
@@ -369,7 +368,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
                               TRANS("Feedback\n"
                               "3-4"));
     addAndMakeVisible (label12.get());
-    label12->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label12->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label12->setJustificationType (Justification::centred);
     label12->setEditable (false, false, false);
     label12->setColour (Label::textColourId, Colours::aliceblue);
@@ -381,7 +380,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label11 = std::make_unique<Label> ("new label",
                               TRANS("Note offset 1-2"));
     addAndMakeVisible (label11.get());
-    label11->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label11->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label11->setJustificationType (Justification::centredLeft);
     label11->setEditable (false, false, false);
     label11->setColour (Label::textColourId, Colours::aliceblue);
@@ -393,7 +392,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label13 = std::make_unique<Label> ("new label",
                               TRANS("Note offset 3-4"));
     addAndMakeVisible (label13.get());
-    label13->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label13->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label13->setJustificationType (Justification::centredLeft);
     label13->setEditable (false, false, false);
     label13->setColour (Label::textColourId, Colours::aliceblue);
@@ -415,7 +414,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label14 = std::make_unique<Label> ("new label",
                               TRANS("Core"));
     addAndMakeVisible (label14.get());
-    label14->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label14->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label14->setJustificationType (Justification::centredLeft);
     label14->setEditable (false, false, false);
     label14->setColour (Label::textColourId, Colours::aliceblue);
@@ -439,7 +438,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label15 = std::make_unique<Label> ("new label",
                               TRANS("Chips"));
     addAndMakeVisible (label15.get());
-    label15->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label15->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label15->setJustificationType (Justification::centredLeft);
     label15->setEditable (false, false, false);
     label15->setColour (Label::textColourId, Colours::aliceblue);
@@ -451,7 +450,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label16 = std::make_unique<Label> ("new label",
                               TRANS("4 ops"));
     addAndMakeVisible (label16.get());
-    label16->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label16->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label16->setJustificationType (Justification::centredLeft);
     label16->setEditable (false, false, false);
     label16->setColour (Label::textColourId, Colours::aliceblue);
@@ -474,7 +473,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label5 = std::make_unique<Label> ("new label",
                              TRANS("Percussion key"));
     addAndMakeVisible (label5.get());
-    label5->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label5->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label5->setJustificationType (Justification::centredLeft);
     label5->setEditable (false, false, false);
     label5->setColour (TextEditor::textColourId, Colours::black);
@@ -495,7 +494,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label17 = std::make_unique<Label> ("new label",
                               TRANS("Percussion key"));
     addAndMakeVisible (label17.get());
-    label17->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label17->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label17->setJustificationType (Justification::centredLeft);
     label17->setEditable (false, false, false);
     label17->setColour (Label::textColourId, Colours::aliceblue);
@@ -507,7 +506,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label18 = std::make_unique<Label> ("new label",
                               TRANS("Fine tune 3-4"));
     addAndMakeVisible (label18.get());
-    label18->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label18->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label18->setJustificationType (Justification::centredLeft);
     label18->setEditable (false, false, false);
     label18->setColour (Label::textColourId, Colours::aliceblue);
@@ -541,7 +540,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label19 = std::make_unique<Label> ("new label",
                               TRANS("Velocity offset"));
     addAndMakeVisible (label19.get());
-    label19->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label19->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label19->setJustificationType (Justification::centredLeft);
     label19->setEditable (false, false, false);
     label19->setColour (Label::textColourId, Colours::aliceblue);
@@ -572,7 +571,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label20 = std::make_unique<Label> ("new label",
                               TRANS("Deep tremolo"));
     addAndMakeVisible (label20.get());
-    label20->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label20->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label20->setJustificationType (Justification::centredLeft);
     label20->setEditable (false, false, false);
     label20->setColour (Label::textColourId, Colours::aliceblue);
@@ -592,7 +591,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label21 = std::make_unique<Label> ("new label",
                               TRANS("Deep vibrato"));
     addAndMakeVisible (label21.get());
-    label21->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label21->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label21->setJustificationType (Justification::centredLeft);
     label21->setEditable (false, false, false);
     label21->setColour (Label::textColourId, Colours::aliceblue);
@@ -604,7 +603,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label22 = std::make_unique<Label> ("new label",
                               TRANS("Volume model"));
     addAndMakeVisible (label22.get());
-    label22->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label22->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label22->setJustificationType (Justification::centredLeft);
     label22->setEditable (false, false, false);
     label22->setColour (Label::textColourId, Colours::aliceblue);
@@ -687,7 +686,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label23 = std::make_unique<Label> ("new label",
                               TRANS("Volume"));
     addAndMakeVisible (label23.get());
-    label23->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label23->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label23->setJustificationType (Justification::centredLeft);
     label23->setEditable (false, false, false);
     label23->setColour (Label::textColourId, Colours::aliceblue);
@@ -699,7 +698,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     lbl_mastervol = std::make_unique<Label> ("new label",
                                     TRANS("-20 dB"));
     addAndMakeVisible (lbl_mastervol.get());
-    lbl_mastervol->setFont (legacy_font (12.0f).withStyle ("Regular"));
+    lbl_mastervol->setFont (FontOptions (12.0f).withStyle ("Regular"));
     lbl_mastervol->setJustificationType (Justification::centredRight);
     lbl_mastervol->setEditable (false, false, false);
     lbl_mastervol->setColour (Label::textColourId, Colours::aliceblue);
@@ -712,7 +711,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     lbl_info = std::make_unique<Label> ("new label",
                                TRANS("OPL Ready"));
     addAndMakeVisible (lbl_info.get());
-    lbl_info->setFont (legacy_font (Font::getDefaultMonospacedFontName(), 15.0f));
+    lbl_info->setFont (FontOptions (Font::getDefaultMonospacedFontName(), 15.0f, Font::plain));
     lbl_info->setJustificationType (Justification::centred);
     lbl_info->setEditable (false, false, false);
     lbl_info->setColour (Label::textColourId, Colours::aliceblue);
@@ -752,7 +751,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     }
 
     if (Label *lbl_midi_channel = slider_text_box(*sl_midi_channel))
-        lbl_midi_channel->setFont(legacy_font(Font::getDefaultSansSerifFontName(), 30.0f));
+        lbl_midi_channel->setFont(FontOptions(Font::getDefaultSansSerifFontName(), 30.0f, Font::plain));
 
     sl_num_4ops->setNumDecimalPlacesToDisplay(0);
     sl_num_chips->setNumDecimalPlacesToDisplay(0);
@@ -886,7 +885,7 @@ void Main_Component::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }
@@ -898,7 +897,7 @@ void Main_Component::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }
@@ -910,7 +909,7 @@ void Main_Component::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }
@@ -922,7 +921,7 @@ void Main_Component::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }
@@ -954,7 +953,7 @@ void Main_Component::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }
@@ -966,7 +965,7 @@ void Main_Component::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }
@@ -978,7 +977,7 @@ void Main_Component::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }
@@ -990,7 +989,7 @@ void Main_Component::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }

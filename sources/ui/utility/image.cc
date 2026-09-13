@@ -8,7 +8,6 @@
 // LICENSE.BSL-1.0.txt for the Boost Software License.
 
 #include "ui/utility/image.h"
-#include "ui/utility/legacy_font.h"
 #include <algorithm>
 #include <cmath>
 
@@ -22,7 +21,7 @@ Image make_text_icon(const String &text)
     constexpr int height = 40;
     constexpr float padding = 10.0f;
     constexpr float corner = 6.0f;
-    const Font font(legacy_font(26.0f, Font::bold));
+    const Font font(FontOptions(26.0f, Font::bold));
     const int width = static_cast<int>(std::ceil(GlyphArrangement::getStringWidth(font, text) + 2.0f * padding));
 
     Image image(Image::ARGB, std::max(width, height), height, true);

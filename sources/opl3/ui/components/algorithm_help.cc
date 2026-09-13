@@ -16,7 +16,6 @@
 //[Headers] You can add your own extra header files here...
 #include "algorithms.h"
 #include "ui/components/algorithm_component.h"
-#include "ui/utility/legacy_font.h"
 //[/Headers]
 
 #include "algorithm_help.h"
@@ -110,7 +109,7 @@ void Algorithm_Help::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }
@@ -122,7 +121,7 @@ void Algorithm_Help::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }
@@ -134,7 +133,7 @@ void Algorithm_Help::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }
@@ -146,7 +145,7 @@ void Algorithm_Help::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }
@@ -158,7 +157,7 @@ void Algorithm_Help::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }
@@ -170,7 +169,7 @@ void Algorithm_Help::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
-        g.setFont (legacy_font (20.0f).withStyle ("Bold Italic"));
+        g.setFont (FontOptions (20.0f).withStyle ("Bold Italic"));
         g.drawText (text, x, y, width, height,
                     Justification::centred, true);
     }

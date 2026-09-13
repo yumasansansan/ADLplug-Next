@@ -176,11 +176,15 @@ target_sources(ADLplug PRIVATE
 
 target_include_directories(ADLplug PUBLIC "sources")
 
+# ADLplug reads no audio files, so it needs none of JUCE's audio codecs. JUCE 9
+# builds the MP3 decoder by default, and its tables are computed when the
+# plug-in loads.
 target_compile_definitions(ADLplug PUBLIC
   JUCE_STRICT_REFCOUNTEDPOINTER=1
   JUCE_VST3_CAN_REPLACE_VST2=0
   JUCE_USE_FLAC=0
   JUCE_USE_OGGVORBIS=0
+  JUCE_USE_MP3AUDIOFORMAT=0
   JUCE_USE_WINDOWS_MEDIA_FORMAT=0
   JUCE_WEB_BROWSER=0
   JUCE_USE_CURL=0)

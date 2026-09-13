@@ -21,7 +21,6 @@
 #include <optional>
 #include <string>
 #include <system_error>
-#include "ui/utility/legacy_font.h"
 //[/Headers]
 
 #include "new_program_editor.h"
@@ -39,7 +38,7 @@ New_Program_Editor::New_Program_Editor ()
     label = std::make_unique<Label> ("new label",
                             TRANS("Program"));
     addAndMakeVisible (label.get());
-    label->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    label->setFont (FontOptions (15.0f).withStyle ("Regular"));
     label->setJustificationType (Justification::centredLeft);
     label->setEditable (false, false, false);
     label->setColour (Label::textColourId, Colours::aliceblue);
@@ -51,7 +50,7 @@ New_Program_Editor::New_Program_Editor ()
     label2 = std::make_unique<Label> ("new label",
                              TRANS("Bank"));
     addAndMakeVisible (label2.get());
-    label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    label2->setFont (FontOptions (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centredLeft);
     label2->setEditable (false, false, false);
     label2->setColour (Label::textColourId, Colours::aliceblue);
@@ -123,7 +122,7 @@ New_Program_Editor::New_Program_Editor ()
     label3 = std::make_unique<Label> ("new label",
                              TRANS(":"));
     addAndMakeVisible (label3.get());
-    label3->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    label3->setFont (FontOptions (15.0f).withStyle ("Regular"));
     label3->setJustificationType (Justification::centredLeft);
     label3->setEditable (false, false, false);
     label3->setColour (Label::textColourId, Colours::aliceblue);

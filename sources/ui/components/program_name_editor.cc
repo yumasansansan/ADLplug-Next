@@ -18,7 +18,6 @@
 #include <format>
 
 #include <memory>
-#include "ui/utility/legacy_font.h"
 //[/Headers]
 
 #include "program_name_editor.h"
@@ -60,7 +59,7 @@ Program_Name_Editor::Program_Name_Editor ()
     label = std::make_unique<Label> ("new label",
                             TRANS("Program"));
     addAndMakeVisible (label.get());
-    label->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    label->setFont (FontOptions (15.0f).withStyle ("Regular"));
     label->setJustificationType (Justification::centredLeft);
     label->setEditable (false, false, false);
     label->setColour (Label::textColourId, Colours::aliceblue);
@@ -72,7 +71,7 @@ Program_Name_Editor::Program_Name_Editor ()
     label2 = std::make_unique<Label> ("new label",
                              TRANS("Bank"));
     addAndMakeVisible (label2.get());
-    label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    label2->setFont (FontOptions (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centredLeft);
     label2->setEditable (false, false, false);
     label2->setColour (Label::textColourId, Colours::aliceblue);

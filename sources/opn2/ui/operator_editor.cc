@@ -21,7 +21,6 @@
 #include <format>
 #include <cmath>
 #include <memory>
-#include "ui/utility/legacy_font.h"
 //[/Headers]
 
 #include "operator_editor.h"
@@ -73,7 +72,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     lbl_level = std::make_unique<Label> ("new label",
                                 TRANS("Lv"));
     addAndMakeVisible (lbl_level.get());
-    lbl_level->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    lbl_level->setFont (FontOptions (14.0f).withStyle ("Regular"));
     lbl_level->setJustificationType (Justification::centredLeft);
     lbl_level->setEditable (false, false, false);
     lbl_level->setColour (Label::textColourId, Colours::aliceblue);
@@ -85,7 +84,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label = std::make_unique<Label> ("new label",
                             TRANS("A"));
     addAndMakeVisible (label.get());
-    label->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    label->setFont (FontOptions (15.0f).withStyle ("Regular"));
     label->setJustificationType (Justification::centredTop);
     label->setEditable (false, false, false);
     label->setColour (Label::textColourId, Colours::aliceblue);
@@ -97,7 +96,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label2 = std::make_unique<Label> ("new label",
                              TRANS("D"));
     addAndMakeVisible (label2.get());
-    label2->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    label2->setFont (FontOptions (15.0f).withStyle ("Regular"));
     label2->setJustificationType (Justification::centredTop);
     label2->setEditable (false, false, false);
     label2->setColour (Label::textColourId, Colours::aliceblue);
@@ -109,7 +108,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label3 = std::make_unique<Label> ("new label",
                              TRANS("S"));
     addAndMakeVisible (label3.get());
-    label3->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    label3->setFont (FontOptions (15.0f).withStyle ("Regular"));
     label3->setJustificationType (Justification::centredTop);
     label3->setEditable (false, false, false);
     label3->setColour (Label::textColourId, Colours::aliceblue);
@@ -121,7 +120,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label4 = std::make_unique<Label> ("new label",
                              TRANS("R"));
     addAndMakeVisible (label4.get());
-    label4->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    label4->setFont (FontOptions (15.0f).withStyle ("Regular"));
     label4->setJustificationType (Justification::centredTop);
     label4->setEditable (false, false, false);
     label4->setColour (Label::textColourId, Colours::aliceblue);
@@ -133,7 +132,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     lbl_fmul = std::make_unique<Label> ("new label",
                                TRANS("F*"));
     addAndMakeVisible (lbl_fmul.get());
-    lbl_fmul->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    lbl_fmul->setFont (FontOptions (14.0f).withStyle ("Regular"));
     lbl_fmul->setJustificationType (Justification::centredLeft);
     lbl_fmul->setEditable (false, false, false);
     lbl_fmul->setColour (Label::textColourId, Colours::aliceblue);
@@ -145,7 +144,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     lbl_rsl = std::make_unique<Label> ("new label",
                               TRANS("Rsl"));
     addAndMakeVisible (lbl_rsl.get());
-    lbl_rsl->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    lbl_rsl->setFont (FontOptions (14.0f).withStyle ("Regular"));
     lbl_rsl->setJustificationType (Justification::centredLeft);
     lbl_rsl->setEditable (false, false, false);
     lbl_rsl->setColour (Label::textColourId, Colours::aliceblue);
@@ -163,7 +162,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label9 = std::make_unique<Label> ("new label",
                              TRANS("D"));
     addAndMakeVisible (label9.get());
-    label9->setFont (legacy_font (15.0f).withStyle ("Regular"));
+    label9->setFont (FontOptions (15.0f).withStyle ("Regular"));
     label9->setJustificationType (Justification::centredTop);
     label9->setEditable (false, false, false);
     label9->setColour (Label::textColourId, Colours::aliceblue);
@@ -183,7 +182,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     lbl_tune = std::make_unique<Label> ("new label",
                                TRANS("Detune"));
     addAndMakeVisible (lbl_tune.get());
-    lbl_tune->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    lbl_tune->setFont (FontOptions (14.0f).withStyle ("Regular"));
     lbl_tune->setJustificationType (Justification::centred);
     lbl_tune->setEditable (false, false, false);
     lbl_tune->setColour (Label::textColourId, Colours::aliceblue);
@@ -195,7 +194,7 @@ Operator_Editor::Operator_Editor (unsigned op_id, Parameter_Block &pb)
     label5 = std::make_unique<Label> ("new label",
                              TRANS("SSG-EG"));
     addAndMakeVisible (label5.get());
-    label5->setFont (legacy_font (14.0f).withStyle ("Regular"));
+    label5->setFont (FontOptions (14.0f).withStyle ("Regular"));
     label5->setJustificationType (Justification::centredLeft);
     label5->setEditable (false, false, false);
     label5->setColour (Label::textColourId, Colours::aliceblue);
