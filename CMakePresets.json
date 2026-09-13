@@ -11,24 +11,10 @@
       "cacheVariables": {
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      }
-    },
-
-    {
-      "name": "windows",
-      "hidden": true,
-      "inherits": "base",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      },
-      "cacheVariables": {
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
         "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld",
         "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld",
-        "ADLplug_ASIO": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "ADLplug_WERROR": "ON"
       }
     },
@@ -63,32 +49,32 @@
     {
       "name": "adl-debug",
       "displayName": "ADLplug (OPL3) — Debug",
-      "inherits": ["windows", "adl", "debug"]
+      "inherits": ["base", "adl", "debug"]
     },
     {
       "name": "adl-relwithdebinfo",
       "displayName": "ADLplug (OPL3) — RelWithDebInfo",
-      "inherits": ["windows", "adl", "relwithdebinfo"]
+      "inherits": ["base", "adl", "relwithdebinfo"]
     },
     {
       "name": "adl-release",
       "displayName": "ADLplug (OPL3) — Release (distribution: ThinLTO, no debug info)",
-      "inherits": ["windows", "adl", "release"]
+      "inherits": ["base", "adl", "release"]
     },
     {
       "name": "opn-debug",
       "displayName": "OPNplug (OPN2) — Debug",
-      "inherits": ["windows", "opn", "debug"]
+      "inherits": ["base", "opn", "debug"]
     },
     {
       "name": "opn-relwithdebinfo",
       "displayName": "OPNplug (OPN2) — RelWithDebInfo",
-      "inherits": ["windows", "opn", "relwithdebinfo"]
+      "inherits": ["base", "opn", "relwithdebinfo"]
     },
     {
       "name": "opn-release",
       "displayName": "OPNplug (OPN2) — Release (distribution: ThinLTO, no debug info)",
-      "inherits": ["windows", "opn", "release"]
+      "inherits": ["base", "opn", "release"]
     }
   ],
 

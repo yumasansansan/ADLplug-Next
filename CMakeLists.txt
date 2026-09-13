@@ -1,10 +1,24 @@
 cmake_minimum_required(VERSION 3.25)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+# macOS builds are for Apple Silicon and macOS 26 or later. Both have to be set
+# before project(). Without a deployment target, the plugins would require the
+# macOS version of whichever SDK built them.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum macOS version")
+set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Architectures to build for on macOS")
+
 project(ADLplug VERSION "1.0.2" LANGUAGES C CXX)
 set(PROJECT_VENDOR "Jean Pierre Cimalando")
 set(PROJECT_CONTACT "Jean Pierre Cimalando <http://jpcima.sdf1.org/>")
 set(PROJECT_HOMEPAGE "https://github.com/jpcima/ADLplug")
+
+# The warning policy, the language standards and LTO below are written for
+# Clang; GCC and MSVC are not supported compilers.
+if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang" OR NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  message(FATAL_ERROR
+    "ADLplug is built with Clang, not ${CMAKE_CXX_COMPILER_ID}. Configure with "
+    "CMAKE_C_COMPILER=clang and CMAKE_CXX_COMPILER=clang++, as the presets do.")
+endif()
 
 include(GNUInstallDirs)
 include(SystemOption)
@@ -25,6 +39,7 @@ option(ADLplug_LTO "Use link-time optimisation (ThinLTO with Clang) in Release b
 option(ADLplug_BUILD_TOOLS "Build developer tools (tools/render: offline VST3 renderer)" OFF)
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
+set(ADLplug_ARCH "baseline" CACHE STRING "Instruction set of x86-64 builds (baseline, avx2)")
 
 # Applied per-target rather than globally: these variables are inherited by
 # add_subdirectory() dependencies, and libADLMIDI/libOPNMIDI build their own
@@ -59,6 +74,29 @@ if(ADLplug_LTO)
   else()
     message(WARNING "ADLplug_LTO is on but LTO is not supported here: ${ADLplug_LTO_ERROR}")
   endif()
+endif()
+
+# --------------------------------------------------------------------------
+# Instruction set
+#
+# x86-64 builds come in two kinds: baseline (x86-64, which every such processor
+# runs) and avx2 (x86-64-v3: AVX2, BMI2, FMA and the rest of that level). The
+# baseline is passed explicitly too, so a compiler configured with another
+# default still builds it. Like LTO, this is set before any dependency is
+# added, so JUCE and the emulator cores get it as well; the cores are where a
+# wider instruction set pays off. ThinLTO takes the choice from the bitcode,
+# so the link needs no flag of its own.
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+  if(ADLplug_ARCH STREQUAL "baseline")
+    add_compile_options(-march=x86-64)
+  elseif(ADLplug_ARCH STREQUAL "avx2")
+    add_compile_options(-march=x86-64-v3)
+  else()
+    message(FATAL_ERROR "unsupported ADLplug_ARCH ${ADLplug_ARCH} (baseline, avx2)")
+  endif()
+elseif(NOT ADLplug_ARCH STREQUAL "baseline")
+  message(FATAL_ERROR "ADLplug_ARCH=${ADLplug_ARCH} applies to x86-64 builds only")
 endif()
 
 # --------------------------------------------------------------------------

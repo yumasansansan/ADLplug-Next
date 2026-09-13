@@ -23,9 +23,11 @@ Contributors: [Olivier Humbert](https://github.com/trebmuh), [Christopher Arndt]
 
 ## Development builds
 
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/jpcima/ADLplug?svg=true)](https://ci.appveyor.com/project/jpcima/ADLplug)
+[![CI](https://github.com/yumasansansan/ADLplug-Next/actions/workflows/ci.yml/badge.svg)](https://github.com/yumasansansan/ADLplug-Next/actions/workflows/ci.yml)
 
-You can find automatic builds of the development branch [here](https://github.com/jpcima/ADLplug/releases/tag/latest).
+Every push and pull request is built by GitHub Actions on Windows, Linux and
+macOS, in Debug and Release; x86-64 builds are made both for the baseline
+instruction set and for AVX2.
 
 ## Useful links
 
@@ -91,10 +93,25 @@ computers: use them to render.
 
 ## Build instructions
 
+ADLplug-Next supports Windows 11 or later (x86-64), Ubuntu 26.04 or later
+(x86-64) and macOS 26 or later (Apple Silicon). On Linux the user interface
+runs on X11, which means XWayland in a Wayland session: JUCE has no Wayland
+backend.
+
 Install required dependencies:
 - CMake 3.25 or newer, and Ninja
-- Clang 19 or newer, for C23 / C++23 (GCC is not supported)
-- development packages for Linux: ALSA, Freetype, Fontconfig, X11
+- Clang and LLD 19 or newer, for C23 / C++23 (GCC is not supported; the CI
+  builds with LLVM 23)
+- Windows: the MSVC libraries and the Windows SDK, from Visual Studio or its
+  Build Tools
+- Linux: development packages for ALSA, FreeType, Fontconfig and X11; on
+  Ubuntu, `libasound2-dev libfontconfig1-dev libfreetype-dev libx11-dev
+  libxcomposite-dev libxcursor-dev libxext-dev libxi-dev libxinerama-dev
+  libxrandr-dev libxrender-dev`
+- macOS: Xcode for the SDK, and LLVM's own Clang and LLD. Compile against the
+  SDK's libc++ headers, not the ones that come with the toolchain, because
+  the plugins load the system's libc++ (`ci/setup.sh` shows how the CI does
+  it)
 
 ### Compiling
 
@@ -105,9 +122,10 @@ cmake --preset adl-release     # or opn-release; *-relwithdebinfo, *-debug for d
 cmake --build --preset adl-release
 ```
 
-The presets in `CMakePresets.json` pin the toolchain (Clang + LLD + Ninja,
-C23 / C++23). To configure by hand instead, pass the options below to `cmake`
-directly.
+The presets in `CMakePresets.json` work on all three systems. They select
+Clang, LLD and Ninja without fixing their versions, and treat warnings in
+ADLplug's own code as errors. To configure by hand instead, pass the options
+below to `cmake` directly.
 
 This package is able to build several plugins from a single source:
 - to build the OPL3 variant, define the option `ADLplug_CHIP` to `OPL3`;
@@ -122,6 +140,7 @@ This package is able to build several plugins from a single source:
 | -DADLplug_Standalone=ON/OFF                   | Build a standalone program                                      |
 | -DADLplug_ASIO=ON/OFF                         | Enable ASIO in the standalone (Windows; uses JUCE's bundled SDK)|
 | -DADLplug_CHIP=OPL3/OPN2                      | Build a variant for the given chip type (default: OPL3)         |
+| -DADLplug_ARCH=baseline/avx2                  | x86-64 instruction set: baseline or AVX2 (x86-64-v3)            |
 | -DADLplug_LTO=ON/OFF                          | Link-time optimisation (ThinLTO) in Release builds (default ON) |
 | -DADLplug_ASSERTIONS=ON/OFF                   | Force building with assertions regardless of build type         |
 | -DADLplug_WERROR=ON/OFF                       | Treat warnings in ADLplug's own code as errors (presets: ON)    |

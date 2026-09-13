@@ -1,0 +1,61 @@
+# Part of ADLplug, distributed under the GNU GPL v3 or later.
+#               (See accompanying file LICENSE.)
+#
+# Builds ADLplug and OPNplug with Clang and LLD on Windows, Linux and macOS, in
+# Debug and Release; x86-64 builds are made both for the baseline instruction
+# set and for AVX2. The workflow uses no actions: the checkout is plain git,
+# and ci/setup.sh installs a pinned toolchain.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: ${{ matrix.preset }} (${{ matrix.os }}, ${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025-vs2026, ubuntu-26.04]
+        arch: [baseline, avx2]
+        preset: [adl-debug, adl-release, opn-debug, opn-release]
+        include:
+          - { os: macos-26, arch: arm64, preset: adl-debug }
+          - { os: macos-26, arch: arm64, preset: adl-release }
+          - { os: macos-26, arch: arm64, preset: opn-debug }
+          - { os: macos-26, arch: arm64, preset: opn-release }
+
+    steps:
+      - name: Check out
+        run: |
+          # The commit with its whole history, the submodules at depth 1. Git
+          # keeps the files as committed, CRLF or LF, on every runner.
+          git config --global core.autocrlf false
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git submodule update --init --depth 1 --jobs 4
+          git log -1 --format='%H %s'
+
+      - name: Set up the toolchain
+        run: bash ci/setup.sh
+
+      - name: Build
+        run: bash ci/build.sh "${{ matrix.preset }}" "${{ matrix.arch }}"
