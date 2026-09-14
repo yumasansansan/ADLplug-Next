@@ -47,8 +47,9 @@ linux_packages=(
   libxinerama-dev libxrandr-dev libxrender-dev
 )
 # For the tests (ci/test.sh): xwfb-run, which runs a command on Xwayland under
-# a headless Weston, and what lv2lint is built with.
-linux_packages+=(xwayland-run weston xwayland xauth)
+# a headless Weston, a window manager for that Xwayland
+# (ci/with-window-manager.sh), and what lv2lint is built with.
+linux_packages+=(xwayland-run weston xwayland xauth openbox)
 linux_packages+=(meson liblilv-dev lv2-dev libelf-dev)
 
 # Pipelines below are written so that no command stops reading early: with

@@ -178,8 +178,9 @@ ctest --preset adl-debug
   [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint) is on the
   `PATH` at configure time, it validates the VST3 or LV2 plugin as well.
 
-The editor tests open windows, so on Linux they need an X11 display, such as
-Xwayland.
+The editor tests open windows, so on Linux they need an X11 display with a
+window manager, as in a desktop session on Xwayland. Without a window manager,
+lv2lint stops at an X error from the editor.
 
 ### Installing
 

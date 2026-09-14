@@ -5,10 +5,10 @@
 #   ci/test.sh <preset>
 #
 # Runs the tests of a preset that ci/build.sh built. On Linux the editor opens
-# on Xwayland under a headless Weston, as it would in a Wayland session. On
-# macOS the Audio Unit also goes through auval. The render hashes are printed
-# at the end, with a warning when tests/render/references.txt has none for
-# this system.
+# on Xwayland under a headless Weston, with a window manager, as it would in a
+# Wayland session. On macOS the Audio Unit also goes through auval. The render
+# hashes are printed at the end, with a warning when
+# tests/render/references.txt has none for this system.
 set -euo pipefail
 
 preset=$1
@@ -16,7 +16,7 @@ build=build/$preset
 status=0
 
 case "$(uname -s)" in
-  Linux) xwfb-run -- ctest --preset "$preset" || status=$? ;;
+  Linux) xwfb-run -- bash ci/with-window-manager.sh ctest --preset "$preset" || status=$? ;;
   *) ctest --preset "$preset" || status=$? ;;
 esac
 
