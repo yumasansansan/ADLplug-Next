@@ -36,9 +36,9 @@ inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_internal_parameter(Au
 
 // The processor owns external parameters; internal ones stay with the block.
 template <class T, class... Arg>
-inline T *Basic_Parameter_Block::do_add_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args)
+inline T *Basic_Parameter_Block::do_add_parameter(AudioProcessorEx &p, std::uint32_t tag, const String &id, Arg &&... args)
 {
-    auto parameter = std::make_unique<T>(std::forward<Arg>(args)...);
+    auto parameter = std::make_unique<T>(ParameterID(id, parameter_version_hint), std::forward<Arg>(args)...);
     T *raw = parameter.get();
     raw->setTagEx(tag);
     raw->addValueChangedListenerEx(&p);
@@ -47,9 +47,9 @@ inline T *Basic_Parameter_Block::do_add_parameter(AudioProcessorEx &p, std::uint
 }
 
 template <class T, class... Arg>
-inline T *Basic_Parameter_Block::do_add_internal_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args)
+inline T *Basic_Parameter_Block::do_add_internal_parameter(AudioProcessorEx &p, std::uint32_t tag, const String &id, Arg &&... args)
 {
-    auto parameter = std::make_unique<T>(std::forward<Arg>(args)...);
+    auto parameter = std::make_unique<T>(ParameterID(id, parameter_version_hint), std::forward<Arg>(args)...);
     T *raw = parameter.get();
     raw->setTagEx(tag);
     raw->addValueChangedListenerEx(&p);

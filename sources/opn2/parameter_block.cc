@@ -37,8 +37,19 @@ WOPNFile_Ptr default_wopn()
     return file;
 }
 
-Instrument default_instrument(const WOPNFile &file)
+// The instrument of a part's default selection, as the processor makes it
+// (AdlplugAudioProcessor::create_player()): program 0 of melodic bank 0:0, or
+// for the percussion part, drum 35 of percussion bank 0:0. Without that bank
+// the percussion part selects nothing, and keeps the melodic default.
+Instrument default_instrument(const WOPNFile &file, bool percussive)
 {
+    if (percussive) {
+        for (unsigned i = 0; i < file.banks_count_percussion; ++i) {
+            const WOPNBank &bank = file.banks_percussive[i];
+            if (bank.bank_midi_lsb == 0 && bank.bank_midi_msb == 0)
+                return Instrument::from_wopl(bank.ins[35]);
+        }
+    }
     for (unsigned i = 0; i < file.banks_count_melodic; ++i) {
         const WOPNBank &bank = file.banks_melodic[i];
         if (bank.bank_midi_lsb == 0 && bank.bank_midi_msb == 0)
@@ -87,12 +98,15 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
     p_chiptype = add_parameter<Pt::Choice>(p, Parameter_Tag::chip, "chiptype", "Chip type", chiptype_choices, static_cast<int>(cs.chip_type));
 
     const WOPNFile_Ptr wopn = default_wopn();
-    const Instrument ins = default_instrument(*wopn);
+    // The parameters start as the default selections: see default_instrument().
+    const Instrument melodic_ins = default_instrument(*wopn, false);
+    const Instrument percussion_ins = default_instrument(*wopn, true);
     const StringArray ssgwaves = ssgeg_wave_choices();
 
     for (unsigned pn = 0; pn < 16; ++pn) {
         Part &current_part = this->part[pn];
         const std::uint32_t tag = Parameter_Tag::instrument(pn);
+        const Instrument &ins = (pn == 9) ? percussion_ins : melodic_ins;
 
         {
             const String idprefix = std::format("P{:d}", pn + 1);
@@ -149,10 +163,12 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
     p_lfofreq = add_parameter<Pt::Choice>(p, Parameter_Tag::global, "lfofreq", "LFO frequency", lfofreq_choices, wopn->lfo_freq & 7);
 }
 
+// As the parameters hold them, which is how states keep them too; the player
+// runs playable_chip_settings() of these.
 Chip_Settings Parameter_Block::chip_settings() const
 {
     Chip_Settings cs;
-    cs.emulator = available_emulator(static_cast<unsigned>(p_emulator->getIndex()));
+    cs.emulator = static_cast<unsigned>(p_emulator->getIndex());
     cs.chip_count = static_cast<unsigned>(p_nchip->get());
     cs.chip_type = static_cast<unsigned>(p_chiptype->getIndex());
     return cs;

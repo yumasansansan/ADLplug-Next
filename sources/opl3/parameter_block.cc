@@ -37,8 +37,19 @@ WOPLFile_Ptr default_wopl()
     return file;
 }
 
-Instrument default_instrument(const WOPLFile &file)
+// The instrument of a part's default selection, as the processor makes it
+// (AdlplugAudioProcessor::create_player()): program 0 of melodic bank 0:0, or
+// for the percussion part, drum 35 of percussion bank 0:0. Without that bank
+// the percussion part selects nothing, and keeps the melodic default.
+Instrument default_instrument(const WOPLFile &file, bool percussive)
 {
+    if (percussive) {
+        for (unsigned i = 0; i < file.banks_count_percussion; ++i) {
+            const WOPLBank &bank = file.banks_percussive[i];
+            if (bank.bank_midi_lsb == 0 && bank.bank_midi_msb == 0)
+                return Instrument::from_wopl(bank.ins[35]);
+        }
+    }
     for (unsigned i = 0; i < file.banks_count_melodic; ++i) {
         const WOPLBank &bank = file.banks_melodic[i];
         if (bank.bank_midi_lsb == 0 && bank.bank_midi_msb == 0)
@@ -70,11 +81,14 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
     p_n4op = add_parameter<Pt::Int>(p, Parameter_Tag::chip, "n4op", "4op channel count", 0, 600, static_cast<int>(cs.fourop_count));
 
     const WOPLFile_Ptr wopl = default_wopl();
-    const Instrument ins = default_instrument(*wopl);
+    // The parameters start as the default selections: see default_instrument().
+    const Instrument melodic_ins = default_instrument(*wopl, false);
+    const Instrument percussion_ins = default_instrument(*wopl, true);
 
     for (unsigned pn = 0; pn < 16; ++pn) {
         Part &current_part = this->part[pn];
         const std::uint32_t tag = Parameter_Tag::instrument(pn);
+        const Instrument &ins = (pn == 9) ? percussion_ins : melodic_ins;
 
         {
             const String idprefix = std::format("P{:d}", pn + 1);
@@ -139,10 +153,12 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
     p_deepvib = add_parameter<Pt::Bool>(p, Parameter_Tag::global, "deepvib", "Deep vibrato", (wopl->opl_flags & WOPL_FLAG_DEEP_VIBRATO) != 0);
 }
 
+// As the parameters hold them, which is how states keep them too; the player
+// runs playable_chip_settings() of these.
 Chip_Settings Parameter_Block::chip_settings() const
 {
     Chip_Settings cs;
-    cs.emulator = available_emulator(static_cast<unsigned>(p_emulator->getIndex()));
+    cs.emulator = static_cast<unsigned>(p_emulator->getIndex());
     cs.chip_count = static_cast<unsigned>(p_nchip->get());
     cs.fourop_count = static_cast<unsigned>(p_n4op->get());
     return cs;

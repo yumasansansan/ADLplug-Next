@@ -42,24 +42,14 @@ public:
     void prepareToPlay(double sample_rate, int block_size) override;
     void releaseResources() override;
 
+    // Between prepareToPlay() and releaseResources().
     bool is_playback_ready() const noexcept
         { return ready_.load(); }
 
     std::unique_lock<std::mutex> acquire_player_nonrt();
-    unsigned num_chips_nonrt() const;
-    void set_num_chips_nonrt(unsigned chips);
-    unsigned chip_emulator_nonrt() const;
-    void set_chip_emulator_nonrt(unsigned emu);
-#if defined(ADLPLUG_OPL3)
-    unsigned num_4ops_nonrt() const;
-    void set_num_4ops_nonrt(unsigned count);
-#endif
-#if defined(ADLPLUG_OPN2)
-    unsigned chip_type_nonrt() const;
-    void set_chip_type_nonrt(unsigned type);
-#endif
+    // With the player lock held: silences the player and reconfigures its chips.
+    void set_chip_settings_nonrt(const Chip_Settings &cs);
     void panic_nonrt();
-    void reconfigure_chip_nonrt();
 
     bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
 
@@ -71,6 +61,9 @@ public:
 private:
     void process_messages(bool under_lock);
     void process_parameter_changes();
+    void apply_parameter_changes();
+    void load_instrument_from_parameters(unsigned part_number);
+    void load_global_parameters_from_parameters();
     void process_notifications();
 
 public:
@@ -147,6 +140,13 @@ public:
     void getStateInformation(MemoryBlock &data) override;
     void setStateInformation(const void *data, int size) override;
 
+private:
+    void create_player(unsigned sample_rate);
+    void create_first_player(unsigned sample_rate);
+    void write_state(MemoryBlock &data);
+    void read_state(const XmlElement &root);
+    void mark_state_for_notification();
+
 protected:
     //==========================================================================
     void parameterValueChanged([[maybe_unused]] int index, [[maybe_unused]] float value) override {}
@@ -154,6 +154,9 @@ protected:
     void parameterValueChangedEx(std::uint32_t tag) override;
 
 private:
+    // Made by the first prepareToPlay(), or before it when the host restores a
+    // state, or saves one after a parameter has changed. Each prepareToPlay()
+    // replaces it with one for its sample rate; releaseResources() keeps it.
     std::unique_ptr<Player> player_;
 
     std::unique_ptr<Bank_Manager> bank_manager_;
@@ -174,6 +177,9 @@ private:
 
     Atomic_Bit_Set<Cb_Count> pr_changed_;
     Atomic_Bit_Set<Cb_Count> to_notify_;
+
+    // Whether any parameter has changed since the processor was made.
+    std::atomic<bool> parameter_changed_ {false};
 
     std::unique_ptr<Parameter_Block> parameter_block_;
 
@@ -197,8 +203,6 @@ private:
     std::mutex player_lock_;
 
     std::unique_ptr<Worker> worker_;
-
-    MemoryBlock last_state_information_;
 
     //==========================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AdlplugAudioProcessor)

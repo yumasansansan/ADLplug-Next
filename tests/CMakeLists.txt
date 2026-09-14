@@ -169,6 +169,13 @@ add_test(NAME render.restore
 set_tests_properties(render.editor render.restore PROPERTIES FIXTURES_REQUIRED render TIMEOUT 900)
 set_tests_properties(render.editor PROPERTIES LABELS gui)
 
+# Parameters changed while the plugin is released keep their values when it is
+# prepared again, and so does the state: Audio Unit hosts expect it, and auval
+# checks it on macOS.
+add_test(NAME render.prepare_again
+  COMMAND ADLplug_render "${plugin}" "${render_out}/prepare_again.f32" 2 1000 --prepare-again)
+set_tests_properties(render.prepare_again PROPERTIES TIMEOUT 300)
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   # Only Windows can capture the hosted editor so far (tools/render).
   add_test(NAME render.snapshot

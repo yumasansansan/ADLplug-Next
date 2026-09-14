@@ -11,6 +11,7 @@
 #include "parameter_block.h"
 #include "adl/chip_settings.h"
 #include "adl/player.h"
+#include <algorithm>
 
 Chip_Settings get_player_chip_settings(const Player &pl)
 {
@@ -41,14 +42,26 @@ Instrument_Global_Parameters get_player_global_parameters(const Player &pl)
     return gp;
 }
 
+Chip_Settings playable_chip_settings(const Chip_Settings &cs)
+{
+    Chip_Settings playable = cs;
+    playable.emulator = available_emulator(cs.emulator);
+    playable.chip_count = std::clamp(cs.chip_count, 1u, 100u);
+#if defined(ADLPLUG_OPL3)
+    playable.fourop_count = std::min(cs.fourop_count, 6 * playable.chip_count);
+#endif
+    return playable;
+}
+
 void set_player_chip_settings(Player &pl, const Chip_Settings &cs)
 {
-    pl.set_emulator(available_emulator(cs.emulator));
-    pl.set_num_chips(cs.chip_count);
+    const Chip_Settings playable = playable_chip_settings(cs);
+    pl.set_emulator(playable.emulator);
+    pl.set_num_chips(playable.chip_count);
 #if defined(ADLPLUG_OPL3)
-    pl.set_num_4ops(cs.fourop_count);
+    pl.set_num_4ops(playable.fourop_count);
 #elif defined(ADLPLUG_OPN2)
-    pl.set_chip_type(cs.chip_type);
+    pl.set_chip_type(playable.chip_type);
 #endif
 }
 

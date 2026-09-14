@@ -45,8 +45,9 @@ fi
 
 render=$build/tests/render
 if [ -f "$render/render.hashes" ]; then
-  read -r key plugin < "$render/key"
-  read -r output state < "$render/render.hashes"
+  # Windows builds write these with CRLF line ends.
+  read -r key plugin < <(tr -d '\r' < "$render/key")
+  read -r output state < <(tr -d '\r' < "$render/render.hashes")
   echo "== render hashes: $key $plugin $output $state"
   if [ ! -s "$render/reference" ]; then
     echo "::warning title=No render reference::tests/render/references.txt has no line for $key $plugin. This run gave: $key $plugin $output $state"

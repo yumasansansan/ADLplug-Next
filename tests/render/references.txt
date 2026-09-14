@@ -10,5 +10,13 @@
 # systems' maths libraries differ (plan D42). When a change to the sound is
 # meant, update the lines and say why in the commit message.
 
+linux-x86_64-avx2 ADLplug ec4d81e1fe9705f1 6b5e1f99c1e18cea
+linux-x86_64-avx2 OPNplug 9115450c6714e0b2 3de28fbd4fed7f4b
+linux-x86_64-baseline ADLplug 517de525268ba85c 6b5e1f99c1e18cea
+linux-x86_64-baseline OPNplug 1bf7d705a03cab2f 3de28fbd4fed7f4b
+macos-arm64 ADLplug ec4d81e1fe9705f1 6b5e1f99c1e18cea
+macos-arm64 OPNplug 9115450c6714e0b2 3de28fbd4fed7f4b
+windows-x86_64-avx2 ADLplug ec4d81e1fe9705f1 6b5e1f99c1e18cea
+windows-x86_64-avx2 OPNplug 9115450c6714e0b2 3de28fbd4fed7f4b
 windows-x86_64-baseline ADLplug 517de525268ba85c 6b5e1f99c1e18cea
-windows-x86_64-baseline OPNplug 1bf7d705a03cab2f 3fd721d6292f9008
+windows-x86_64-baseline OPNplug 1bf7d705a03cab2f 3de28fbd4fed7f4b

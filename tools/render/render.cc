@@ -50,8 +50,9 @@
 // saved with it does: the plug-in's state is restored with the emulator number
 // in its chip settings changed. Both happen on this thread before the warm-up,
 // so renders with other emulators are reproducible as well. The summary names
-// the emulator the plug-in reports afterwards, which for a number the build
-// lacks is the one it plays instead.
+// the emulator of the plug-in's parameter. For a number the build lacks, the
+// parameter keeps the number, shown as "<Reserved n>", while another emulator
+// plays (sources/plugin_state.h).
 //
 // For the tests in tests/, the exit status can report a result. --save-hashes
 // <file> writes the output and state hashes, as "<output> <state>" in
@@ -60,11 +61,19 @@
 // and --expect-state-of <file> with a file from --save-hashes,
 // --require-emulator <name> compares the emulator the plug-in reports, and
 // --require-sound requires output that is not silent and has only finite
-// samples. A failed check is printed and makes the exit status 1, after the
-// teardown has run as usual. --compare checks a file from --save-hashes
-// against given hashes without loading any plug-in; "-" skips a hash.
+// samples. --prepare-again then releases the plug-in, gives each parameter a
+// pseudo-random value and prepares the plug-in again, as auval does with an
+// Audio Unit: every parameter has to keep the value it was given, and the
+// state has to stay the same. A failed check is printed and makes the exit
+// status 1, after the teardown has run as usual. --compare checks a file from
+// --save-hashes against given hashes without loading any plug-in; "-" skips a
+// hash.
 
 #include <juce_audio_processors/juce_audio_processors.h>
+
+#if defined(JUCE_LINUX)
+ #include "x_errors.h"
+#endif
 
 #if defined(JUCE_WINDOWS)
  #include <windows.h>
@@ -379,6 +388,7 @@ int main(int argc, char *argv[])
     std::string expected_state_file;
     std::string required_emulator;
     bool require_sound = false;
+    bool prepare_again = false;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--editor")
@@ -411,6 +421,8 @@ int main(int argc, char *argv[])
             required_emulator = argv[++i];
         else if (arg == "--require-sound")
             require_sound = true;
+        else if (arg == "--prepare-again")
+            prepare_again = true;
         else
             args.push_back(arg);
     }
@@ -418,7 +430,7 @@ int main(int argc, char *argv[])
         print_line("usage: ADLplug_render <plugin.vst3> <output.f32> [seconds] [warm-up ms] [--editor] "
                    "[--snapshot <file.png>] [--no-teardown] [--state <file>] [--restore <file>] [--emulator <number>] "
                    "[--save-hashes <file>] [--expect-output <hash>] [--expect-state <hash>] [--expect-output-of <file>] "
-                   "[--expect-state-of <file>] [--require-emulator <name>] [--require-sound]\n"
+                   "[--expect-state-of <file>] [--require-emulator <name>] [--require-sound] [--prepare-again]\n"
                    "       ADLplug_render --compare <hashes file> <output hash|-> <state hash|->");
         return 2;
     }
@@ -446,6 +458,9 @@ int main(int argc, char *argv[])
 
     int exit_status = 0;
     milestone("start");
+   #if defined(JUCE_LINUX)
+    report_x_errors();
+   #endif
     {
         juce::ScopedJuceInitialiser_GUI juce_init;
         juce::AudioPluginFormatManager formats;
@@ -627,6 +642,35 @@ int main(int argc, char *argv[])
             failures.push_back("emulator '" + emulator + "', expected '" + required_emulator + "'");
         if (require_sound && (peak <= 0.0f || nonfinite != 0))
             failures.push_back("the output is silent or has samples that are not finite");
+        if (prepare_again) {
+            plugin->releaseResources();
+            const juce::Array<juce::AudioProcessorParameter *> &parameters = plugin->getParameters();
+            Sequence_Rng rng(0x5eed);
+            for (juce::AudioProcessorParameter *parameter : parameters)
+                parameter->setValueNotifyingHost(static_cast<float>(rng.below(1001)) / 1000.0f);
+            std::vector<float> given;
+            for (juce::AudioProcessorParameter *parameter : parameters)
+                given.push_back(parameter->getValue());
+            // Saving the state also hands the new values over to the plug-in.
+            const std::uint64_t released_state = state_hash(*plugin);
+            plugin->prepareToPlay(sample_rate, block_size);
+            pump_messages(100);
+            constexpr int listed = 8;
+            int changed = 0;
+            for (int i = 0; i < parameters.size(); ++i) {
+                const float value = parameters[i]->getValue();
+                const float before = given[static_cast<std::size_t>(i)];
+                if (value != before && ++changed <= listed)
+                    failures.push_back("parameter '" + parameters[i]->getName(64).toStdString() + "' is " +
+                                       std::to_string(value) + " after preparing again, " + std::to_string(before) +
+                                       " before");
+            }
+            if (changed > listed)
+                failures.push_back(std::to_string(changed - listed) + " more parameters changed when prepared again");
+            if (state_hash(*plugin) != released_state)
+                failures.push_back("the state changed when the plug-in was prepared again");
+            milestone("released, " + std::to_string(parameters.size()) + " parameters set, prepared again");
+        }
         for (const std::string &failure : failures)
             print_line("check failed: " + failure);
         if (!failures.empty())

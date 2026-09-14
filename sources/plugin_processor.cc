@@ -37,6 +37,10 @@ void copy_text(char *buffer, std::size_t size, std::string_view text) noexcept
     std::memset(buffer + length, 0, size - length);
 }
 
+// The sample rate of a player made before prepareToPlay(). It only holds the
+// state until prepareToPlay() replaces it.
+constexpr unsigned state_only_sample_rate = 44100;
+
 }  // namespace
 
 //==============================================================================
@@ -110,6 +114,8 @@ void AdlplugAudioProcessor::changeProgramName([[maybe_unused]] int index, [[mayb
 //==============================================================================
 void AdlplugAudioProcessor::prepareToPlay(double sample_rate, [[maybe_unused]] int block_size)
 {
+    ready_.store(false);
+
     // Stop the worker before replacing the queues it reads and writes.
     if (worker_) {
         worker_->stop_worker();
@@ -128,23 +134,6 @@ void AdlplugAudioProcessor::prepareToPlay(double sample_rate, [[maybe_unused]] i
     worker_ = std::make_unique<Worker>(*this);
     worker_->start_worker();
 
-    Pak_File_Reader pak;
-    [[maybe_unused]] const bool pak_ok = pak.init_with_data(Res::banks_pak.data, Res::banks_pak.size);
-    assert(pak_ok);
-    const std::string default_wopl = pak.extract(0);
-    assert(!default_wopl.empty());
-
-    player_ = std::make_unique<Player>();
-    Player &pl = *player_;
-    pl.init(static_cast<unsigned>(sample_rate));
-    pl.reserve_banks(bank_reserve_size);
-    pl.set_soft_pan_enabled(true);
-
-    Chip_Settings cs;
-    cs.emulator = get_emulator_defaults().default_index;
-    set_player_chip_settings(pl, cs);
-    mark_for_notification(Cb_ChipSettings);
-
     for (std::size_t i = 0; i < 2; ++i) {
         dc_filter_[i].cutoff(5.0 / sample_rate);
         vu_monitor_[i].release(0.5 * sample_rate);
@@ -157,33 +146,32 @@ void AdlplugAudioProcessor::prepareToPlay(double sample_rate, [[maybe_unused]] i
         midi_channel_note_active_[i].reset_all();
     }
 
-    bank_manager_ = std::make_unique<Bank_Manager>(*this, pl, default_wopl.data(), default_wopl.size());
-    Bank_Manager &bm = *bank_manager_;
+    {
+        const std::scoped_lock lock(player_lock_);
+        const auto rate = static_cast<unsigned>(sample_rate);
 
-    mark_for_notification(Cb_GlobalParameters);
-    bm.mark_everything_for_notification();
+        if (!player_) {
+            create_first_player(rate);
+        }
+        else {
+            // A player runs at the rate it was made for, so a new one takes
+            // over the old one's state, with the parameter changes the old one
+            // has not taken yet. The parameters are not set from the new
+            // player: parts that select the same program would all get the
+            // values of the part applied last, and hosts expect a parameter to
+            // keep the value they gave it (auval checks that).
+            apply_parameter_changes();
+            MemoryBlock state;
+            write_state(state);
+            create_player(rate);
+            if (const std::unique_ptr<XmlElement> root = getXmlFromBinary(state.getData(), static_cast<int>(state.getSize())))
+                read_state(*root);
+        }
 
-    for (unsigned p = 0; p < 16; ++p) {
-        const bool percussive = p == 9;
-        selection_[p] = Selection{Bank_Id(0, 0, percussive), static_cast<std::uint8_t>(percussive ? 35 : 0)};
-        mark_for_notification(Cb_Selection1 + p);
+        mark_state_for_notification();
     }
 
-    active_part_ = 0;
-    mark_for_notification(Cb_ActivePart);
-
-    copy_text(bank_title_, sizeof bank_title_, pak.name(0));
-    mark_for_notification(Cb_BankTitle);
-
     ready_.store(true);
-
-    setStateInformation(last_state_information_.getData(), static_cast<int>(last_state_information_.getSize()));
-
-    Parameter_Block &pb = *parameter_block_;
-    pb.set_chip_settings(get_player_chip_settings(pl));
-    pb.set_global_parameters(get_player_global_parameters(pl));
-    for (unsigned p = 0; p < 16; ++p)
-        set_instrument_parameters_notifying_host(p);
 
     [[maybe_unused]] const bool sent = Messages::send<Messages::Fx::NotifyReady>(*mq_to_ui_, [](auto &) {});
     assert(sent);
@@ -196,15 +184,11 @@ void AdlplugAudioProcessor::releaseResources()
         worker_.reset();
     }
 
-    getStateInformation(last_state_information_);
-
     ready_.store(false);
 
-    // avoid destroying the player while the UI is working on it
-    const std::scoped_lock lock(player_lock_, queue_lock_);
-
-    bank_manager_.reset();
-    player_.reset();
+    // The player stays, with its state: the host may save or restore the
+    // state, or change parameters, before it prepares the processor again.
+    const std::scoped_lock lock(queue_lock_);
     mq_from_ui_.reset();
     mq_to_ui_.reset();
     mq_from_worker_.reset();
@@ -216,60 +200,16 @@ std::unique_lock<std::mutex> AdlplugAudioProcessor::acquire_player_nonrt()
     return std::unique_lock<std::mutex>(player_lock_);
 }
 
-unsigned AdlplugAudioProcessor::num_chips_nonrt() const
+void AdlplugAudioProcessor::set_chip_settings_nonrt(const Chip_Settings &cs)
 {
-    return player_->num_chips();
+    Player &pl = *player_;
+    pl.panic();
+    set_player_chip_settings(pl, cs);
 }
-
-void AdlplugAudioProcessor::set_num_chips_nonrt(unsigned chips)
-{
-    player_->set_num_chips(chips);
-    reconfigure_chip_nonrt();
-}
-
-unsigned AdlplugAudioProcessor::chip_emulator_nonrt() const
-{
-    return player_->emulator();
-}
-
-void AdlplugAudioProcessor::set_chip_emulator_nonrt(unsigned emu)
-{
-    player_->set_emulator(emu);
-    reconfigure_chip_nonrt();
-}
-
-#if defined(ADLPLUG_OPL3)
-unsigned AdlplugAudioProcessor::num_4ops_nonrt() const
-{
-    return player_->num_4ops();
-}
-
-void AdlplugAudioProcessor::set_num_4ops_nonrt(unsigned count)
-{
-    player_->set_num_4ops(count);
-}
-#endif  // defined(ADLPLUG_OPL3)
-
-#if defined(ADLPLUG_OPN2)
-unsigned AdlplugAudioProcessor::chip_type_nonrt() const
-{
-    return player_->chip_type();
-}
-
-void AdlplugAudioProcessor::set_chip_type_nonrt(unsigned type)
-{
-    player_->set_chip_type(type);
-}
-#endif  // defined(ADLPLUG_OPN2)
 
 void AdlplugAudioProcessor::panic_nonrt()
 {
     player_->panic();
-}
-
-void AdlplugAudioProcessor::reconfigure_chip_nonrt()
-{
-    // TODO any necessary reconfiguration after reset
 }
 
 bool AdlplugAudioProcessor::isBusesLayoutSupported(const BusesLayout &layouts) const
@@ -383,13 +323,11 @@ void AdlplugAudioProcessor::process_messages(bool under_lock)
 
 void AdlplugAudioProcessor::process_parameter_changes()
 {
-    Player &pl = *player_;
-    Bank_Manager &bm = *bank_manager_;
-    const Parameter_Block &pb = *parameter_block_;
-
     if (unmark_parameter_as_changed(Cb_ChipSettings)) {
-        const Chip_Settings cs = pb.chip_settings();
-        if (cs != get_player_chip_settings(pl)) {
+        // The parameters keep the chip settings as they were given; compare
+        // what the player would run for them.
+        const Chip_Settings cs = parameter_block_->chip_settings();
+        if (playable_chip_settings(cs) != get_player_chip_settings(*player_)) {
             if (Messages::send<Messages::Fx::RequestChipSettings>(*mq_to_worker_, [&cs](auto &body) { body.cs = cs; }))
                 worker_->postSemaphore();
             else
@@ -397,26 +335,44 @@ void AdlplugAudioProcessor::process_parameter_changes()
         }
     }
 
+    apply_parameter_changes();
+}
+
+// Passes changes of the instrument and global parameters on to the player: on
+// the audio thread for each block, and before the state is saved or the player
+// replaced. The player lock is held.
+void AdlplugAudioProcessor::apply_parameter_changes()
+{
     for (unsigned p = 0; p < 16; ++p) {
-        if (unmark_parameter_as_changed(Cb_Instrument1 + p)) {
-            // The parameters hold most of an instrument. The rest, such as the
-            // rhythm-mode drum type of OPL3 percussion, stays as the program has it.
-            const Selection &sel = selection_[p];
-            Instrument current;
-            bm.find_program(sel.bank, sel.program, current);
-            const Instrument ins = pb.part[p].instrument(current);
-            bm.load_program(
-                sel.bank, sel.program, ins,
-                Bank_Manager::LP_Notify | Bank_Manager::LP_NeedMeasurement | Bank_Manager::LP_KeepName);
-        }
+        if (unmark_parameter_as_changed(Cb_Instrument1 + p))
+            load_instrument_from_parameters(p);
     }
 
-    if (unmark_parameter_as_changed(Cb_GlobalParameters)) {
-        const Instrument_Global_Parameters gp = pb.global_parameters();
-        if (gp != get_player_global_parameters(pl)) {
-            set_player_global_parameters(pl, gp);
-            mark_for_notification(Cb_GlobalParameters);
-        }
+    if (unmark_parameter_as_changed(Cb_GlobalParameters))
+        load_global_parameters_from_parameters();
+}
+
+void AdlplugAudioProcessor::load_instrument_from_parameters(unsigned part_number)
+{
+    // The parameters hold most of an instrument. The rest, such as the
+    // rhythm-mode drum type of OPL3 percussion, stays as the program has it.
+    Bank_Manager &bm = *bank_manager_;
+    const Selection &sel = selection_[part_number];
+    Instrument current;
+    bm.find_program(sel.bank, sel.program, current);
+    const Instrument ins = parameter_block_->part[part_number].instrument(current);
+    bm.load_program(
+        sel.bank, sel.program, ins,
+        Bank_Manager::LP_Notify | Bank_Manager::LP_NeedMeasurement | Bank_Manager::LP_KeepName);
+}
+
+void AdlplugAudioProcessor::load_global_parameters_from_parameters()
+{
+    Player &pl = *player_;
+    const Instrument_Global_Parameters gp = parameter_block_->global_parameters();
+    if (gp != get_player_global_parameters(pl)) {
+        set_player_global_parameters(pl, gp);
+        mark_for_notification(Cb_GlobalParameters);
     }
 }
 
@@ -541,13 +497,15 @@ bool AdlplugAudioProcessor::handle_midi(const std::uint8_t *data, unsigned len)
 
 bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_Handler_Context &ctx)
 {
+    // While another thread holds the player lock, messages wait in their
+    // queues; MIDI from the editor too, as it goes to the player.
+    if (!ctx.under_lock)
+        return false;
+
     const unsigned tag = msg.header->tag;
 
     if (tag == std::to_underlying(User_Message::Midi))
         return handle_midi(msg.data, msg.header->size);
-
-    if (!ctx.under_lock)
-        return false;
 
     Player &pl = *player_;
     Bank_Manager &bm = *bank_manager_;
@@ -681,8 +639,12 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
     return true;
 }
 
-void AdlplugAudioProcessor::finish_handling_messages([[maybe_unused]] Message_Handler_Context &ctx)
+void AdlplugAudioProcessor::finish_handling_messages(Message_Handler_Context &ctx)
 {
+    // The bank manager belongs to whoever holds the player lock.
+    if (!ctx.under_lock)
+        return;
+
     bank_manager_->send_notifications();
     bank_manager_->send_measurement_requests();
 }
@@ -763,12 +725,102 @@ void AdlplugAudioProcessor::getStateInformation(MemoryBlock &data)
 {
     const std::scoped_lock lock(player_lock_);
 
-    Player *pl = player_.get();
-    if (!pl) {
-        data = last_state_information_;
+    // Without a player, and while no parameter has changed, the state is the
+    // default one, which an empty block stands for.
+    if (!player_ && !parameter_changed_.load()) {
+        data.reset();
         return;
     }
 
+    if (!player_)
+        create_first_player(state_only_sample_rate);
+
+    // The host may save before the audio thread has passed changes on.
+    apply_parameter_changes();
+    write_state(data);
+}
+
+void AdlplugAudioProcessor::setStateInformation(const void *data, int size)
+{
+    const std::scoped_lock lock(player_lock_);
+
+    const std::unique_ptr<XmlElement> root = getXmlFromBinary(data, size);
+    if (!root || root->getTagName() != "ADLMIDI-state")
+        return;
+
+    // The state replaces the parameter changes that came before it.
+    for (unsigned p = 0; p < 16; ++p)
+        unmark_parameter_as_changed(Cb_Instrument1 + p);
+    unmark_parameter_as_changed(Cb_GlobalParameters);
+
+    if (!player_)
+        create_first_player(state_only_sample_rate);
+    read_state(*root);
+
+    // make the host aware of changed parameters
+    parameter_block_->set_global_parameters(get_player_global_parameters(*player_));
+    for (unsigned p = 0; p < 16; ++p)
+        set_instrument_parameters_notifying_host(p);
+}
+
+// Replaces the player with one in the default state: the default bank and
+// selections, and the chip settings of the parameters. The player lock is held.
+void AdlplugAudioProcessor::create_player(unsigned sample_rate)
+{
+    Pak_File_Reader pak;
+    [[maybe_unused]] const bool pak_ok = pak.init_with_data(Res::banks_pak.data, Res::banks_pak.size);
+    assert(pak_ok);
+    const std::string default_wopl = pak.extract(0);
+    assert(!default_wopl.empty());
+
+    auto pl = std::make_unique<Player>();
+    pl->init(sample_rate);
+    pl->reserve_banks(bank_reserve_size);
+    pl->set_soft_pan_enabled(true);
+    set_player_chip_settings(*pl, parameter_block_->chip_settings());
+
+    auto bm = std::make_unique<Bank_Manager>(*this, *pl, default_wopl.data(), default_wopl.size());
+
+    // The old bank manager refers to the old player, so it goes first.
+    bank_manager_ = std::move(bm);
+    player_ = std::move(pl);
+
+    for (unsigned p = 0; p < 16; ++p) {
+        const bool percussive = p == 9;
+        selection_[p] = Selection{Bank_Id(0, 0, percussive), static_cast<std::uint8_t>(percussive ? 35 : 0)};
+    }
+
+    active_part_ = 0;
+    copy_text(bank_title_, sizeof bank_title_, pak.name(0));
+}
+
+// Makes the first player and settles the parameters with it. Until then the
+// parameters have their defaults, which describe the default state, or values
+// that the host or the editor gave them. Those go to the player; the other
+// instrument and global parameters take the player's values. The player lock
+// is held.
+void AdlplugAudioProcessor::create_first_player(unsigned sample_rate)
+{
+    create_player(sample_rate);
+
+    for (unsigned p = 0; p < 16; ++p) {
+        if (unmark_parameter_as_changed(Cb_Instrument1 + p))
+            load_instrument_from_parameters(p);
+        else
+            set_instrument_parameters_notifying_host(p);
+    }
+
+    if (unmark_parameter_as_changed(Cb_GlobalParameters))
+        load_global_parameters_from_parameters();
+    else
+        parameter_block_->set_global_parameters(get_player_global_parameters(*player_));
+}
+
+// Writes the state of the player, with the chip settings and the master volume
+// of the parameters. The player lock is held.
+void AdlplugAudioProcessor::write_state(MemoryBlock &data)
+{
+    Player &pl = *player_;
     const Parameter_Block &pb = *parameter_block_;
     const Bank_Manager &bm = *bank_manager_;
 
@@ -790,7 +842,7 @@ void AdlplugAudioProcessor::getStateInformation(MemoryBlock &data)
         for (unsigned p_i = 0; p_i < 128; ++p_i) {
             if (!info.used.test(p_i))
                 continue;
-            pl->ensure_get_instrument(info.bank, p_i, ins);
+            pl.ensure_get_instrument(info.bank, p_i, ins);
             PropertySet ins_set = ins.to_properties();
             ins_set.setValue("bank", static_cast<int>(info.id.to_integer()));
             ins_set.setValue("program", static_cast<int>(p_i));
@@ -808,8 +860,10 @@ void AdlplugAudioProcessor::getStateInformation(MemoryBlock &data)
         root.addChildElement(sel_set.createXml("selection").release());
     }
 
-    root.addChildElement(get_player_chip_settings(*pl).to_properties().createXml("chip").release());
-    root.addChildElement(get_player_global_parameters(*pl).to_properties().createXml("global").release());
+    // The chip settings as the parameters have them, which the player may run
+    // otherwise (playable_chip_settings()).
+    root.addChildElement(pb.chip_settings().to_properties().createXml("chip").release());
+    root.addChildElement(get_player_global_parameters(pl).to_properties().createXml("global").release());
 
     PropertySet common_set;
     common_set.setValue("bank_title", String(CharPointer_UTF8(bank_title_)));
@@ -820,28 +874,17 @@ void AdlplugAudioProcessor::getStateInformation(MemoryBlock &data)
     copyXmlToBinary(root, data);
 }
 
-void AdlplugAudioProcessor::setStateInformation(const void *data, int size)
+// Reads a state into the player, and its chip settings and master volume into
+// the parameters. The player lock is held.
+void AdlplugAudioProcessor::read_state(const XmlElement &root)
 {
-    const std::scoped_lock lock(player_lock_);
-
-    // The deprecated replaceWith() ignored empty input; keep that behaviour.
-    if (size > 0)
-        last_state_information_.replaceAll(data, static_cast<std::size_t>(size));
-
-    if (!is_playback_ready())
-        return;  // not ready yet, will load state information later
-
-    const std::unique_ptr<XmlElement> root = getXmlFromBinary(data, size);
-    if (!root || root->getTagName() != "ADLMIDI-state")
-        return;
-
     Player &pl = *player_;
     Parameter_Block &pb = *parameter_block_;
     Bank_Manager &bm = *bank_manager_;
 
     bm.clear_banks(false);
 
-    for (const XmlElement *elt : root->getChildWithTagNameIterator("instrument")) {
+    for (const XmlElement *elt : root.getChildWithTagNameIterator("instrument")) {
         PropertySet ins_set;
         ins_set.restoreFromXml(*elt);
         const Bank_Id bank = Bank_Id::from_integer(static_cast<std::uint32_t>(ins_set.getIntValue("bank")));
@@ -853,14 +896,14 @@ void AdlplugAudioProcessor::setStateInformation(const void *data, int size)
         bm.load_program(bank, static_cast<unsigned>(program), ins, 0);
     }
 
-    for (const XmlElement *elt : root->getChildWithTagNameIterator("bank")) {
+    for (const XmlElement *elt : root.getChildWithTagNameIterator("bank")) {
         PropertySet bank_set;
         bank_set.restoreFromXml(*elt);
         const Bank_Id bank = Bank_Id::from_integer(static_cast<std::uint32_t>(bank_set.getIntValue("bank")));
         bm.rename_bank(bank, bank_set.getValue("name").toRawUTF8(), false);
     }
 
-    for (const XmlElement *elt : root->getChildWithTagNameIterator("selection")) {
+    for (const XmlElement *elt : root.getChildWithTagNameIterator("selection")) {
         PropertySet sel_set;
         sel_set.restoreFromXml(*elt);
         const int part = sel_set.getIntValue("part");
@@ -873,14 +916,15 @@ void AdlplugAudioProcessor::setStateInformation(const void *data, int size)
     }
 
     // chip settings
-    if (const XmlElement *elt = root->getChildByName("chip")) {
+    if (const XmlElement *elt = root.getChildByName("chip")) {
         PropertySet set;
         set.restoreFromXml(*elt);
-        set_player_chip_settings(pl, Chip_Settings::from_properties(set));
+        pb.set_chip_settings(Chip_Settings::from_properties(set));
     }
+    set_player_chip_settings(pl, pb.chip_settings());
 
     // global parameters
-    if (const XmlElement *elt = root->getChildByName("global")) {
+    if (const XmlElement *elt = root.getChildByName("global")) {
         PropertySet set;
         set.restoreFromXml(*elt);
         set_player_global_parameters(pl, Instrument_Global_Parameters::from_properties(set));
@@ -888,35 +932,36 @@ void AdlplugAudioProcessor::setStateInformation(const void *data, int size)
 
     // common parameters
     PropertySet common_set;
-    if (const XmlElement *elt = root->getChildByName("common"))
+    if (const XmlElement *elt = root.getChildByName("common"))
         common_set.restoreFromXml(*elt);
     common_set.getValue("bank_title").copyToUTF8(bank_title_, bank_title_size_max + 1);
     active_part_ = static_cast<unsigned>(jlimit(0, 15, common_set.getIntValue("part")));
+    *pb.p_mastervol = static_cast<float>(common_set.getDoubleValue("master_volume", 1.0));
 
-    // notify everything
-    mark_for_notification(Cb_ChipSettings);
-    mark_for_notification(Cb_GlobalParameters);
-    bm.mark_everything_for_notification();
-    for (unsigned p = 0; p < 16; ++p)
-        mark_for_notification(Cb_Selection1 + p);
-    mark_for_notification(Cb_ActivePart);
-    mark_for_notification(Cb_BankTitle);
+    mark_state_for_notification();
 
     // send program changes
     for (unsigned p = 0; p < 16; ++p)
         send_program_change_from_selection(p);
+}
 
-    // make the host aware of changed parameters
-    pb.set_chip_settings(get_player_chip_settings(pl));
-    pb.set_global_parameters(get_player_global_parameters(pl));
+// Marks everything the editor shows, for sending to it.
+void AdlplugAudioProcessor::mark_state_for_notification()
+{
+    mark_for_notification(Cb_ChipSettings);
+    mark_for_notification(Cb_GlobalParameters);
+    bank_manager_->mark_everything_for_notification();
     for (unsigned p = 0; p < 16; ++p)
-        set_instrument_parameters_notifying_host(p);
-    *pb.p_mastervol = static_cast<float>(common_set.getDoubleValue("master_volume", 1.0));
+        mark_for_notification(Cb_Selection1 + p);
+    mark_for_notification(Cb_ActivePart);
+    mark_for_notification(Cb_BankTitle);
 }
 
 //==============================================================================
 void AdlplugAudioProcessor::parameterValueChangedEx(std::uint32_t tag)
 {
+    parameter_changed_.store(true, std::memory_order_relaxed);
+
     if (tag == Parameter_Tag::chip)
         mark_parameter_as_changed(Cb_ChipSettings);
     else if (tag == Parameter_Tag::global)

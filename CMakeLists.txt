@@ -185,6 +185,15 @@ get_target_property(ADLplug_JUCE_LIBRARY_CODE ADLplug JUCE_GENERATED_SOURCES_DIR
 target_include_directories(ADLplug SYSTEM PRIVATE "${ADLplug_JUCE_LIBRARY_CODE}")
 adlplug_set_language_standard(ADLplug)
 
+if(TARGET ADLplug_LV2)
+  # JUCE writes the whole numbers of the parameters' atom:Float ranges as
+  # integers; the script rewrites them after JUCE's helper has written dsp.ttl.
+  add_custom_command(TARGET ADLplug_LV2 POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" "-DTTL=$<TARGET_FILE_DIR:ADLplug_LV2>/dsp.ttl"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/LV2FloatLiterals.cmake"
+    VERBATIM)
+endif()
+
 target_sources(ADLplug PRIVATE
   "sources/utility/midi.cc"
   "sources/utility/simple_fifo.cc"
@@ -341,6 +350,12 @@ if(ADLplug_BUILD_TOOLS)
   target_link_libraries(ADLplug_render PRIVATE
     juce::juce_audio_processors
     juce::juce_recommended_config_flags)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # X errors are printed rather than fatal (tools/render/x_errors.h).
+    find_package(X11 REQUIRED)
+    target_sources(ADLplug_render PRIVATE "tools/render/x_errors.cc")
+    target_link_libraries(ADLplug_render PRIVATE X11::X11)
+  endif()
 endif()
 
 # --------------------------------------------------------------------------
@@ -355,7 +370,9 @@ endif()
 get_target_property(ADLplug_OWN_SOURCES ADLplug SOURCES)
 list(FILTER ADLplug_OWN_SOURCES INCLUDE REGEX "^sources/")
 if(TARGET ADLplug_render)
-  list(APPEND ADLplug_OWN_SOURCES "tools/render/render.cc")
+  get_target_property(ADLplug_RENDER_SOURCES ADLplug_render SOURCES)
+  list(FILTER ADLplug_RENDER_SOURCES INCLUDE REGEX "^tools/")
+  list(APPEND ADLplug_OWN_SOURCES ${ADLplug_RENDER_SOURCES})
 endif()
 
 set(ADLplug_OWN_COMPILE_DEFINITIONS "")

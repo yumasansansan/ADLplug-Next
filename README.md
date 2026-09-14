@@ -154,7 +154,8 @@ comes from, `-DUSE_<core>_EMULATOR=ON/OFF`, named in the tables under
 being built is affected. `USE_DOSBOX_EMULATOR` (ADLplug) and
 `USE_MAME_EMULATOR` (OPNplug) have to stay on, because the plugins measure
 their instruments on those cores. A project saved with a core that a build
-leaves out plays on that build's default core for the same chip.
+leaves out plays on that build's default core for the same chip, and keeps
+its choice: a build with the core plays it again.
 
 ### Testing
 
@@ -171,7 +172,8 @@ ctest --preset adl-debug
 - The render tests load the VST3 plugin into `tools/render`, play a fixed
   sequence, and compare the output with `tests/render/references.txt`. They
   also check that opening the editor and restoring the saved state change
-  nothing and, in Release builds, that every emulator core plays.
+  nothing, that the plugin keeps its parameters and state when it is prepared
+  again, and, in Release builds, that every emulator core plays.
 - When [pluginval](https://github.com/Tracktion/pluginval) or
   [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint) is on the
   `PATH` at configure time, it validates the VST3 or LV2 plugin as well.

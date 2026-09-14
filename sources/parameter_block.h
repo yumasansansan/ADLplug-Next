@@ -30,6 +30,12 @@ namespace Parameter_Tag {
         { return tag & 0xff; }
 }
 
+// The version hint of every parameter (JUCE's ParameterID). JUCE's Audio Unit
+// wrapper lists parameters in the order of their hints, so that hosts can keep
+// the ones they know in place: a parameter added later needs a higher hint
+// than those before it. All of these came with ADLplug 1.
+inline constexpr int parameter_version_hint = 1;
+
 struct Basic_Parameter_Block {
     template <AudioParameterType Ty, class... Arg>
     TypedAudioParameter<Ty> *add_automatable_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args);
@@ -42,10 +48,10 @@ struct Basic_Parameter_Block {
 
 private:
     template <class T, class... Arg>
-    T *do_add_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args);
+    T *do_add_parameter(AudioProcessorEx &p, std::uint32_t tag, const String &id, Arg &&... args);
 
     template <class T, class... Arg>
-    T *do_add_internal_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args);
+    T *do_add_internal_parameter(AudioProcessorEx &p, std::uint32_t tag, const String &id, Arg &&... args);
 
     std::vector<std::unique_ptr<AudioProcessorParameter>> internal_parameters_;
 };
