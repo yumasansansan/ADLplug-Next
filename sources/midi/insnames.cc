@@ -3,9 +3,17 @@
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 //
-// Modified for ADLplug-Next. The modifications are distributed under the
-// GNU GPL v3 or later; see the accompanying file LICENSE, and
-// LICENSE.BSL-1.0.txt for the Boost Software License.
+// SPDX-FileCopyrightText: 2018 Jean Pierre Cimalando
+// SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+// SPDX-License-Identifier: BSL-1.0 AND GPL-3.0-or-later
+//
+// This file comes from ADLplug and was modified for ADLplug-Next. The notice at
+// the top is ADLplug's; the LICENSE it names was ADLplug's copy of the Boost
+// Software License, now LICENSES/BSL-1.0.txt. The SPDX lines name the copyright
+// holders and licenses in the machine-readable form of the REUSE specification:
+// ADLplug's code is under the Boost Software License 1.0, and ADLplug-Next's
+// changes are under the GNU General Public License, version 3 or any later
+// version (LICENSES/GPL-3.0-or-later.txt).
 
 #include "insnames.h"
 

@@ -3,9 +3,17 @@
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 //
-// Modified for ADLplug-Next. The modifications are distributed under the
-// GNU GPL v3 or later; see the accompanying file LICENSE, and
-// LICENSE.BSL-1.0.txt for the Boost Software License.
+// SPDX-FileCopyrightText: 2018 Jean Pierre Cimalando
+// SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+// SPDX-License-Identifier: BSL-1.0 AND GPL-3.0-or-later
+//
+// This file comes from ADLplug and was modified for ADLplug-Next. The notice at
+// the top is ADLplug's; the LICENSE it names was ADLplug's copy of the Boost
+// Software License, now LICENSES/BSL-1.0.txt. The SPDX lines name the copyright
+// holders and licenses in the machine-readable form of the REUSE specification:
+// ADLplug's code is under the Boost Software License 1.0, and ADLplug-Next's
+// changes are under the GNU General Public License, version 3 or any later
+// version (LICENSES/GPL-3.0-or-later.txt).
 //
 // Binary resources embedded by resources.c. This header is valid C and C++;
 // C++ code refers to the resources as Res::<name>.
@@ -24,20 +32,13 @@ struct Res_Data {
 
 #if defined(ADLPLUG_OPL3)
 extern const struct Res_Data adlplug_res_opl3_banks_pak;
-extern const struct Res_Data adlplug_res_emu_dosbox;
 extern const struct Res_Data adlplug_res_emu_nuked;
 extern const struct Res_Data adlplug_res_emu_nuked2;
-extern const struct Res_Data adlplug_res_emu_opal;
-extern const struct Res_Data adlplug_res_emu_java;
 extern const struct Res_Data adlplug_res_emu_esfmu;
-extern const struct Res_Data adlplug_res_emu_mame;
 extern const struct Res_Data adlplug_res_emoji_u1f4a1;
 #elif defined(ADLPLUG_OPN2)
 extern const struct Res_Data adlplug_res_opn2_banks_pak;
-extern const struct Res_Data adlplug_res_emu_mame;
 extern const struct Res_Data adlplug_res_emu_nuked;
-extern const struct Res_Data adlplug_res_emu_gens;
-extern const struct Res_Data adlplug_res_emu_neko;
 #endif
 
 extern const struct Res_Data adlplug_res_emoji_u1f4be;
@@ -68,20 +69,13 @@ namespace Res {
 
 #if defined(ADLPLUG_OPL3)
     inline constexpr const Data &banks_pak = adlplug_res_opl3_banks_pak;
-    inline constexpr const Data &emu_dosbox = adlplug_res_emu_dosbox;
     inline constexpr const Data &emu_nuked = adlplug_res_emu_nuked;
     inline constexpr const Data &emu_nuked2 = adlplug_res_emu_nuked2;
-    inline constexpr const Data &emu_opal = adlplug_res_emu_opal;
-    inline constexpr const Data &emu_java = adlplug_res_emu_java;
     inline constexpr const Data &emu_esfmu = adlplug_res_emu_esfmu;
-    inline constexpr const Data &emu_mame = adlplug_res_emu_mame;
     inline constexpr const Data &emoji_u1f4a1 = adlplug_res_emoji_u1f4a1;
 #elif defined(ADLPLUG_OPN2)
     inline constexpr const Data &banks_pak = adlplug_res_opn2_banks_pak;
-    inline constexpr const Data &emu_mame = adlplug_res_emu_mame;
     inline constexpr const Data &emu_nuked = adlplug_res_emu_nuked;
-    inline constexpr const Data &emu_gens = adlplug_res_emu_gens;
-    inline constexpr const Data &emu_neko = adlplug_res_emu_neko;
 #endif
 
     inline constexpr const Data &emoji_u1f4be = adlplug_res_emoji_u1f4be;

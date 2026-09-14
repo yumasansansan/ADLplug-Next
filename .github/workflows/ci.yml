@@ -1,11 +1,19 @@
-# Part of ADLplug, distributed under the GNU GPL v3 or later.
-#               (See accompanying file LICENSE.)
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
 #
 # Builds and tests ADLplug and OPNplug with Clang and LLD on Windows, Linux and
 # macOS, in Debug and Release; x86-64 builds are made both for the baseline
 # instruction set and for AVX2. The checkout is plain git, and ci/setup.sh
 # installs a pinned toolchain. The one action, actions/upload-artifact, keeps
 # the pictures of the editor; it is pinned to the commit of its release.
+#
+# The reuse job checks with reuse lint, from Ubuntu's reuse package, that every
+# file names its copyright holders and license (see REUSE.toml and LICENSES/).
 
 name: CI
 
@@ -72,3 +80,29 @@ jobs:
           path: build/${{ matrix.preset }}/tests/render/*.png
           if-no-files-found: warn
           retention-days: 14
+
+  reuse:
+    name: REUSE compliance
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out
+        run: |
+          # The commit alone: reuse lint leaves the submodules out, as they
+          # carry the licensing of their own projects.
+          git config --global core.autocrlf false
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet --depth 1 origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git log -1 --format='%H %s'
+
+      - name: Install reuse
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends reuse
+          reuse --version
+
+      - name: Check the licensing of every file
+        run: reuse lint

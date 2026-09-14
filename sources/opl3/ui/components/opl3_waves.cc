@@ -15,8 +15,18 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //
-// Modified for ADLplug-Next. The modifications are distributed under the
-// GNU GPL v3 or later (see the accompanying file LICENSE).
+// SPDX-FileCopyrightText: 2018 Jean Pierre Cimalando
+// SPDX-FileCopyrightText: 2013-2016 Alexey Khokholov (Nuke.YKT)
+// SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+// SPDX-License-Identifier: LGPL-2.1-or-later AND GPL-3.0-or-later
+//
+// This file comes from ADLplug and was modified for ADLplug-Next. The notice at
+// the top is ADLplug's: the file includes code of Nuked OPL3 by Alexey Khokholov
+// and is under the GNU Lesser General Public License, version 2.1 or any later
+// version (LICENSES/LGPL-2.1-or-later.txt). The SPDX lines name the copyright
+// holders and licenses in the machine-readable form of the REUSE specification,
+// with ADLplug-Next's changes under the GNU General Public License, version 3 or
+// any later version (LICENSES/GPL-3.0-or-later.txt).
 
 #include "opl3_waves.h"
 #include <cmath>

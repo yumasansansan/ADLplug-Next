@@ -1,3 +1,17 @@
+<!--
+SPDX-FileCopyrightText: 2018-2021 Jean Pierre Cimalando
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: BSL-1.0 AND GPL-3.0-or-later
+
+This file comes from ADLplug and was modified for ADLplug-Next. ADLplug gave
+it no notice of its own; it was under ADLplug's license, the Boost Software
+License 1.0 (LICENSES/BSL-1.0.txt). The SPDX lines name the copyright holders
+and licenses in the machine-readable form of the REUSE specification:
+ADLplug's part is under the Boost Software License 1.0, and ADLplug-Next's
+changes are under the GNU General Public License, version 3 or any later
+version (LICENSES/GPL-3.0-or-later.txt).
+-->
+
 # ADLplug
 Synthesizer plugin for ADLMIDI and OPNMIDI (VST/LV2)
 
@@ -294,15 +308,21 @@ licenses; the strongest of those governs the combined work.
 
 Code written for ADLplug-Next — new files, and the changes made to files that
 came from upstream — is licensed under the **GNU GPL v3 or (at your option) any
-later version**. New files say so in their header; upstream files keep their
-original notice, followed by a note that their ADLplug-Next modifications are
-under the GNU GPL v3 or later.
+later version**. Its copyright holder, Yuma Kakei, is yumasansansan on GitHub.
 
 The parts developed for the original ADLplug remain available from their
-authors under the **Boost Software License 1.0** (see `LICENSE.BSL-1.0.txt`),
+authors under the **Boost Software License 1.0** (see `LICENSES/BSL-1.0.txt`),
 which is what the Boost notices in `sources/` refer to. Boost is
 GPL-compatible, so those parts may be redistributed as part of this work with
 their notices intact.
+
+Every file names its copyright holders and its license in the machine-readable
+form of the [REUSE specification](https://reuse.software/spec-3.3/): in a
+comment at its top, or, for the files that cannot hold one, such as images,
+fonts and the bank packs, in `REUSE.toml`. A file that came from upstream keeps
+its original notice, and its header tells ADLplug's part from ADLplug-Next's.
+The license texts are in `LICENSES/`, and the CI checks every file with
+`reuse lint`.
 
 The binaries themselves are distributed under version 3 of the GPL: the bundled
 ASIO and AAX SDKs are available under the GPL v3 with no later-version option,
@@ -326,9 +346,12 @@ this has no practical effect, but it is why the binary cannot be described as
 | `sources/opl3/adl/measurer`                | GNU GPL v3+                                                |
 | `sources/opn2/adl/measurer`                | GNU GPL v3+                                                |
 | `sources/opl3/ui/components/opl3_waves.cc` | GNU LGPL v2.1+                                             |
-| `resources/ui/fonts`                       | SIL Open Font License 1.1 (Liberation)                     |
+| `resources/opl3/banks.pak`                 | See `LICENSES/LicenseRef-OPL3-Banks.txt`                   |
+| `resources/opn2/banks.pak`                 | See `LICENSES/LicenseRef-OPN2-Banks.txt`                   |
+| `resources/ui/fonts`                       | SIL Open Font License 1.1 (Liberation, renamed)            |
 | `resources/ui/noto-emoji`                  | Apache License 2.0                                         |
 | `resources/ui/cores/ESFMu.png`             | GNU LGPL v2.1+ (ESFMu's logo, from its repository)         |
+| `docs/manual`                              | Free Art License 1.3 or CC BY-SA 4.0                       |
 
 ASIO is a trademark and software of Steinberg Media Technologies GmbH.
 AAX is a trademark of Avid Technology, Inc.

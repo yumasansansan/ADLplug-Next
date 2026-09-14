@@ -1,3 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
 # Render references for tests/CMakeLists.txt: the hashes (FNV-1a, 64 bits)
 # that tools/render reports for the fixed sequence, 20 s after a 5000 ms
 # warm-up, with each plugin's default emulator. One line per system,

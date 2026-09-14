@@ -3,9 +3,17 @@
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 //
-// Modified for ADLplug-Next. The modifications are distributed under the
-// GNU GPL v3 or later; see the accompanying file LICENSE, and
-// LICENSE.BSL-1.0.txt for the Boost Software License.
+// SPDX-FileCopyrightText: 2018-2019 Jean Pierre Cimalando
+// SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+// SPDX-License-Identifier: BSL-1.0 AND GPL-3.0-or-later
+//
+// This file comes from ADLplug and was modified for ADLplug-Next. The notice at
+// the top is ADLplug's; the LICENSE it names was ADLplug's copy of the Boost
+// Software License, now LICENSES/BSL-1.0.txt. The SPDX lines name the copyright
+// holders and licenses in the machine-readable form of the REUSE specification:
+// ADLplug's code is under the Boost Software License 1.0, and ADLplug-Next's
+// changes are under the GNU General Public License, version 3 or any later
+// version (LICENSES/GPL-3.0-or-later.txt).
 
 #include "chip_settings.h"
 #include "player.h"
@@ -75,13 +83,9 @@ Emulator_Icons::Emulator_Icons()
     const Emulator_Defaults &defaults = get_emulator_defaults();
     const auto load = [](const Res::Data &res) { return ImageFileFormat::loadFrom(res.data, res.size); };
 
-    const Image icon_dosbox = load(Res::emu_dosbox);
     const Image icon_nuked = load(Res::emu_nuked);
     const Image icon_nuked2 = load(Res::emu_nuked2);
-    const Image icon_opal = load(Res::emu_opal);
-    const Image icon_java = load(Res::emu_java);
     const Image icon_esfmu = load(Res::emu_esfmu);
-    const Image icon_mame = load(Res::emu_mame);
 
     images.resize(static_cast<std::size_t>(defaults.choices.size()));
     for (std::size_t i = 0; i < images.size(); ++i) {
@@ -89,10 +93,6 @@ Emulator_Icons::Emulator_Icons()
         if (name.isEmpty())
             continue;
         switch (static_cast<int>(i)) {
-        case ADLMIDI_EMU_DOSBOX:
-        case ADLMIDI_EMU_DOSBOX_OPL2:
-            images[i] = icon_dosbox;
-            break;
         // Nuke.YKT's cores, including the low-level ones.
         case ADLMIDI_EMU_NUKED:
         case ADLMIDI_EMU_NUKED_OPL2_LITE:
@@ -106,21 +106,14 @@ Emulator_Icons::Emulator_Icons()
         case ADLMIDI_EMU_NUKED_FAST:
             images[i] = icon_nuked2;
             break;
-        case ADLMIDI_EMU_OPAL:
-            images[i] = icon_opal;
-            break;
-        case ADLMIDI_EMU_JAVA:
-            images[i] = icon_java;
-            break;
         case ADLMIDI_EMU_ESFMu:
             images[i] = icon_esfmu;
             break;
-        case ADLMIDI_EMU_MAME_OPL2:
-            images[i] = icon_mame;
-            break;
         default:
-            // Cores without a logo among the resources -- ymfm has none in its
-            // repository -- show the first word of their name.
+            // The other cores show the first word of their name. The resources
+            // hold only the logos whose origin and license are known
+            // (REUSE.toml): ymfm has none, and the ones that ADLplug had for
+            // DOSBox, Opal, Java and MAME could not be traced.
             images[i] = Image_Utils::make_text_icon(name.upToFirstOccurrenceOf(" ", false, false));
             break;
         }

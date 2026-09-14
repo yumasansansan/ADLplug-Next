@@ -15,8 +15,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * Modified for ADLplug-Next. The modifications are distributed under the
- * GNU GPL v3 or later, as above.
+ * SPDX-FileCopyrightText: 2016-2018 Vitaly Novichkov <admin@wohlnet.ru>
+ * SPDX-FileCopyrightText: 2018-2019 Jean Pierre Cimalando
+ * SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This file comes from OPL Bank Editor, whose notice is above; ADLplug adapted
+ * it, and ADLplug-Next modified it further, under the same license. The SPDX
+ * lines name the copyright holders and the license in the machine-readable form
+ * of the REUSE specification (LICENSES/GPL-3.0-or-later.txt).
  */
 
 #include "measurer.h"

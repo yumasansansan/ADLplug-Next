@@ -1,5 +1,14 @@
 // -*- mode: adoc; -*-
-// SPDX-License-Identifier: LAL-1.3 or CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2018-2019 Jean Pierre Cimalando
+// SPDX-FileCopyrightText: 2018 Olivier Humbert
+// SPDX-FileCopyrightText: 2019 Bruce Sutherland
+// SPDX-License-Identifier: LAL-1.3 OR CC-BY-SA-4.0
+//
+// This manual comes from ADLplug. The SPDX lines name its copyright holders and
+// its license in the machine-readable form of the REUSE specification: at your
+// choice, the Free Art License 1.3 or the Creative Commons Attribution-ShareAlike
+// 4.0 International license (LICENSES/LAL-1.3.txt, LICENSES/CC-BY-SA-4.0.txt;
+// see also docs/manual/LICENSE).
 
 :lang: en
 

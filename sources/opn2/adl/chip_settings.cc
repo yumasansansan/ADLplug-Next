@@ -3,9 +3,17 @@
 //    (See accompanying file LICENSE or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 //
-// Modified for ADLplug-Next. The modifications are distributed under the
-// GNU GPL v3 or later; see the accompanying file LICENSE, and
-// LICENSE.BSL-1.0.txt for the Boost Software License.
+// SPDX-FileCopyrightText: 2018-2019 Jean Pierre Cimalando
+// SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+// SPDX-License-Identifier: BSL-1.0 AND GPL-3.0-or-later
+//
+// This file comes from ADLplug and was modified for ADLplug-Next. The notice at
+// the top is ADLplug's; the LICENSE it names was ADLplug's copy of the Boost
+// Software License, now LICENSES/BSL-1.0.txt. The SPDX lines name the copyright
+// holders and licenses in the machine-readable form of the REUSE specification:
+// ADLplug's code is under the Boost Software License 1.0, and ADLplug-Next's
+// changes are under the GNU General Public License, version 3 or any later
+// version (LICENSES/GPL-3.0-or-later.txt).
 
 #include "chip_settings.h"
 #include "player.h"
@@ -74,10 +82,7 @@ Emulator_Icons::Emulator_Icons()
     const Emulator_Defaults &defaults = get_emulator_defaults();
     const auto load = [](const Res::Data &res) { return ImageFileFormat::loadFrom(res.data, res.size); };
 
-    const Image icon_mame = load(Res::emu_mame);
     const Image icon_nuked = load(Res::emu_nuked);
-    const Image icon_gens = load(Res::emu_gens);
-    const Image icon_neko = load(Res::emu_neko);
 
     images.resize(static_cast<std::size_t>(defaults.choices.size()));
     for (std::size_t i = 0; i < images.size(); ++i) {
@@ -85,10 +90,6 @@ Emulator_Icons::Emulator_Icons()
         if (name.isEmpty())
             continue;
         switch (static_cast<int>(i)) {
-        case OPNMIDI_EMU_MAME:
-        case OPNMIDI_EMU_MAME_2608:
-            images[i] = icon_mame;
-            break;
         // Nuke.YKT's cores, including the low-level ones.
         case OPNMIDI_EMU_NUKED_YM3438:
         case OPNMIDI_EMU_NUKED_YM2612:
@@ -98,15 +99,11 @@ Emulator_Icons::Emulator_Icons()
         case OPNMIDI_EMU_NUKED_YMF276_LLE:
             images[i] = icon_nuked;
             break;
-        case OPNMIDI_EMU_GENS:
-            images[i] = icon_gens;
-            break;
-        case OPNMIDI_EMU_NP2:
-            images[i] = icon_neko;
-            break;
         default:
-            // Cores without a logo among the resources -- ymfm has none in its
-            // repository -- show the first word of their name.
+            // The other cores show the first word of their name. The resources
+            // hold only the logos whose origin and license are known
+            // (REUSE.toml): ymfm has none, and the ones that ADLplug had for
+            // MAME, GENS and Neko Project II could not be traced.
             images[i] = Image_Utils::make_text_icon(name.upToFirstOccurrenceOf(" ", false, false));
             break;
         }

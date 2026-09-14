@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# Part of ADLplug, distributed under the GNU GPL v3 or later.
-#               (See accompanying file LICENSE.)
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
 #
 #   ci/test.sh <preset>
 #

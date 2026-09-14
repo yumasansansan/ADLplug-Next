@@ -1,0 +1,148 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# The copyright holders and licenses of the files that cannot name them in a
+# comment of their own: images, fonts, sounds, the bank packs, the generated
+# HTML manuals, JSON and the Windows resource scripts. Every other file names
+# them at its top. The license texts are in LICENSES/, and `reuse lint` checks
+# the repository in the CI.
+
+version = 1
+
+# ADLplug-Next's own.
+[[annotations]]
+path = "CMakePresets.json"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Yuma Kakei <yumasansansan@gmail.com>"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+# Made for ADLplug, whose license, the Boost Software License, covers them.
+[[annotations]]
+path = [
+    "resources/application/ADLplug*.png",
+    "resources/application/ADLplug.icns",
+    "resources/application/ADLplug.ico",
+    "resources/application/*.rc",
+    "resources/ui/cores/Nuked*.png",
+    "resources/ui/cores/Nuked*.svg",
+    "resources/ui/knob-skin.*",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2018 Jean Pierre Cimalando"
+SPDX-License-Identifier = "BSL-1.0"
+
+[[annotations]]
+path = [
+    "docs/screen.png",
+    "resources/ui/adl*",
+    "resources/ui/opn*",
+    "resources/ui/slider-skin.*",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2018-2019 Jean Pierre Cimalando"
+SPDX-License-Identifier = "BSL-1.0"
+
+# OPNplug's application icon, contributed to ADLplug; the smaller sizes and the
+# icon files are conversions of it.
+[[annotations]]
+path = [
+    "resources/application/OPNplug*.png",
+    "resources/application/OPNplug.icns",
+    "resources/application/OPNplug.ico",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2018 Christopher Arndt"
+SPDX-License-Identifier = "BSL-1.0"
+
+# The logo of ESFMu (https://github.com/Kagamiin/ESFMu, assets/logo.png), under
+# the license of its repository. ESFMu's README credits shadex/shidzy13 "for
+# helping out with the nifty logo".
+[[annotations]]
+path = "resources/ui/cores/ESFMu.png"
+precedence = "override"
+SPDX-FileCopyrightText = "shadex/shidzy13"
+SPDX-License-Identifier = "LGPL-2.1-or-later"
+
+# Images of Noto Emoji (https://github.com/googlefonts/noto-emoji), whose image
+# resources are under the Apache License 2.0; its AUTHORS file names Google Inc.
+[[annotations]]
+path = [
+    "resources/ui/noto-emoji/*.png",
+    "docs/manual/resources/emoji_*.png",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Google Inc."
+SPDX-License-Identifier = "Apache-2.0"
+
+# Subsets of the Liberation fonts 2.00.1, renamed ADLplug-Next Mono, Sans and
+# Serif because the license reserves their names (tools/make-fonts.sh). The
+# copyright lines are those of the Liberation fonts' LICENSE file.
+[[annotations]]
+path = "resources/ui/fonts/*.ttf.gz"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "2010 Google Corporation, with Reserved Font Arimo, Tinos and Cousine",
+    "2012 Red Hat, Inc., with Reserved Font Name Liberation",
+]
+SPDX-License-Identifier = "OFL-1.1-RFN"
+
+# The instrument banks. They come from many authors, and for many of them no
+# license is known: the LicenseRef files list the origin and the known terms of
+# each bank.
+[[annotations]]
+path = "resources/opl3/banks.pak"
+precedence = "override"
+SPDX-FileCopyrightText = "The authors of the banks listed in LICENSES/LicenseRef-OPL3-Banks.txt"
+SPDX-License-Identifier = "LicenseRef-OPL3-Banks"
+
+[[annotations]]
+path = "resources/opn2/banks.pak"
+precedence = "override"
+SPDX-FileCopyrightText = "The authors of the banks listed in LICENSES/LicenseRef-OPN2-Banks.txt"
+SPDX-License-Identifier = "LicenseRef-OPN2-Banks"
+
+# The user manual: the HTML is generated from manual.txt, which names the same
+# holders and license, and the pictures and sounds are part of it.
+[[annotations]]
+path = "docs/manual/en/manual.html"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "2018-2019 Jean Pierre Cimalando",
+    "2018 Olivier Humbert",
+    "2019 Bruce Sutherland",
+]
+SPDX-License-Identifier = "LAL-1.3 OR CC-BY-SA-4.0"
+
+[[annotations]]
+path = "docs/manual/fr/manual.html"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "2018-2019 Jean Pierre Cimalando",
+    "2018 Olivier Humbert",
+]
+SPDX-License-Identifier = "LAL-1.3 OR CC-BY-SA-4.0"
+
+[[annotations]]
+path = [
+    "docs/manual/resources/*.opus",
+    "docs/manual/resources/adsr.svg",
+    "docs/manual/resources/algo2op.png",
+    "docs/manual/resources/algo4op.png",
+    "docs/manual/resources/algorithm.png",
+    "docs/manual/resources/chip.png",
+    "docs/manual/resources/emulators.png",
+    "docs/manual/resources/global.png",
+    "docs/manual/resources/misc.png",
+    "docs/manual/resources/operator.png",
+    "docs/manual/resources/screen.png",
+    "docs/manual/resources/tuning.png",
+    "docs/manual/resources/voices4op.png",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2018 Jean Pierre Cimalando"
+SPDX-License-Identifier = "LAL-1.3 OR CC-BY-SA-4.0"

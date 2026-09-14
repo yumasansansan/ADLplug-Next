@@ -1,3 +1,13 @@
+<!--
+SPDX-FileCopyrightText: 2019 Jean Pierre Cimalando
+SPDX-License-Identifier: BSL-1.0
+
+This file comes from ADLplug, which gave it no notice of its own; it is under
+ADLplug's license, the Boost Software License 1.0 (LICENSES/BSL-1.0.txt). The
+SPDX lines name its copyright holder and license in the machine-readable form
+of the REUSE specification.
+-->
+
 # Developer notes
 
 This is a memento and also help for developers who want to contribute and help the project.
