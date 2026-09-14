@@ -7,16 +7,18 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-#   ci/build.sh <preset> <baseline|avx2|arm64>
+#   ci/build.sh <preset> <baseline|avx2|arm64> [<cmake option>...]
 #
 # Configures and builds a CMake preset, with the developer tools and the tests,
 # for the given instruction set (arm64 stands for the macOS build, which has no
-# choice). Then lists the -march flags of the compile commands, the artefacts,
-# and the libraries the VST3 plugin links against.
+# choice) and any further options, such as emulator cores to leave out. Then
+# lists the -march flags of the compile commands, the artefacts, and the
+# libraries the VST3 plugin links against.
 set -euo pipefail
 
 preset=$1
 arch=$2
+shift 2
 
 args=(--preset "$preset" -DADLplug_BUILD_TOOLS=ON -DADLplug_BUILD_TESTS=ON)
 case $arch in
@@ -24,6 +26,7 @@ case $arch in
   arm64) ;;
   *) echo "error: unknown instruction set '$arch'" >&2; exit 2 ;;
 esac
+args+=("$@")
 
 cmake "${args[@]}"
 cmake --build --preset "$preset"

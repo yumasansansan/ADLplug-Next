@@ -9,7 +9,9 @@
 #
 # Sets up a GitHub Actions runner to build and test ADLplug-Next: Clang, LLD and the
 # LLVM tools of one pinned version, pluginval, and on Linux the development
-# packages that JUCE needs, the tools for the tests and lv2lint. The tools go
+# packages that JUCE needs, the tools for the tests and lv2lint. In the
+# AlmaLinux container of the Nightly workflow, which builds the rpm packages,
+# it sets up LLVM and the development packages alone, as root. The tools go
 # first on PATH for the later steps. Every download is checked: the
 # apt.llvm.org signing key by its fingerprint, archives by their SHA-256, and
 # lv2lint's source by its commit.
@@ -21,12 +23,14 @@ set -euo pipefail
 
 llvm_major=23
 
-# Windows and macOS: LLVM's release archives.
+# Windows, macOS and the AlmaLinux container: LLVM's release archives.
 llvm_release=23.1.1
 windows_archive=clang+llvm-$llvm_release-x86_64-pc-windows-msvc.tar.zst
 windows_sha256=c8a12d754b5050c5668b56a5425c806792d46c70f7244b1216046164aa4b6462
 macos_archive=LLVM-$llvm_release-macOS-ARM64.tar.zst
 macos_sha256=2c4a0fdd1ec6a32d4fd57ff32aa714ec8b3c71bf02a24ec38608a4f23f8aca89
+linux_archive=LLVM-$llvm_release-Linux-X64.tar.zst
+linux_sha256=b7ddbabd70fa1d206948bc83f59e59aa84eaf4cd09b6b89cc3ece28177710a6f
 
 # Linux: the packages of apt.llvm.org, signed with this key.
 apt_key_fingerprint=6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
@@ -56,6 +60,17 @@ linux_packages=(
 # (ci/with-window-manager.sh), and what lv2lint is built with.
 linux_packages+=(xwayland-run weston xwayland xauth openbox)
 linux_packages+=(meson liblilv-dev lv2-dev libelf-dev)
+
+# The same development packages in AlmaLinux 10, from its BaseOS, AppStream and
+# CRB repositories, with what the build needs besides: the headers and the
+# runtime of libstdc++, which come with GCC's C++ package (Clang compiles and
+# links), and rpmbuild.
+almalinux_packages=(
+  alsa-lib-devel fontconfig-devel freetype-devel
+  libX11-devel libXcomposite-devel libXcursor-devel libXext-devel libXi-devel
+  libXinerama-devel libXrandr-devel libXrender-devel
+  cmake ninja-build gcc-c++ git python3 tar xz zstd rpm-build
+)
 
 # Pipelines below are written so that no command stops reading early: with
 # pipefail, a writer killed by SIGPIPE would fail the script.
@@ -166,9 +181,22 @@ setup_macos() {
   tool_paths+=("$RUNNER_TEMP/pluginval/pluginval.app/Contents/MacOS")
 }
 
+setup_almalinux() {
+  dnf install -y -q --setopt=install_weak_deps=False "${almalinux_packages[@]}"
+  download "$(release_url "$linux_archive")" "$RUNNER_TEMP/$linux_archive" "$linux_sha256"
+  extract "$RUNNER_TEMP/$linux_archive" "$RUNNER_TEMP/llvm" tar .a
+  llvm_bin=$RUNNER_TEMP/llvm/bin
+}
+
 tool_paths=()
 case "${RUNNER_OS:-}" in
-  Linux) setup_linux ;;
+  Linux)
+    if [ -f /etc/almalinux-release ]; then
+      setup_almalinux
+    else
+      setup_linux
+    fi
+    ;;
   Windows) setup_windows ;;
   macOS) setup_macos ;;
   *) echo "error: unsupported runner '${RUNNER_OS:-}'" >&2; exit 1 ;;

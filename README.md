@@ -42,15 +42,60 @@ which the copyright lines of ADLplug-Next's code carry.
 ## Development builds
 
 [![CI](https://github.com/yumasansansan/ADLplug-Next/actions/workflows/ci.yml/badge.svg)](https://github.com/yumasansansan/ADLplug-Next/actions/workflows/ci.yml)
+[![Nightly](https://github.com/yumasansansan/ADLplug-Next/actions/workflows/nightly.yml/badge.svg)](https://github.com/yumasansansan/ADLplug-Next/actions/workflows/nightly.yml)
 
 Every push and pull request is built by GitHub Actions on Windows, Linux and
 macOS, in Debug and Release; x86-64 builds are made both for the baseline
 instruction set and for AVX2.
 
+Every day at 18:00 UTC, when `main` has changed, the Nightly workflow builds
+and tests it again, and replaces the
+[Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly)
+pre-release with the new builds: an archive for each system, and packages for
+Ubuntu and for RHEL, AlmaLinux and openSUSE (see [Installing](#installing)).
+
 Until the first release, the versions are 1.99.N, where N counts the commits
 of `main` since the last commit of upstream ADLplug. The plugins show the time
 of the commit, in UTC, and its hash as well: `1.99.N+YYYYMMDD.HHMM.git<hash>`.
 An odd minor number marks a development version.
+
+## Installing
+
+Each file of the
+[Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly)
+pre-release has both plugins. The builds with `avx2`, `amd64v3` or
+`x86_64_v3` in their names need a processor with AVX2 (x86-64-v3): a host
+that loads one on another processor crashes, even while it scans for
+plugins.
+
+- Windows 11 or later (x86-64): extract the zip archive. Copy the `.vst3`
+  bundles to `C:\Program Files\Common Files\VST3`, the `.lv2` bundles to
+  `C:\Program Files\Common Files\LV2` or `%APPDATA%\LV2`, and the
+  `.aaxplugin` bundles to `C:\Program Files\Common Files\Avid\Audio\Plug-Ins`.
+  The plugins and the standalone programs need the
+  [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
+  for x64.
+- macOS 26 or later (Apple Silicon): extract the zip archive. The files are
+  not notarized, so remove the quarantine that the download put on them,
+  with `xattr -dr com.apple.quarantine` and the extracted folder. Copy the
+  `.vst3` bundles to `~/Library/Audio/Plug-Ins/VST3`, the `.component`
+  bundles to `~/Library/Audio/Plug-Ins/Components`, the `.lv2` bundles to
+  `~/Library/Audio/Plug-Ins/LV2`, and the `.aaxplugin` bundles to
+  `/Library/Application Support/Avid/Audio/Plug-Ins`.
+- Ubuntu 26.04 or later: install the deb packages, for example
+  `sudo apt install ./adlplug-next_*_amd64.deb`. The `amd64v3` packages are
+  the AVX2 builds; install them only on a processor with AVX2.
+- RHEL and AlmaLinux 10 or later, and openSUSE: install the rpm packages,
+  for example `sudo dnf install ./adlplug-next-*.x86_64.rpm` or
+  `sudo zypper install ./adlplug-next-*.x86_64.rpm`. The `x86_64_v3`
+  packages are the AVX2 builds.
+- Other Linux systems (x86-64): extract the tar archive, and copy the `.vst3`
+  bundles to `~/.vst3` and the `.lv2` bundles to `~/.lv2`.
+
+On Linux, the user interface runs on X11: Xwayland in a Wayland session. The
+AAX plugins have no PACE signature, so only Pro Tools Developer loads them.
+Each archive and package has the licenses of the binaries, and each plugin
+the terms of its instrument banks, in `<plugin>-banks.txt`.
 
 ## Coming from ADLplug
 
@@ -185,6 +230,8 @@ This package is able to build several plugins from a single source:
 | -DADLplug_WERROR=ON/OFF         | OFF (the presets set ON)               | Treat warnings in ADLplug-Next's own code as errors              |
 | -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | Build developer tools (offline VST3 renderer)                    |
 | -DADLplug_BUILD_TESTS=ON/OFF    | OFF                                    | Build the tests and register them with CTest                     |
+| -DADLplug_INSTALL_VST3DIR=<dir> | lib/vst3                               | Directory of the VST3 plugin under the install prefix (Linux)    |
+| -DADLplug_INSTALL_LV2DIR=<dir>  | lib/lv2                                | Directory of the LV2 plugin under the install prefix (Linux)     |
 
 Every emulator core is built by default. Each has an option of the library it
 comes from, `-DUSE_<core>_EMULATOR=ON/OFF`, named in the tables under
@@ -238,7 +285,8 @@ ctest --preset adl-debug
   also check that opening the editor and restoring the saved state change
   nothing, that the plugin keeps its parameters and state when it is prepared
   again, that the VST3 plugin keeps the parameter IDs of upstream ADLplug, and,
-  in Release builds, that every emulator core plays.
+  in Release builds, that every emulator core plays. A build that leaves cores
+  out checks that asking for one of them plays the core in its place.
 - When [pluginval](https://github.com/Tracktion/pluginval) or
   [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint) is on the
   `PATH` at configure time, it validates the VST3 or LV2 plugin as well.
@@ -247,11 +295,19 @@ The editor tests open windows, so on Linux they need an X11 display with a
 window manager, as in a desktop session on Xwayland. Without a window manager,
 lv2lint stops at an X error from the editor.
 
-### Installing
+### Installing a build
+
+On Linux, `cmake --install` installs what a build made under a prefix:
 
 ```
-sudo cmake --build . --target install
+sudo cmake --install build/adl-release --prefix /usr/local
 ```
+
+The plugins go into `lib/vst3` and `lib/lv2` under the prefix. On systems
+whose libraries are in `lib64`, such as RHEL and openSUSE, the LV2 hosts look
+in `lib64/lv2`: configure with `-DADLplug_INSTALL_LV2DIR=lib64/lv2` there. On
+Windows and macOS, copy the bundles from `build/<preset>/ADLplug_artefacts/Release`
+as [Installing](#installing) describes.
 
 ### Change Log
 

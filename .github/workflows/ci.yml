@@ -10,8 +10,9 @@
 # Linux and macOS, in Debug and Release; x86-64 builds are made both for the
 # baseline instruction set and for AVX2. The checkout is plain git, and
 # ci/setup.sh installs a pinned toolchain. The one action,
-# actions/upload-artifact, keeps the pictures of the editor; it is pinned to
-# the commit of its release.
+# actions/upload-artifact, keeps the pictures of the editor, and the packs of
+# the Release builds when the Nightly workflow (nightly.yml) calls this one
+# with package set (ci/package.sh); it is pinned to the commit of its release.
 #
 # The reuse job checks with reuse lint, from Ubuntu's reuse package, that every
 # file names its copyright holders and license (see REUSE.toml and LICENSES/).
@@ -22,12 +23,20 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      package:
+        description: Pack the Release builds for the Nightly release
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+# A workflow that calls this one gives its own name as github.workflow, so
+# that its run and the runs of pushes do not cancel each other.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -72,6 +81,19 @@ jobs:
 
       - name: Test
         run: bash ci/test.sh "${{ matrix.preset }}"
+
+      - name: Pack for the Nightly release
+        if: ${{ inputs.package && endsWith(matrix.preset, '-release') }}
+        run: bash ci/package.sh "${{ matrix.preset }}" "${{ matrix.arch }}" package
+
+      - name: Keep the pack
+        if: ${{ inputs.package && endsWith(matrix.preset, '-release') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.preset }}
+          path: package/
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Keep the editor pictures
         if: ${{ !cancelled() && runner.os == 'Windows' }}

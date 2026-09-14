@@ -145,6 +145,15 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 else()
   string(TOLOWER "${CMAKE_SYSTEM_NAME}" ADLplug_RENDER_SYSTEM)
 endif()
+# A Linux distribution other than Ubuntu has its own version of the maths
+# library, so its references have a key of their own, as AlmaLinux has in the
+# Nightly workflow.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  cmake_host_system_information(RESULT ADLplug_DISTRIBUTION QUERY DISTRIB_ID)
+  if(ADLplug_DISTRIBUTION AND NOT ADLplug_DISTRIBUTION STREQUAL "ubuntu")
+    string(TOLOWER "linux-${ADLplug_DISTRIBUTION}" ADLplug_RENDER_SYSTEM)
+  endif()
+endif()
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
   set(ADLplug_RENDER_KEY "${ADLplug_RENDER_SYSTEM}-x86_64-${ADLplug_ARCH}")
 else()
@@ -229,51 +238,90 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set_tests_properties(render.snapshot PROPERTIES TIMEOUT 300 LABELS gui)
 endif()
 
-# Every emulator core plays, and the plugin names the one asked for. Release
-# only: the low-level cores are too slow in Debug builds. Each entry is the
-# emulator number, its name and the build option that includes it.
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  if(ADLplug_CHIP STREQUAL "OPL3")
-    set(cores
-      "0|Nuked OPL3 (v 1.8)|USE_NUKED_EMULATOR"
-      "1|Nuked OPL3 Fast (by tgies)|USE_NUKED_EMULATOR"
-      "2|DOSBox 0.74-r4111 OPL3|USE_DOSBOX_EMULATOR"
-      "3|Opal OPL3|USE_OPAL_EMULATOR"
-      "4|Java 1.0.6 OPL3|USE_JAVA_EMULATOR"
-      "5|ESFMu|USE_ESFMU_EMULATOR"
-      "6|MAME OPL2|USE_MAME_EMULATOR"
-      "7|YMFM OPL2|USE_YMFM_EMULATOR"
-      "8|YMFM OPL3|USE_YMFM_EMULATOR"
-      "9|YM3812-LLE OPL2|USE_NUKED_OPL2_LLE_EMULATOR"
-      "10|YMF262-LLE OPL3|USE_NUKED_OPL3_LLE_EMULATOR"
-      "11|Nuked OPL2 Lite|USE_NUKED_EMULATOR"
-      "12|Nuked CQM|USE_NUKED_EMULATOR"
-      "13|DOSBox 0.74-r4111 OPL2|USE_DOSBOX_EMULATOR")
-  else()
-    set(cores
-      "0|MAME YM2612|USE_MAME_EMULATOR"
-      "1|Nuked OPN2 (3438)|USE_NUKED_EMULATOR"
-      "2|GENS/GS II OPN2|USE_GENS_EMULATOR"
-      "3|YMFM OPN2|USE_YMFM_EMULATOR"
-      "4|Neko Project II Kai OPNA|USE_NP2_EMULATOR"
-      "5|MAME YM2608|USE_MAME_2608_EMULATOR"
-      "6|YMFM OPNA|USE_YMFM_EMULATOR"
-      "8|Nuked OPN2 (2612)|USE_NUKED_EMULATOR"
-      "9|YM2612-LLE OPN2|USE_NUKED_OPN2_LLE_EMULATOR"
-      "10|YM2608-LLE OPNA|USE_NUKED_OPNA_LLE_EMULATOR"
-      "11|YM3438-LLE OPN2|USE_NUKED_OPN2_LLE_EMULATOR"
-      "12|YMF276-LLE OPN2|USE_NUKED_OPN2_LLE_EMULATOR")
-  endif()
-  foreach(core IN LISTS cores)
-    string(REPLACE "|" ";" core_fields "${core}")
-    list(GET core_fields 0 core_index)
-    list(GET core_fields 1 core_name)
-    list(GET core_fields 2 core_option)
-    if(${core_option})
+# The emulator cores. Each entry is the emulator number, its name, the build
+# option that includes it, and the number of the core that plays in its place
+# when a build leaves it out: an OPL2 core plays as DOSBox in OPL2 mode, an OPNA
+# core as MAME YM2608, any other as the default core
+# (sources/*/adl/chip_settings.cc, plan D36).
+if(ADLplug_CHIP STREQUAL "OPL3")
+  set(default_core 2)
+  set(cores
+    "0|Nuked OPL3 (v 1.8)|USE_NUKED_EMULATOR|2"
+    "1|Nuked OPL3 Fast (by tgies)|USE_NUKED_EMULATOR|2"
+    "2|DOSBox 0.74-r4111 OPL3|USE_DOSBOX_EMULATOR|2"
+    "3|Opal OPL3|USE_OPAL_EMULATOR|2"
+    "4|Java 1.0.6 OPL3|USE_JAVA_EMULATOR|2"
+    "5|ESFMu|USE_ESFMU_EMULATOR|2"
+    "6|MAME OPL2|USE_MAME_EMULATOR|13"
+    "7|YMFM OPL2|USE_YMFM_EMULATOR|13"
+    "8|YMFM OPL3|USE_YMFM_EMULATOR|2"
+    "9|YM3812-LLE OPL2|USE_NUKED_OPL2_LLE_EMULATOR|13"
+    "10|YMF262-LLE OPL3|USE_NUKED_OPL3_LLE_EMULATOR|2"
+    "11|Nuked OPL2 Lite|USE_NUKED_EMULATOR|13"
+    "12|Nuked CQM|USE_NUKED_EMULATOR|2"
+    "13|DOSBox 0.74-r4111 OPL2|USE_DOSBOX_EMULATOR|13")
+else()
+  set(default_core 0)
+  set(cores
+    "0|MAME YM2612|USE_MAME_EMULATOR|0"
+    "1|Nuked OPN2 (3438)|USE_NUKED_EMULATOR|0"
+    "2|GENS/GS II OPN2|USE_GENS_EMULATOR|0"
+    "3|YMFM OPN2|USE_YMFM_EMULATOR|0"
+    "4|Neko Project II Kai OPNA|USE_NP2_EMULATOR|5"
+    "5|MAME YM2608|USE_MAME_2608_EMULATOR|0"
+    "6|YMFM OPNA|USE_YMFM_EMULATOR|5"
+    "8|Nuked OPN2 (2612)|USE_NUKED_EMULATOR|0"
+    "9|YM2612-LLE OPN2|USE_NUKED_OPN2_LLE_EMULATOR|0"
+    "10|YM2608-LLE OPNA|USE_NUKED_OPNA_LLE_EMULATOR|5"
+    "11|YM3438-LLE OPN2|USE_NUKED_OPN2_LLE_EMULATOR|0"
+    "12|YMF276-LLE OPN2|USE_NUKED_OPN2_LLE_EMULATOR|0")
+endif()
+
+set(fallback_cores "")
+foreach(core IN LISTS cores)
+  string(REPLACE "|" ";" core_fields "${core}")
+  list(GET core_fields 0 core_index)
+  list(GET core_fields 1 core_name)
+  list(GET core_fields 2 core_option)
+  list(GET core_fields 3 core_substitute)
+
+  if(${core_option})
+    # Every core of the build plays, and the plugin names the one asked for.
+    # Release only: the low-level cores are too slow in Debug builds.
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
       add_test(NAME render.core.${core_index}
         COMMAND ADLplug_render "${plugin}" "${render_out}/core${core_index}.f32" 2 1000
           --emulator ${core_index} --require-emulator "${core_name}" --require-sound)
       set_tests_properties(render.core.${core_index} PROPERTIES TIMEOUT 600 LABELS core)
     endif()
+    continue()
+  endif()
+
+  # A core that the build leaves out plays as the one in its place, or as the
+  # default core when the build leaves that one out too: asking for it gives
+  # the output of that core. The parameters keep the number asked for (plan
+  # D54), so the outputs are compared rather than the names. Only builds that
+  # leave cores out have these tests, such as those of the Nightly workflow.
+  foreach(other IN LISTS cores)
+    string(REPLACE "|" ";" other_fields "${other}")
+    list(GET other_fields 0 other_index)
+    list(GET other_fields 2 other_option)
+    if(other_index EQUAL core_substitute AND NOT ${other_option})
+      set(core_substitute ${default_core})
+    endif()
   endforeach()
-endif()
+  if(NOT core_substitute IN_LIST fallback_cores)
+    list(APPEND fallback_cores ${core_substitute})
+    add_test(NAME render.fallback.to.${core_substitute}
+      COMMAND ADLplug_render "${plugin}" "${render_out}/fallback-to-${core_substitute}.f32" 2 1000
+        --emulator ${core_substitute} --require-sound
+        --save-hashes "${render_out}/fallback-to-${core_substitute}.hashes")
+    set_tests_properties(render.fallback.to.${core_substitute} PROPERTIES
+      FIXTURES_SETUP fallback-to-${core_substitute} TIMEOUT 600 LABELS fallback)
+  endif()
+  add_test(NAME render.fallback.${core_index}
+    COMMAND ADLplug_render "${plugin}" "${render_out}/fallback${core_index}.f32" 2 1000
+      --emulator ${core_index} --expect-output-of "${render_out}/fallback-to-${core_substitute}.hashes")
+  set_tests_properties(render.fallback.${core_index} PROPERTIES
+    FIXTURES_REQUIRED fallback-to-${core_substitute} TIMEOUT 600 LABELS fallback)
+endforeach()

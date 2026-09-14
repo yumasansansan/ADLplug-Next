@@ -7,23 +7,33 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-#   ci/test.sh <preset>
+#   ci/test.sh <preset> [--no-gui]
 #
 # Runs the tests of a preset that ci/build.sh built. On Linux the editor opens
 # on Xwayland under a headless Weston, with a window manager, as it would in a
-# Wayland session. On macOS the Audio Unit also goes through auval. The render
-# hashes are printed at the end, with a warning when
-# tests/render/references.txt has none for this system.
+# Wayland session; --no-gui leaves out the tests that open windows instead, for
+# systems that have none of those, as the AlmaLinux container of the Nightly
+# workflow. On macOS the Audio Unit also goes through auval. The render hashes
+# are printed at the end, with a warning when tests/render/references.txt has
+# none for this system.
 set -euo pipefail
 
 preset=$1
+gui=true
+if [ "${2:-}" = --no-gui ]; then
+  gui=false
+fi
 build=build/$preset
 status=0
 
-case "$(uname -s)" in
-  Linux) xwfb-run -- bash ci/with-window-manager.sh ctest --preset "$preset" || status=$? ;;
-  *) ctest --preset "$preset" || status=$? ;;
-esac
+if [ "$gui" = false ]; then
+  ctest --preset "$preset" --label-exclude gui || status=$?
+else
+  case "$(uname -s)" in
+    Linux) xwfb-run -- bash ci/with-window-manager.sh ctest --preset "$preset" || status=$? ;;
+    *) ctest --preset "$preset" || status=$? ;;
+  esac
+fi
 
 if [ "$(uname -s)" = Darwin ]; then
   case $preset in

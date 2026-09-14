@@ -25,6 +25,9 @@ project(ADLplug VERSION "${ADLplug_VERSION}" LANGUAGES C CXX)
 set(PROJECT_VENDOR "DyTect")
 set(PROJECT_CONTACT "Yuma Kakei <yumasansansan@gmail.com>")
 set(PROJECT_HOMEPAGE "https://github.com/yumasansansan/ADLplug-Next")
+# The version and the version to show, for the scripts that pack the builds
+# (ci/package.sh).
+file(CONFIGURE OUTPUT "version.txt" CONTENT "${ADLplug_VERSION}\n${ADLplug_VERSION_DISPLAY}\n")
 
 # The warning policy, the language standards and LTO below are written for
 # Clang; GCC and MSVC are not supported compilers.
@@ -584,15 +587,25 @@ endif()
 
 # --------------------------------------------------------------------------
 # Installation (Linux/BSD; the other platforms install through their bundles)
+#
+# The plugins go where hosts look for them. VST3 hosts look in lib/vst3 under
+# /usr and /usr/local, whatever the library directory of the system. LV2 hosts
+# mostly look where lilv does, in the library directory of the system that
+# built lilv: lib/lv2, or lib64/lv2 on systems whose libraries are in lib64
+# (ci/package-rpm.sh sets that). JUCE's bundles are copied whole.
+set(ADLplug_INSTALL_VST3DIR "lib/vst3" CACHE STRING
+  "Installation directory of the VST3 plugin, relative to the prefix")
+set(ADLplug_INSTALL_LV2DIR "lib/lv2" CACHE STRING
+  "Installation directory of the LV2 plugin, relative to the prefix")
 
 if(NOT (CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
   if(ADLplug_VST3)
-    install(DIRECTORY "$<TARGET_FILE_DIR:ADLplug_VST3>/../../../${ADLplug_NAME}.vst3"
-      DESTINATION "${CMAKE_INSTALL_LIBDIR}/vst3")
+    install(DIRECTORY "$<GENEX_EVAL:$<TARGET_PROPERTY:ADLplug_VST3,JUCE_PLUGIN_ARTEFACT_FILE>>"
+      DESTINATION "${ADLplug_INSTALL_VST3DIR}" USE_SOURCE_PERMISSIONS)
   endif()
   if(ADLplug_LV2)
-    install(DIRECTORY "$<TARGET_FILE_DIR:ADLplug_LV2>/../../../${ADLplug_NAME}.lv2"
-      DESTINATION "${CMAKE_INSTALL_LIBDIR}/lv2")
+    install(DIRECTORY "$<GENEX_EVAL:$<TARGET_PROPERTY:ADLplug_LV2,JUCE_PLUGIN_ARTEFACT_FILE>>"
+      DESTINATION "${ADLplug_INSTALL_LV2DIR}" USE_SOURCE_PERMISSIONS)
   endif()
   if(ADLplug_Standalone)
     install(PROGRAMS "$<TARGET_FILE:ADLplug_Standalone>"
@@ -612,5 +625,3 @@ if(NOT (CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "Darw
   install(FILES "${ADLplug_BANKS_NOTICES}"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/${ADLplug_NAME}")
 endif()
-
-include("CPackLists.txt")
