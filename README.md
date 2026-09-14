@@ -145,22 +145,22 @@ This package is able to build several plugins from a single source:
 - to build the OPL3 variant, define the option `ADLplug_CHIP` to `OPL3`;
 - to build the OPN2 variant, define the option `ADLplug_CHIP` to `OPN2`.
 
-| Build option                                  | Description                                                     |
-| --------------------------------------------- | --------------------------------------------------------------- |
-| -DADLplug_VST3=ON/OFF                         | Build a VST3 plugin                                             |
-| -DADLplug_LV2=ON/OFF                          | Build a LV2 plugin                                              |
-| -DADLplug_AU=ON/OFF                           | Build an Audio Unit (macOS only)                                |
-| -DADLplug_AAX=ON/OFF                          | Build an AAX plugin (needs PACE signing to load in Pro Tools)   |
-| -DADLplug_Standalone=ON/OFF                   | Build a standalone program                                      |
-| -DADLplug_ASIO=ON/OFF                         | Enable ASIO in the standalone (Windows; uses JUCE's bundled SDK)|
-| -DADLplug_CHIP=OPL3/OPN2                      | Build a variant for the given chip type (default: OPL3)         |
-| -DADLplug_GREYZONE_BANKS=ON/OFF               | Include the banks of the grey zone (default OFF; see below)     |
-| -DADLplug_ARCH=baseline/avx2                  | x86-64 instruction set: baseline or AVX2 (x86-64-v3)            |
-| -DADLplug_LTO=ON/OFF                          | Link-time optimisation (ThinLTO) in Release builds (default ON) |
-| -DADLplug_ASSERTIONS=ON/OFF                   | Force building with assertions regardless of build type         |
-| -DADLplug_WERROR=ON/OFF                       | Treat warnings in ADLplug's own code as errors (presets: ON)    |
-| -DADLplug_BUILD_TOOLS=ON/OFF                  | Build developer tools (offline VST3 renderer)                   |
-| -DADLplug_BUILD_TESTS=ON/OFF                  | Build the tests and register them with CTest                    |
+| Build option                    | Default                                | Description                                                      |
+| ------------------------------- | -------------------------------------- | ---------------------------------------------------------------- |
+| -DADLplug_VST3=ON/OFF           | ON                                     | Build a VST3 plugin                                              |
+| -DADLplug_LV2=ON/OFF            | ON                                     | Build a LV2 plugin                                               |
+| -DADLplug_AU=ON/OFF             | ON on macOS, OFF elsewhere             | Build an Audio Unit (macOS only)                                 |
+| -DADLplug_AAX=ON/OFF            | ON on Windows and macOS, OFF elsewhere | Build an AAX plugin (needs PACE signing to load in Pro Tools)    |
+| -DADLplug_Standalone=ON/OFF     | ON                                     | Build a standalone program                                       |
+| -DADLplug_ASIO=ON/OFF           | ON on Windows, OFF elsewhere           | Enable ASIO in the standalone (Windows; uses JUCE's bundled SDK) |
+| -DADLplug_CHIP=OPL3/OPN2        | OPL3 (the opn-* presets set OPN2)      | Build a variant for the given chip type                          |
+| -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | Include the banks of the grey zone (see below)                   |
+| -DADLplug_ARCH=baseline/avx2    | baseline                               | x86-64 instruction set: baseline or AVX2 (x86-64-v3)             |
+| -DADLplug_LTO=ON/OFF            | ON                                     | Link-time optimisation (ThinLTO) in Release builds               |
+| -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | Force building with assertions regardless of build type          |
+| -DADLplug_WERROR=ON/OFF         | OFF (the presets set ON)               | Treat warnings in ADLplug's own code as errors                   |
+| -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | Build developer tools (offline VST3 renderer)                    |
+| -DADLplug_BUILD_TESTS=ON/OFF    | OFF                                    | Build the tests and register them with CTest                     |
 
 Every emulator core is built by default. Each has an option of the library it
 comes from, `-DUSE_<core>_EMULATOR=ON/OFF`, named in the tables under
