@@ -16,17 +16,12 @@
 // version (LICENSES/GPL-3.0-or-later.txt).
 
 #pragma once
-// JucePlugin_VersionString arrives as a compile definition from
-// juce_add_plugin(); the Projucer AppConfig.h it used to come from is gone.
+// The version of ADLplug-Next, which cmake/Version.cmake finds in the git
+// history (plan D43). JucePlugin_VersionString, from juce_add_plugin(), has the
+// numbers, and ADLPLUG_VERSION_DISPLAY adds the time and the hash of the commit.
 #include <JuceHeader.h>
 
 #define ADLplug_Version JucePlugin_VersionString
-#define ADLplug_VersionFinal 1
-
-#if !ADLplug_VersionFinal
-#   define ADLplug_VersionExtra "Beta 5"
-#   define ADLplug_SemVer JucePlugin_VersionString "-beta.5"
-#else
-#   define ADLplug_VersionExtra ""
-#   define ADLplug_SemVer JucePlugin_VersionString
-#endif
+#define ADLplug_VersionDisplay ADLPLUG_VERSION_DISPLAY
+// An odd minor number marks a development version. For #if.
+#define ADLplug_VersionDevelopment ((JucePlugin_VersionCode >> 8) & 1)

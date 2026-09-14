@@ -9,8 +9,8 @@
 # The tests, registered with CTest when ADLplug_BUILD_TESTS is on:
 #  - unit.<name>: each ADLPLUG_TEST in unit/, run by ADLplug_unit_tests;
 #  - bankgen.greyzone: tools/bankgen with the banks of the grey zone;
-#  - format.*: pluginval and lv2lint validating the plugins, when they are
-#    installed;
+#  - format.*: the compatibility that the VST3 plugin declares, and pluginval
+#    and lv2lint validating the plugins, when they are installed;
 #  - render.*: tools/render loading this build's VST3 plugin, playing the fixed
 #    sequence and checking what comes out (these need ADLplug_BUILD_TOOLS).
 
@@ -118,6 +118,18 @@ if(ADLplug_LV2LINT AND TARGET ADLplug_LV2)
   set_tests_properties(format.lv2.lv2lint PROPERTIES TIMEOUT 600 LABELS format)
 endif()
 
+# The moduleinfo.json of the VST3 plugin lists the classes of upstream ADLplug
+# among those that the plugin replaces, by their IDs as hosts read them (see
+# JUCE_VST3_COMPATIBLE_CLASSES in CMakeLists.txt). JUCE writes the file when it
+# builds the plugin, except on BSD systems.
+if(NOT CMAKE_SYSTEM_NAME MATCHES "BSD$")
+  add_test(NAME format.vst3.compatibility
+    COMMAND "${CMAKE_COMMAND}" "-Dmoduleinfo=${plugin}/Contents/Resources/moduleinfo.json"
+      "-Dnew=${ADLplug_VST3_CLASS}" "-Dold=${ADLplug_UPSTREAM_VST2_CLASS},${ADLplug_UPSTREAM_VST3_CLASS}"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/format/vst3_compatibility.cmake")
+  set_tests_properties(format.vst3.compatibility PROPERTIES TIMEOUT 60 LABELS format)
+endif()
+
 # --------------------------------------------------------------------------
 # Render tests
 
@@ -200,6 +212,14 @@ set_tests_properties(render.editor PROPERTIES LABELS gui)
 add_test(NAME render.prepare_again
   COMMAND ADLplug_render "${plugin}" "${render_out}/prepare_again.f32" 2 1000 --prepare-again)
 set_tests_properties(render.prepare_again PROPERTIES TIMEOUT 300)
+
+# The parameters of upstream ADLplug 1 come first, in their order and with their
+# IDs: projects saved with the plugins of upstream refer to them, and the VST3
+# plugin maps them for hosts that replace those plugins with it (plan D02).
+add_test(NAME render.upstream_parameters
+  COMMAND ADLplug_render "${plugin}" "${render_out}/upstream_parameters.f32" 1 0
+    --upstream-parameters "${ADLplug_CHIP}")
+set_tests_properties(render.upstream_parameters PROPERTIES TIMEOUT 300)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   # Only Windows can capture the hosted editor so far (tools/render).

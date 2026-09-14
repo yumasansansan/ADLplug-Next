@@ -68,6 +68,36 @@ AdlplugAudioProcessor::~AdlplugAudioProcessor()
         worker_->stop_worker();
 }
 
+VST3ClientExtensions *AdlplugAudioProcessor::getVST3ClientExtensions()
+{
+    return &vst3_extensions_;
+}
+
+// The plugins of upstream had the parameters of ADLplug 1, in the same order
+// and with the same IDs. Its VST2 plugin numbered them by their index, and its
+// VST3 plugin by a hash of the ID, as JUCE's wrapper still does. The parameters
+// added since then have higher version hints, and come after those. On Windows
+// each class of upstream comes twice, by its ID in memory and by its notation
+// (CMakeLists.txt).
+std::map<std::uint32_t, String> AdlplugAudioProcessor::Vst3_Extensions::getCompatibleParameterIds(
+    const VST3Interface::Id &compatible_class) const
+{
+    const bool vst2 = compatible_class == VST3Interface::vst2PluginId(JucePlugin_PluginCode, ADLPLUG_UPSTREAM_NAME) ||
+                      compatible_class == VST3Interface::hexStringToId(ADLPLUG_UPSTREAM_VST2_CLASS);
+    std::map<std::uint32_t, String> ids;
+    std::uint32_t index = 0;
+    for (const AudioProcessorParameter *parameter : processor_.getParameters()) {
+        const auto *with_id = dynamic_cast<const AudioProcessorParameterWithID *>(parameter);
+        if (with_id == nullptr)
+            continue;
+        if (!vst2)
+            ids[VST3ClientExtensions::convertJuceParameterId(with_id->paramID)] = with_id->paramID;
+        else if (with_id->getVersionHint() == parameter_version_hint)
+            ids[index++] = with_id->paramID;
+    }
+    return ids;
+}
+
 //==============================================================================
 const String AdlplugAudioProcessor::getName() const
 {

@@ -40,7 +40,7 @@ if [ "$(uname -s)" = Darwin ]; then
   # look again.
   killall -9 AudioComponentRegistrar 2> /dev/null || true
   echo "== auval"
-  auval -v aumu "$subtype" JPCm || status=1
+  auval -v aumu "$subtype" DyTc || status=1
   if command -v pluginval > /dev/null; then
     echo "== pluginval, Audio Unit"
     pluginval --strictness-level 5 --timeout-ms 300000 \

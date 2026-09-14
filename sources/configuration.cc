@@ -42,6 +42,7 @@ constexpr long config_version = 1;
 // characters could not be opened.
 bool load_ini(CSimpleIniA &ini, const File &file)
 {
+    ini.Reset();
     MemoryBlock data;
     return file.existsAsFile() && file.loadFileAsData(data) &&
         ini.LoadData(static_cast<const char *>(data.getData()), data.getSize()) == SI_OK;
@@ -75,6 +76,23 @@ void create_default_configuration(CSimpleIniA &ini)
     }
 }
 
+// Where upstream ADLplug, or OPNplug, keeps its configuration. ADLplug-Next
+// starts from it when it has none of its own (plan D02), and saves to its own.
+File upstream_system_file_path()
+{
+#if defined(JUCE_LINUX)
+    return File("/etc/" ADLPLUG_UPSTREAM_NAME "/" ADLPLUG_UPSTREAM_NAME ".ini");
+#else
+    return {};
+#endif
+}
+
+File upstream_user_file_path()
+{
+    const File data_dir = File::getSpecialLocation(File::userApplicationDataDirectory);
+    return data_dir.getChildFile(ADLPLUG_UPSTREAM_MANUFACTURER "/" ADLPLUG_UPSTREAM_NAME ".ini");
+}
+
 }  // namespace
 
 Configuration::Configuration()
@@ -104,7 +122,8 @@ void Configuration::load_default()
 {
     auto ini_default = std::make_unique<Opaque_Ini>();
 
-    if (!load_ini(ini_default->instance, system_file_path()))
+    if (!load_ini(ini_default->instance, system_file_path()) &&
+        !load_ini(ini_default->instance, upstream_system_file_path()))
         create_default_configuration(ini_default->instance);
     else {
         const long version = ini_default->instance.GetLongValue("", "configuration-version");
@@ -117,15 +136,19 @@ void Configuration::load_default()
 
     const File user = user_file_path();
     auto ini_user = std::make_unique<Opaque_Ini>();
-    if (!load_ini(ini_user->instance, user))
+    const bool own = load_ini(ini_user->instance, user);
+    if (!own && !load_ini(ini_user->instance, upstream_user_file_path()))
         ini_ = std::move(ini_default);
     else {
         const long version = ini_user->instance.GetLongValue("", "configuration-version");
         if (version < config_version) {
-            // use the latest configuration, keep a backup of the previous one
+            // use the latest configuration, keep a backup of the previous one;
+            // the file of upstream stays as it is
             ini_ = std::move(ini_default);
-            user.moveFileTo(user.withFileExtension("ini.bak" + String(version)));
-            save_default();
+            if (own) {
+                user.moveFileTo(user.withFileExtension("ini.bak" + String(version)));
+                save_default();
+            }
         }
         else
             ini_ = std::move(ini_user);

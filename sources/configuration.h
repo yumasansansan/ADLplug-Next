@@ -26,8 +26,8 @@ public:
 
     Configuration();
     ~Configuration();
-    // Takes the user's configuration, or the default one if the user has none
-    // or has one of an older version.
+    // Takes the user's configuration, or else the one of upstream ADLplug, or the
+    // default one if there is none or it is of an older version.
     void load_default();
     bool save_default();
     bool load_file(const File &file);

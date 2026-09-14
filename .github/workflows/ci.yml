@@ -6,11 +6,12 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-# Builds and tests ADLplug and OPNplug with Clang and LLD on Windows, Linux and
-# macOS, in Debug and Release; x86-64 builds are made both for the baseline
-# instruction set and for AVX2. The checkout is plain git, and ci/setup.sh
-# installs a pinned toolchain. The one action, actions/upload-artifact, keeps
-# the pictures of the editor; it is pinned to the commit of its release.
+# Builds and tests ADLplug-Next and OPNplug-Next with Clang and LLD on Windows,
+# Linux and macOS, in Debug and Release; x86-64 builds are made both for the
+# baseline instruction set and for AVX2. The checkout is plain git, and
+# ci/setup.sh installs a pinned toolchain. The one action,
+# actions/upload-artifact, keeps the pictures of the editor; it is pinned to
+# the commit of its release.
 #
 # The reuse job checks with reuse lint, from Ubuntu's reuse package, that every
 # file names its copyright holders and license (see REUSE.toml and LICENSES/).

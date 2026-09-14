@@ -7,7 +7,7 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-# Sets up a GitHub Actions runner to build and test ADLplug: Clang, LLD and the
+# Sets up a GitHub Actions runner to build and test ADLplug-Next: Clang, LLD and the
 # LLVM tools of one pinned version, pluginval, and on Linux the development
 # packages that JUCE needs, the tools for the tests and lv2lint. The tools go
 # first on PATH for the later steps. Every download is checked: the

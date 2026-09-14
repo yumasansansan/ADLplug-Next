@@ -69,8 +69,11 @@
 // samples. --prepare-again then releases the plug-in, gives each parameter a
 // pseudo-random value and prepares the plug-in again, as auval does with an
 // Audio Unit: every parameter has to keep the value it was given, and the
-// state has to stay the same. A failed check is printed and makes the exit
-// status 1, after the teardown has run as usual. --compare checks a file from
+// state has to stay the same. --upstream-parameters <OPL3|OPN2> requires the
+// parameters of upstream ADLplug 1 to come first, in their order and with
+// their VST3 IDs, which projects saved with upstream refer to. A failed check
+// is printed and makes the exit status 1, after the teardown has run as usual.
+// --compare checks a file from
 // --save-hashes against given hashes without loading any plug-in; "-" skips a
 // hash.
 
@@ -115,6 +118,26 @@ void milestone(const std::string &what)
     std::fprintf(stderr, "[%8.3f s] %s", t, what.c_str());
     std::fputc(10, stderr);
     std::fflush(stderr);
+}
+
+// The IDs of the parameters that upstream ADLplug 1 gave its hosts, in their
+// order: sources/opl3/parameter_block.cc and sources/opn2/parameter_block.cc of
+// its last commit, a488abe.
+std::vector<juce::String> upstream_parameter_ids(const std::string &chip)
+{
+    const bool opl3 = chip == "OPL3";
+    std::vector<juce::String> ids {"mastervol", "emulator", "nchip", opl3 ? "n4op" : "chiptype"};
+    static constexpr const char *opl3_operators[4] {"c1", "m1", "c2", "m2"};
+    static constexpr const char *opn2_operators[4] {"op1", "op3", "op2", "op4"};
+    for (int part = 1; part <= 16; ++part) {
+        for (std::size_t op = 0; op < 4; ++op)
+            ids.push_back("P" + juce::String(part) + (opl3 ? opl3_operators[op] : opn2_operators[op]) + "level");
+    }
+    if (opl3)
+        ids.insert(ids.end(), {"volmodel", "deeptrem", "deepvib"});
+    else
+        ids.insert(ids.end(), {"volmodel", "lfoenable", "lfofreq"});
+    return ids;
 }
 
 void pump_messages(int milliseconds)
@@ -394,6 +417,7 @@ int main(int argc, char *argv[])
     std::string required_emulator;
     bool require_sound = false;
     bool prepare_again = false;
+    std::string upstream_chip;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--editor")
@@ -428,6 +452,13 @@ int main(int argc, char *argv[])
             require_sound = true;
         else if (arg == "--prepare-again")
             prepare_again = true;
+        else if (arg == "--upstream-parameters" && i + 1 < argc) {
+            upstream_chip = argv[++i];
+            if (upstream_chip != "OPL3" && upstream_chip != "OPN2") {
+                print_line("error: --upstream-parameters needs OPL3 or OPN2");
+                return 2;
+            }
+        }
         else
             args.push_back(arg);
     }
@@ -435,7 +466,8 @@ int main(int argc, char *argv[])
         print_line("usage: ADLplug_render <plugin.vst3> <output.f32> [seconds] [warm-up ms] [--editor] "
                    "[--snapshot <file.png>] [--no-teardown] [--state <file>] [--restore <file>] [--emulator <number>] "
                    "[--save-hashes <file>] [--expect-output <hash>] [--expect-state <hash>] [--expect-output-of <file>] "
-                   "[--expect-state-of <file>] [--require-emulator <name>] [--require-sound] [--prepare-again]\n"
+                   "[--expect-state-of <file>] [--require-emulator <name>] [--require-sound] [--prepare-again] "
+                   "[--upstream-parameters <OPL3|OPN2>]\n"
                    "       ADLplug_render --compare <hashes file> <output hash|-> <state hash|->");
         return 2;
     }
@@ -490,6 +522,29 @@ int main(int argc, char *argv[])
             return 1;
         }
         milestone("plug-in instantiated");
+
+        // Hosted, the parameters of a VST3 plug-in have its ParamIDs for IDs.
+        std::vector<std::string> upstream_failures;
+        if (!upstream_chip.empty()) {
+            const std::vector<juce::String> ids = upstream_parameter_ids(upstream_chip);
+            const juce::Array<juce::AudioProcessorParameter *> &parameters = plugin->getParameters();
+            constexpr std::size_t listed = 8;
+            std::size_t wrong = 0;
+            for (std::size_t i = 0; i < ids.size(); ++i) {
+                const juce::String expected(juce::VST3ClientExtensions::convertJuceParameterId(ids[i]));
+                const int index = static_cast<int>(i);
+                const auto *hosted = (index < parameters.size())
+                    ? dynamic_cast<juce::HostedAudioProcessorParameter *>(parameters[index]) : nullptr;
+                const juce::String actual = (hosted != nullptr) ? hosted->getParameterID() : juce::String("none");
+                if (actual != expected && ++wrong <= listed)
+                    upstream_failures.push_back("parameter " + std::to_string(i) + " has the ID " + actual.toStdString() +
+                                                ", where " + ids[i].toStdString() + " of upstream has " +
+                                                expected.toStdString());
+            }
+            if (wrong > listed)
+                upstream_failures.push_back(std::to_string(wrong - listed) + " more parameters differ from upstream");
+            milestone("compared " + std::to_string(ids.size()) + " parameters with those of upstream");
+        }
 
         plugin->enableAllBuses();
         plugin->prepareToPlay(sample_rate, block_size);
@@ -638,7 +693,7 @@ int main(int argc, char *argv[])
             }
         }
 
-        std::vector<std::string> failures;
+        std::vector<std::string> failures = upstream_failures;
         if (expected_output && *expected_output != hash)
             failures.push_back("output " + hash_text(hash) + ", expected " + hash_text(*expected_output));
         if (expected_state && *expected_state != state)

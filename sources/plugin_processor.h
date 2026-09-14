@@ -28,6 +28,7 @@
 #include <atomic>
 #include <bitset>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
 class Player;
@@ -148,6 +149,10 @@ public:
     void getStateInformation(MemoryBlock &data) override;
     void setStateInformation(const void *data, int size) override;
 
+    // Maps the parameters of the VST2 and VST3 plugins of upstream ADLplug, which
+    // hosts may replace with this one (JUCE_VST3_COMPATIBLE_CLASSES).
+    VST3ClientExtensions *getVST3ClientExtensions() override;
+
 private:
     void create_player(unsigned sample_rate);
     void create_first_player(unsigned sample_rate);
@@ -211,6 +216,17 @@ private:
     std::mutex player_lock_;
 
     std::unique_ptr<Worker> worker_;
+
+    class Vst3_Extensions final : public VST3ClientExtensions {
+    public:
+        explicit Vst3_Extensions(const AudioProcessor &processor) noexcept
+            : processor_(processor) {}
+        std::map<std::uint32_t, String> getCompatibleParameterIds(const VST3Interface::Id &compatible_class) const override;
+
+    private:
+        const AudioProcessor &processor_;
+    };
+    Vst3_Extensions vst3_extensions_ {*this};
 
     //==========================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AdlplugAudioProcessor)

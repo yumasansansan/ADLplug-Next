@@ -12,14 +12,14 @@ changes are under the GNU General Public License, version 3 or any later
 version (LICENSES/GPL-3.0-or-later.txt).
 -->
 
-# ADLplug
-Synthesizer plugin for ADLMIDI and OPNMIDI (VST/LV2)
+# ADLplug-Next
+Synthesizer plugins for ADLMIDI and OPNMIDI (VST3, LV2, AU, AAX and standalone)
 
 ![screenshot](docs/screen.png)
 
 ## Introduction
 
-This software package provides FM synthesizer plugins, based on [OPL3](https://en.wikipedia.org/wiki/Yamaha_YMF262) and [OPN2](https://en.wikipedia.org/wiki/Yamaha_YM2612) sound chip emulations.  
+This software package provides FM synthesizer plugins, ADLplug-Next and OPNplug-Next, based on [OPL3](https://en.wikipedia.org/wiki/Yamaha_YMF262) and [OPN2](https://en.wikipedia.org/wiki/Yamaha_YM2612) sound chip emulations. It continues [ADLplug](https://github.com/jpcima/ADLplug) by Jean Pierre Cimalando.  
 The emulations and the drivers are provided by [libADLMIDI](https://github.com/Wohlstand/libADLMIDI) and [libOPNMIDI](https://github.com/Wohlstand/libOPNMIDI).
 
 - [x] control of multiple YMF262/YM2612 emulated chips
@@ -32,8 +32,12 @@ The emulations and the drivers are provided by [libADLMIDI](https://github.com/W
 - [x] multi-channel operation with General MIDI compatibility
 - [x] ability to synthesize entire MIDI files out of the box
 
-Author: [Jean Pierre Cimalando](https://github.com/jpcima)  
-Contributors: [Olivier Humbert](https://github.com/trebmuh), [Christopher Arndt](https://github.com/SpotlightKid), [Bruce Sutherland](https://github.com/bsutherland), [David Runge](https://github.com/dvzrv), [Jérémy Frey](https://github.com/jfrey-xx)
+ADLplug-Next: DyTect ([yumasansansan](https://github.com/yumasansansan) on GitHub)  
+Upstream ADLplug: [Jean Pierre Cimalando](https://github.com/jpcima), author; contributors [Olivier Humbert](https://github.com/trebmuh), [Christopher Arndt](https://github.com/SpotlightKid), [Bruce Sutherland](https://github.com/bsutherland), [David Runge](https://github.com/dvzrv), [Jérémy Frey](https://github.com/jfrey-xx)
+
+DyTect is the artist and engineer name of Yuma Kakei, who is yumasansansan on
+GitHub. Yuma Kakei is the real name, which the KDE project knows too, and
+which the copyright lines of ADLplug-Next's code carry.
 
 ## Development builds
 
@@ -43,17 +47,37 @@ Every push and pull request is built by GitHub Actions on Windows, Linux and
 macOS, in Debug and Release; x86-64 builds are made both for the baseline
 instruction set and for AVX2.
 
+Until the first release, the versions are 1.99.N, where N counts the commits
+of `main` since the last commit of upstream ADLplug. The plugins show the time
+of the commit, in UTC, and its hash as well: `1.99.N+YYYYMMDD.HHMM.git<hash>`.
+An odd minor number marks a development version.
+
+## Coming from ADLplug
+
+ADLplug-Next and OPNplug-Next are plugins separate from ADLplug and OPNplug,
+with names, a maker and identifiers of their own, so that both can be
+installed.
+- Their VST3 plugins declare themselves compatible with the VST2 and VST3
+  plugins of ADLplug and OPNplug, and map their parameters: a host that
+  supports this opens a project that used those with ADLplug-Next or
+  OPNplug-Next.
+- Audio Unit and LV2 hosts see different plugins.
+- Without a configuration of their own, the plugins start from the one of
+  ADLplug or OPNplug (the keyboard layout and the last directory of
+  instruments), and save to their own.
+
 ## Useful links
 
-- User Manual : [English :us:](http://jpcima.sdf1.org/software/documentation/ADLplug/manual/en/manual.html) [French :fr:](http://jpcima.sdf1.org/software/documentation/ADLplug/manual/fr/manual.html)
-- LibraZiK-2 : [ADLplug :fr:](https://librazik.tuxfamily.org/doc2/logiciels/adlplug) [OPNplug :fr:](https://librazik.tuxfamily.org/doc2/logiciels/opnplug)
-- Fedora Copr : [ycollet/linuxmao](https://copr.fedorainfracloud.org/coprs/ycollet/linuxmao/)
-- Arch Linux AUR : [adlplug-git](https://aur.archlinux.org/packages/adlplug-git/) and [opnplug-git](https://aur.archlinux.org/packages/opnplug-git/)
+- User Manual of ADLplug : [English :us:](http://jpcima.sdf1.org/software/documentation/ADLplug/manual/en/manual.html) [French :fr:](http://jpcima.sdf1.org/software/documentation/ADLplug/manual/fr/manual.html)
+- Packages of upstream ADLplug:
+  - LibraZiK-2 : [ADLplug :fr:](https://librazik.tuxfamily.org/doc2/logiciels/adlplug) [OPNplug :fr:](https://librazik.tuxfamily.org/doc2/logiciels/opnplug)
+  - Fedora Copr : [ycollet/linuxmao](https://copr.fedorainfracloud.org/coprs/ycollet/linuxmao/)
+  - Arch Linux AUR : [adlplug-git](https://aur.archlinux.org/packages/adlplug-git/) and [opnplug-git](https://aur.archlinux.org/packages/opnplug-git/)
 - Bank editor software : [OPL3](https://github.com/Wohlstand/OPL3BankEditor) and [OPN2](https://github.com/Wohlstand/OPN2BankEditor)
 
 ## FM core characteristics
 
-ADLplug builds every emulator core that libADLMIDI and libOPNMIDI provide, and
+ADLplug-Next builds every emulator core that libADLMIDI and libOPNMIDI provide, and
 each one can be left out with a build option (see
 [Build instructions](#build-instructions)). The names are those of the
 plugins' emulator menu, and the notes summarise what the libraries and the
@@ -69,7 +93,7 @@ The low-level (LLE) cores reproduce a chip's circuits as read from its die
 shots. They are the most faithful, and too slow to play in real time on most
 computers: use them to render.
 
-**ADLplug**
+**ADLplug-Next**
 
 | Core                             | Chip           | Notes                                                                                                  | Speed | Full panning | Build option                  |
 |----------------------------------|----------------|--------------------------------------------------------------------------------------------------------|------:|--------------|-------------------------------|
@@ -88,7 +112,7 @@ computers: use them to render.
 | ESFMu                            | ESFM (ESS)     | ESS's extended OPL3 clone, emulated on the basis of Nuked OPL3; libADLMIDI plays it as an OPL3         |  9.7× | yes          | `USE_ESFMU_EMULATOR`          |
 | Nuked CQM                        | CQM (Creative) | Creative's OPL3 clone chip, by Nuke.YKT, version 0.9 beta                                              |   22× | no           | `USE_NUKED_EMULATOR`          |
 
-**OPNplug**
+**OPNplug-Next**
 
 | Core                     | Chip           | Notes                                                                                                   | Speed | Full panning | Build option                  |
 |--------------------------|----------------|---------------------------------------------------------------------------------------------------------|------:|--------------|-------------------------------|
@@ -138,7 +162,7 @@ cmake --build --preset adl-release
 
 The presets in `CMakePresets.json` work on all three systems. They select
 Clang, LLD and Ninja without fixing their versions, and treat warnings in
-ADLplug's own code as errors. To configure by hand instead, pass the options
+ADLplug-Next's own code as errors. To configure by hand instead, pass the options
 below to `cmake` directly.
 
 This package is able to build several plugins from a single source:
@@ -158,7 +182,7 @@ This package is able to build several plugins from a single source:
 | -DADLplug_ARCH=baseline/avx2    | baseline                               | x86-64 instruction set: baseline or AVX2 (x86-64-v3)             |
 | -DADLplug_LTO=ON/OFF            | ON                                     | Link-time optimisation (ThinLTO) in Release builds               |
 | -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | Force building with assertions regardless of build type          |
-| -DADLplug_WERROR=ON/OFF         | OFF (the presets set ON)               | Treat warnings in ADLplug's own code as errors                   |
+| -DADLplug_WERROR=ON/OFF         | OFF (the presets set ON)               | Treat warnings in ADLplug-Next's own code as errors              |
 | -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | Build developer tools (offline VST3 renderer)                    |
 | -DADLplug_BUILD_TESTS=ON/OFF    | OFF                                    | Build the tests and register them with CTest                     |
 
@@ -166,8 +190,8 @@ Every emulator core is built by default. Each has an option of the library it
 comes from, `-DUSE_<core>_EMULATOR=ON/OFF`, named in the tables under
 [FM core characteristics](#fm-core-characteristics). Some names, such as
 `USE_NUKED_EMULATOR`, exist in both libraries; only the library of the chip
-being built is affected. `USE_DOSBOX_EMULATOR` (ADLplug) and
-`USE_MAME_EMULATOR` (OPNplug) have to stay on, because the plugins measure
+being built is affected. `USE_DOSBOX_EMULATOR` (ADLplug-Next) and
+`USE_MAME_EMULATOR` (OPNplug-Next) have to stay on, because the plugins measure
 their instruments on those cores. A project saved with a core that a build
 leaves out plays on that build's default core for the same chip, and keeps
 its choice: a build with the core plays it again.
@@ -176,17 +200,17 @@ its choice: a build with the core plays it again.
 
 The banks that the plugins offer are generated when they are built, by
 `tools/bankgen`, from the submodules in `thirdparty/`:
-- ADLplug takes the banks built into libADLMIDI, from their WOPLX files, as
+- ADLplug-Next takes the banks built into libADLMIDI, from their WOPLX files, as
   libADLMIDI's `banks-no-grey.ini` lists them, with each file once.
-- OPNplug takes the banks that `resources/opn2/banks.ini` lists: WOPN banks of
+- OPNplug-Next takes the banks that `resources/opn2/banks.ini` lists: WOPN banks of
   libOPNMIDI, and GYB and GEMS banks from the examples of OPN2 Bank Editor,
   converted as the editor reads them.
 
 libADLMIDI keeps a grey zone of banks that were made without an explicit
 permission of their authors, whose legal status is unclear, and has
 placeholders for them. The build leaves the grey zone out unless
-`-DADLplug_GREYZONE_BANKS=ON` is given: ADLplug then takes libADLMIDI's
-`banks.ini` instead, and OPNplug also the banks that its list marks as grey
+`-DADLplug_GREYZONE_BANKS=ON` is given: ADLplug-Next then takes libADLMIDI's
+`banks.ini` instead, and OPNplug-Next also the banks that its list marks as grey
 zone, for which no license or permission of their authors is known. The
 binaries of ADLplug-Next are built without them.
 
@@ -205,7 +229,7 @@ cmake --build --preset adl-debug
 ctest --preset adl-debug
 ```
 
-- The unit tests (`tests/unit`) check ADLplug's own utilities and the banks it
+- The unit tests (`tests/unit`) check ADLplug-Next's own utilities and the banks it
   embeds. `bankgen.greyzone` generates the banks with the grey zone as well,
   which checks what only those banks need, such as the conversion of GYB and
   GEMS banks.
@@ -213,7 +237,8 @@ ctest --preset adl-debug
   sequence, and compare the output with `tests/render/references.txt`. They
   also check that opening the editor and restoring the saved state change
   nothing, that the plugin keeps its parameters and state when it is prepared
-  again, and, in Release builds, that every emulator core plays.
+  again, that the VST3 plugin keeps the parameter IDs of upstream ADLplug, and,
+  in Release builds, that every emulator core plays.
 - When [pluginval](https://github.com/Tracktion/pluginval) or
   [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint) is on the
   `PATH` at configure time, it validates the VST3 or LV2 plugin as well.
@@ -328,7 +353,7 @@ sudo cmake --build . --target install
 
 ## License
 
-ADLplug as a whole is distributed under the **GNU General Public License v3**
+ADLplug-Next as a whole is distributed under the **GNU General Public License v3**
 (see `LICENSE`). It combines parts under several different free software
 licenses; the strongest of those governs the combined work.
 
