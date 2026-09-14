@@ -254,4 +254,5 @@ void Midi_Bank::from_wopl(const WOPLFile &wopl, std::vector<Midi_Bank> &banks, I
     igp.volume_model = wopl.volume_model;
     igp.deep_tremolo = (wopl.opl_flags & WOPL_FLAG_DEEP_TREMOLO) != 0;
     igp.deep_vibrato = (wopl.opl_flags & WOPL_FLAG_DEEP_VIBRATO) != 0;
+    igp.mt32_defaults = (wopl.opl_flags & WOPL_FLAG_MT32) != 0;
 }

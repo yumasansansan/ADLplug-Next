@@ -38,10 +38,11 @@ namespace Parameter_Tag {
         { return tag & 0xff; }
 }
 
-// The version hint of every parameter (JUCE's ParameterID). JUCE's Audio Unit
+// The version hint of a parameter (JUCE's ParameterID). JUCE's Audio Unit
 // wrapper lists parameters in the order of their hints, so that hosts can keep
 // the ones they know in place: a parameter added later needs a higher hint
-// than those before it. All of these came with ADLplug 1.
+// than those before it. The parameters of ADLplug 1 have hint 1; those added
+// since give theirs to add_parameter_since().
 inline constexpr int parameter_version_hint = 1;
 
 struct Basic_Parameter_Block {
@@ -51,12 +52,16 @@ struct Basic_Parameter_Block {
     template <AudioParameterType Ty, class... Arg>
     TypedAudioParameter<Ty> *add_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args);
 
+    // A parameter added after ADLplug 1, with the version hint it came with.
+    template <AudioParameterType Ty, class... Arg>
+    TypedAudioParameter<Ty> *add_parameter_since(int version_hint, AudioProcessorEx &p, std::uint32_t tag, Arg &&... args);
+
     template <AudioParameterType Ty, class... Arg>
     TypedAudioParameter<Ty> *add_internal_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args);
 
 private:
     template <class T, class... Arg>
-    T *do_add_parameter(AudioProcessorEx &p, std::uint32_t tag, const String &id, Arg &&... args);
+    T *do_add_parameter(AudioProcessorEx &p, std::uint32_t tag, int version_hint, const String &id, Arg &&... args);
 
     template <class T, class... Arg>
     T *do_add_internal_parameter(AudioProcessorEx &p, std::uint32_t tag, const String &id, Arg &&... args);

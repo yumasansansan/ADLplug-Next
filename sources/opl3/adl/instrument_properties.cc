@@ -123,6 +123,7 @@ PropertySet Instrument_Global_Parameters::to_properties() const
     set.setValue("volume_model", volume_model);
     set.setValue("deep_tremolo", deep_tremolo);
     set.setValue("deep_vibrato", deep_vibrato);
+    set.setValue("mt32_defaults", mt32_defaults);
     return set;
 }
 
@@ -132,5 +133,6 @@ Instrument_Global_Parameters Instrument_Global_Parameters::from_properties(const
     gp.volume_model = std::max(0, set.getIntValue("volume_model"));
     gp.deep_tremolo = set.getBoolValue("deep_tremolo");
     gp.deep_vibrato = set.getBoolValue("deep_vibrato");
+    gp.mt32_defaults = set.getBoolValue("mt32_defaults");
     return gp;
 }

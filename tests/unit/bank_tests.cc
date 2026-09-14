@@ -124,6 +124,15 @@ ADLPLUG_TEST(embedded_banks)
         for (unsigned b = 0; b < file->banks_count_percussion; ++b)
             same = instruments_round_trip(name + " (percussion)", file->banks_percussive[b]) && same;
         CHECK(same);
+
+        // The bank's global parameters go through a state unchanged.
+        std::vector<Midi_Bank> banks;
+        Instrument_Global_Parameters igp;
+        Midi_Bank::from_wopl(*file, banks, igp);
+        CHECK(Instrument_Global_Parameters::from_properties(igp.to_properties()) == igp);
+#if defined(ADLPLUG_OPL3)
+        CHECK(igp.mt32_defaults == ((file->opl_flags & WOPL_FLAG_MT32) != 0));
+#endif
     }
 }
 

@@ -16,7 +16,14 @@
 // version (LICENSES/GPL-3.0-or-later.txt).
 
 #include "player.h"
+#include <cstddef>
 #include <stdexcept>
+
+// From libADLMIDI's source tree, for the MT-32 defaults. The definitions that
+// shape these classes, such as ADLMIDI_DISABLE_MIDI_SEQUENCER, are public ones
+// of ADLMIDI_static, so this file sees the classes as the library does.
+#include "adlmidi_midiplay.hpp"
+#include "adlmidi_opl3.hpp"
 
 void Player::init(unsigned sample_rate)
 {
@@ -38,6 +45,43 @@ bool Player::set_num_4ops(unsigned count)
         ops4 = adl_getNumFourOpsChnObtained(pl);
     }
     return adl_setNumFourOpsChn(pl, ops4) >= 0;
+}
+
+// libADLMIDI has no function for the MT-32 defaults: only a WOPL bank opened as
+// a whole sets them (adl_openBankData()), and ADLplug gives the player its
+// instruments one by one. So these reach the state that opening such a bank
+// sets. Besides the flag, that is the defaults which each MIDI channel takes
+// when it is reset (MIDIplay::resetMIDIDefaults(), which a bank without the
+// flag leaves as they are, so they are set back here). A change also puts the
+// channels' volume and pitch bend range to the new defaults, as the start of a
+// song would.
+bool Player::mt32_defaults() const
+{
+    const MIDIplay &play = *static_cast<const MIDIplay *>(player_->adl_midiPlayer);
+    return play.m_synth->m_insBankSetup.mt32defaults;
+}
+
+void Player::set_mt32_defaults(bool mt32)
+{
+    ADL_MIDIPlayer *pl = player_.get();
+    MIDIplay &play = *static_cast<MIDIplay *>(pl->adl_midiPlayer);
+    Synth &synth = *play.m_synth;
+    if (synth.m_insBankSetup.mt32defaults == mt32)
+        return;
+    synth.m_insBankSetup.mt32defaults = mt32;
+
+    const bool wide = mt32 || synth.m_musicMode == Synth::MODE_RSXX;
+    for (std::size_t c = 0; c < play.m_midiChannels.size; ++c) {
+        MIDIplay::MIDIchannel &ch = play.m_midiChannels[c];
+        ch.def_volume = wide ? 127 : 100;
+        ch.def_bendsense_lsb = 0;
+        ch.def_bendsense_msb = wide ? 12 : 2;
+        ch.bendsense_lsb = ch.def_bendsense_lsb;
+        ch.bendsense_msb = ch.def_bendsense_msb;
+        ch.updateBendSensitivity();
+        if (c < 16)
+            adl_rt_controllerChange(pl, static_cast<ADL_UInt8>(c), 7, ch.def_volume);
+    }
 }
 
 void Player::play_midi(const std::uint8_t *msg, unsigned len)

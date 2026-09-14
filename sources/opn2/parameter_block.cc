@@ -25,6 +25,7 @@
 #include <cassert>
 #include <cstdint>
 #include <format>
+#include <iterator>
 #include <new>
 #include <string>
 
@@ -133,7 +134,8 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
             current_part.p_fms = add_internal_parameter<Pt::Int>(p, tag, id("fms"), name("FM sensitivity"), 0, 7, ins.fms());
             current_part.p_veloffset = add_internal_parameter<Pt::Int>(p, tag, id("veloffset"), name("Velocity offset"), -127, +127, ins.midi_velocity_offset);
             // current_part.p_voice2ft = add_internal_parameter<Pt::Int>(p, tag, id("voice2ft"), name("Voice 2 fine tune"), -127, +127, ins.second_voice_detune);
-            current_part.p_drumnote = add_internal_parameter<Pt::Int>(p, tag, id("drumnote"), name("Percussion note"), 0, 127, ins.percussion_key_number);
+            // Keys from 128 on play as the key 128 below: see the editor's menu.
+            current_part.p_drumnote = add_internal_parameter<Pt::Int>(p, tag, id("drumnote"), name("Percussion note"), 0, 255, ins.percussion_key_number);
         }
 
         static constexpr const char *op_id_suffix[4] = { "op1", "op3", "op2", "op4" };
@@ -161,10 +163,12 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
         }
     }
 
-    // The volume models of libOPNMIDI, the same as those of libADLMIDI. This
-    // used to offer "Generic" alone, but a choice needs at least two entries:
-    // with one, its normalised value was 0/0.
-    const StringArray volmodel_choices {"Generic", "Native", "DMX", "Apogee", "Win9x"};
+    // The volume models of libOPNMIDI, numbered from 0, where libOPNMIDI has
+    // OPNMIDI_VolumeModel_AUTO first. This used to offer "Generic" alone, but a
+    // choice needs at least two entries: with one, its normalised value was 0/0.
+    static constexpr const char *volmodel_names[] {"Generic", "Native", "DMX", "Apogee", "Win9x"};
+    static_assert(std::size(volmodel_names) == OPNMIDI_VolumeModel_Count - 1);
+    const StringArray volmodel_choices(volmodel_names, static_cast<int>(std::size(volmodel_names)));
     p_volmodel = add_parameter<Pt::Choice>(p, Parameter_Tag::global, "volmodel", "Volume model", volmodel_choices, int{wopn->volume_model});
     p_lfoenable = add_parameter<Pt::Bool>(p, Parameter_Tag::global, "lfoenable", "LFO enable", (wopn->lfo_freq & 8) != 0);
     const StringArray lfofreq_choices {"3.98 Hz", "5.56 Hz", "6.02 Hz", "6.37 Hz", "6.88 Hz", "9.63 Hz", "48.1 Hz", "72.2 Hz"};

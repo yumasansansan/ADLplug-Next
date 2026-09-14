@@ -25,6 +25,7 @@
 #include <cassert>
 #include <cstdint>
 #include <format>
+#include <iterator>
 #include <new>
 #include <string>
 
@@ -117,7 +118,8 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
             current_part.p_fb34 = add_internal_parameter<Pt::Int>(p, tag, id("fb34"), name("Feedback 3-4"), 0, 7, ins.fb34());
             current_part.p_veloffset = add_internal_parameter<Pt::Int>(p, tag, id("veloffset"), name("Velocity offset"), -127, +127, ins.midi_velocity_offset);
             current_part.p_voice2ft = add_internal_parameter<Pt::Int>(p, tag, id("voice2ft"), name("Voice 2 fine tune"), -127, +127, ins.second_voice_detune);
-            current_part.p_drumnote = add_internal_parameter<Pt::Int>(p, tag, id("drumnote"), name("Percussion note"), 0, 127, ins.percussion_key_number);
+            // Keys from 128 on play as the key 128 below: see the editor's menu.
+            current_part.p_drumnote = add_internal_parameter<Pt::Int>(p, tag, id("drumnote"), name("Percussion note"), 0, 255, ins.percussion_key_number);
         }
 
         static constexpr const char *op_id_suffix[4] = { "c1", "m1", "c2", "m2" };
@@ -155,10 +157,21 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
         }
     }
 
-    const StringArray volmodel_choices {"Generic", "Native", "DMX", "Apogee", "Win9x"};
+    // The volume models of libADLMIDI, numbered from 0 as in WOPL banks, where
+    // libADLMIDI has ADLMIDI_VolumeModel_AUTO first. The banks of libADLMIDI
+    // 1.6 use the later ones too (AIL, HMI...).
+    static constexpr const char *volmodel_names[] {
+        "Generic", "Native", "DMX", "Apogee", "Win9x",
+        "DMX (fixed AM)", "Apogee (fixed AM)", "AIL", "Win9x (generic FM)",
+        "HMI", "HMI (old)", "MS AdLib", "IMF Creator", "O'Connell FM Synth",
+    };
+    static_assert(std::size(volmodel_names) == ADLMIDI_VolumeModel_Count - 1);
+    const StringArray volmodel_choices(volmodel_names, static_cast<int>(std::size(volmodel_names)));
     p_volmodel = add_parameter<Pt::Choice>(p, Parameter_Tag::global, "volmodel", "Volume model", volmodel_choices, int{wopl->volume_model});
     p_deeptrem = add_parameter<Pt::Bool>(p, Parameter_Tag::global, "deeptrem", "Deep tremolo", (wopl->opl_flags & WOPL_FLAG_DEEP_TREMOLO) != 0);
     p_deepvib = add_parameter<Pt::Bool>(p, Parameter_Tag::global, "deepvib", "Deep vibrato", (wopl->opl_flags & WOPL_FLAG_DEEP_VIBRATO) != 0);
+    // Added by ADLplug-Next: the MT-32 defaults flag of WOPL banks.
+    p_mt32 = add_parameter_since<Pt::Bool>(2, p, Parameter_Tag::global, "mt32", "MT-32 defaults", (wopl->opl_flags & WOPL_FLAG_MT32) != 0);
 }
 
 // As the parameters hold them, which is how states keep them too; the player
@@ -178,6 +191,7 @@ Instrument_Global_Parameters Parameter_Block::global_parameters() const
     gp.volume_model = p_volmodel->getIndex();
     gp.deep_tremolo = p_deeptrem->get();
     gp.deep_vibrato = p_deepvib->get();
+    gp.mt32_defaults = p_mt32->get();
     return gp;
 }
 
@@ -193,6 +207,7 @@ void Parameter_Block::set_global_parameters(const Instrument_Global_Parameters &
     *p_volmodel = gp.volume_model;
     *p_deeptrem = gp.deep_tremolo;
     *p_deepvib = gp.deep_vibrato;
+    *p_mt32 = gp.mt32_defaults;
 }
 
 Instrument Parameter_Block::Part::instrument(const Instrument &base) const

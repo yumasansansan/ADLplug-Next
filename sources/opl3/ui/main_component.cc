@@ -575,7 +575,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     btn_deep_tremolo->addListener (this);
     btn_deep_tremolo->setColour (TextButton::buttonOnColourId, Colour (0xff42a2c8));
 
-    btn_deep_tremolo->setBounds (552, 486, 15, 15);
+    btn_deep_tremolo->setBounds (510, 486, 15, 15);
 
     label20 = std::make_unique<Label> ("new label",
                               TRANS("Deep tremolo"));
@@ -587,7 +587,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label20->setColour (TextEditor::textColourId, Colours::black);
     label20->setColour (TextEditor::backgroundColourId, Colour (0x00000000));
 
-    label20->setBounds (568, 486, 94, 15);
+    label20->setBounds (526, 486, 86, 15);
 
     btn_deep_vibrato = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_deep_vibrato.get());
@@ -595,7 +595,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     btn_deep_vibrato->addListener (this);
     btn_deep_vibrato->setColour (TextButton::buttonOnColourId, Colour (0xff42a2c8));
 
-    btn_deep_vibrato->setBounds (664, 486, 15, 15);
+    btn_deep_vibrato->setBounds (612, 486, 15, 15);
 
     label21 = std::make_unique<Label> ("new label",
                               TRANS("Deep vibrato"));
@@ -607,7 +607,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label21->setColour (TextEditor::textColourId, Colours::black);
     label21->setColour (TextEditor::backgroundColourId, Colour (0x00000000));
 
-    label21->setBounds (680, 486, 94, 15);
+    label21->setBounds (628, 486, 82, 15);
 
     label22 = std::make_unique<Label> ("new label",
                               TRANS("Volume model"));
@@ -619,7 +619,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     label22->setColour (TextEditor::textColourId, Colours::black);
     label22->setColour (TextEditor::backgroundColourId, Colour (0x00000000));
 
-    label22->setBounds (552, 458, 106, 20);
+    label22->setBounds (510, 458, 106, 20);
 
     cb_volmodel = std::make_unique<ComboBox> ("new combo box");
     addAndMakeVisible (cb_volmodel.get());
@@ -630,6 +630,28 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
     cb_volmodel->addListener (this);
 
     cb_volmodel->setBounds (664, 457, 104, 20);
+
+    btn_mt32 = std::make_unique<TextButton> ("new button");
+    addAndMakeVisible (btn_mt32.get());
+    btn_mt32->setTooltip (TRANS("MT-32 defaults: the channels start at volume 127, with a pitch bend range of 12 semitones"));
+    btn_mt32->setButtonText (String());
+    btn_mt32->addListener (this);
+    btn_mt32->setColour (TextButton::buttonOnColourId, Colour (0xff42a2c8));
+
+    btn_mt32->setBounds (710, 486, 15, 15);
+
+    lbl_mt32 = std::make_unique<Label> ("new label",
+                               TRANS("MT-32"));
+    addAndMakeVisible (lbl_mt32.get());
+    lbl_mt32->setTooltip (TRANS("MT-32 defaults: the channels start at volume 127, with a pitch bend range of 12 semitones"));
+    lbl_mt32->setFont (FontOptions (14.0f).withStyle ("Regular"));
+    lbl_mt32->setJustificationType (Justification::centredLeft);
+    lbl_mt32->setEditable (false, false, false);
+    lbl_mt32->setColour (Label::textColourId, Colours::aliceblue);
+    lbl_mt32->setColour (TextEditor::textColourId, Colours::black);
+    lbl_mt32->setColour (TextEditor::backgroundColourId, Colour (0x00000000));
+
+    lbl_mt32->setBounds (726, 486, 46, 15);
 
     btn_algo_help = std::make_unique<TextButton> ("new button");
     addAndMakeVisible (btn_algo_help.get());
@@ -773,6 +795,7 @@ Main_Component::Main_Component (AdlplugAudioProcessor &proc, Parameter_Block &pb
 
     btn_deep_tremolo->setClickingTogglesState(true);
     btn_deep_vibrato->setClickingTogglesState(true);
+    btn_mt32->setClickingTogglesState(true);
 
     create_image_overlay(*btn_auto4ops, image_from_resource(Res::emoji_u1f4a1), 0.7);
 
@@ -847,6 +870,8 @@ Main_Component::~Main_Component()
     label21 = nullptr;
     label22 = nullptr;
     cb_volmodel = nullptr;
+    btn_mt32 = nullptr;
+    lbl_mt32 = nullptr;
     btn_algo_help = nullptr;
     btn_auto4ops = nullptr;
     btn_keymap = nullptr;
@@ -992,7 +1017,7 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        int x = 586, y = 422, width = 188, height = 30;
+        int x = 504, y = 422, width = 270, height = 30;
         String text (TRANS("Global"));
         Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
@@ -1022,7 +1047,7 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        float x = 546.0f, y = 450.0f, width = 228.0f, height = 60.0f;
+        float x = 504.0f, y = 450.0f, width = 270.0f, height = 60.0f;
         Colour fillColour = Colour (0x662e4c4d);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
@@ -1245,6 +1270,15 @@ void Main_Component::buttonClicked (Button* buttonThatWasClicked)
         p = btn->getToggleState();
         p.endChangeGesture();
         //[/UserButtonCode_btn_deep_vibrato]
+    }
+    else if (buttonThatWasClicked == btn_mt32.get())
+    {
+        //[UserButtonCode_btn_mt32] -- add your button handler code here..
+        AudioParameterBool &p = *pb.p_mt32;
+        p.beginChangeGesture();
+        p = btn->getToggleState();
+        p.endChangeGesture();
+        //[/UserButtonCode_btn_mt32]
     }
     else if (buttonThatWasClicked == btn_algo_help.get())
     {
@@ -1580,6 +1614,7 @@ void Main_Component::set_global_parameters(NotificationType ntf)
     cb_volmodel->setSelectedId(instrument_gparam_.volume_model + 1, ntf);
     btn_deep_tremolo->setToggleState(instrument_gparam_.deep_tremolo, ntf);
     btn_deep_vibrato->setToggleState(instrument_gparam_.deep_vibrato, ntf);
+    btn_mt32->setToggleState(instrument_gparam_.mt32_defaults, ntf);
 }
 
 void Main_Component::on_change_midi_channel(unsigned channel)

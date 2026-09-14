@@ -28,6 +28,9 @@ set(ADLplug_UNIT_TEST_SOURCES
   "unit/fifo_tests.cc"
   "unit/text_tests.cc"
   "unit/utility_tests.cc")
+if(ADLplug_CHIP STREQUAL "OPL3")
+  list(APPEND ADLplug_UNIT_TEST_SOURCES "unit/opl3_tests.cc")
+endif()
 
 # The plugin's own sources under test, compiled again here against juce_core
 # alone.
@@ -37,6 +40,10 @@ set(ADLplug_UNIT_TESTED_SOURCES
   "${PROJECT_SOURCE_DIR}/sources/utility/simple_fifo.cc"
   "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/instrument.cc"
   "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/instrument_properties.cc")
+if(ADLplug_CHIP STREQUAL "OPL3")
+  # The player, which sets the MT-32 defaults inside libADLMIDI.
+  list(APPEND ADLplug_UNIT_TESTED_SOURCES "${PROJECT_SOURCE_DIR}/sources/opl3/adl/player.cc")
+endif()
 
 juce_add_console_app(ADLplug_unit_tests)
 juce_generate_juce_header(ADLplug_unit_tests)
@@ -51,6 +58,7 @@ target_compile_definitions(ADLplug_unit_tests PRIVATE
   JUCE_WEB_BROWSER=0)
 if(ADLplug_CHIP STREQUAL "OPL3")
   target_link_libraries(ADLplug_unit_tests PRIVATE wopl ADLMIDI_static)
+  target_include_directories(ADLplug_unit_tests SYSTEM PRIVATE "${PROJECT_SOURCE_DIR}/thirdparty/libADLMIDI/src")
 else()
   target_link_libraries(ADLplug_unit_tests PRIVATE wopn OPNMIDI_static)
 endif()

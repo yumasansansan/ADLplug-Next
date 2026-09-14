@@ -89,6 +89,7 @@ struct Parameter_Block : Basic_Parameter_Block {
     AudioParameterChoice *p_volmodel = nullptr;
     AudioParameterBool *p_deeptrem = nullptr;
     AudioParameterBool *p_deepvib = nullptr;
+    AudioParameterBool *p_mt32 = nullptr;
 
     void setup_parameters(AudioProcessorEx &p);
 };

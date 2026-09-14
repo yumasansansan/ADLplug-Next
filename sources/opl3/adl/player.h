@@ -89,6 +89,8 @@ public:
         { return adl_getHVibrato(player_.get()) != 0; }
     void set_deep_vibrato(bool vib)
         { adl_setHVibrato(player_.get(), vib ? 1 : 0); }
+    bool mt32_defaults() const;
+    void set_mt32_defaults(bool mt32);
     void set_soft_pan_enabled(bool sp)
         { adl_setSoftPanEnabled(player_.get(), sp ? 1 : 0); }
     void play_midi(const std::uint8_t *msg, unsigned len);

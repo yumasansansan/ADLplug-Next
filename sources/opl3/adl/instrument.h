@@ -96,6 +96,9 @@ struct Instrument_Global_Parameters
     int volume_model = 0;
     bool deep_tremolo = false;
     bool deep_vibrato = false;
+    // The MIDI channels start at volume 127, with a pitch bend range of 12
+    // semitones, instead of 100 and 2 (WOPL_FLAG_MT32).
+    bool mt32_defaults = false;
 
     bool operator==(const Instrument_Global_Parameters &) const = default;
 

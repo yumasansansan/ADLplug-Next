@@ -21,7 +21,7 @@
 template <AudioParameterType Ty, class... Arg>
 inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_automatable_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args)
 {
-    TypedAudioParameter<Ty> *par = do_add_parameter<TypedAudioParameter<Ty>>(p, tag, std::forward<Arg>(args)...);
+    TypedAudioParameter<Ty> *par = do_add_parameter<TypedAudioParameter<Ty>>(p, tag, parameter_version_hint, std::forward<Arg>(args)...);
     par->setAutomatable(true);
     return par;
 }
@@ -29,7 +29,15 @@ inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_automatable_parameter
 template <AudioParameterType Ty, class... Arg>
 inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_parameter(AudioProcessorEx &p, std::uint32_t tag, Arg &&... args)
 {
-    TypedAudioParameter<Ty> *par = do_add_parameter<TypedAudioParameter<Ty>>(p, tag, std::forward<Arg>(args)...);
+    TypedAudioParameter<Ty> *par = do_add_parameter<TypedAudioParameter<Ty>>(p, tag, parameter_version_hint, std::forward<Arg>(args)...);
+    par->setAutomatable(false);
+    return par;
+}
+
+template <AudioParameterType Ty, class... Arg>
+inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_parameter_since(int version_hint, AudioProcessorEx &p, std::uint32_t tag, Arg &&... args)
+{
+    TypedAudioParameter<Ty> *par = do_add_parameter<TypedAudioParameter<Ty>>(p, tag, version_hint, std::forward<Arg>(args)...);
     par->setAutomatable(false);
     return par;
 }
@@ -44,9 +52,9 @@ inline TypedAudioParameter<Ty> *Basic_Parameter_Block::add_internal_parameter(Au
 
 // The processor owns external parameters; internal ones stay with the block.
 template <class T, class... Arg>
-inline T *Basic_Parameter_Block::do_add_parameter(AudioProcessorEx &p, std::uint32_t tag, const String &id, Arg &&... args)
+inline T *Basic_Parameter_Block::do_add_parameter(AudioProcessorEx &p, std::uint32_t tag, int version_hint, const String &id, Arg &&... args)
 {
-    auto parameter = std::make_unique<T>(ParameterID(id, parameter_version_hint), std::forward<Arg>(args)...);
+    auto parameter = std::make_unique<T>(ParameterID(id, version_hint), std::forward<Arg>(args)...);
     T *raw = parameter.get();
     raw->setTagEx(tag);
     raw->addValueChangedListenerEx(&p);

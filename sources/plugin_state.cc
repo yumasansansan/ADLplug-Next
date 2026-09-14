@@ -43,6 +43,7 @@ Instrument_Global_Parameters get_player_global_parameters(const Player &pl)
 #if defined(ADLPLUG_OPL3)
     gp.deep_tremolo = pl.deep_tremolo();
     gp.deep_vibrato = pl.deep_vibrato();
+    gp.mt32_defaults = pl.mt32_defaults();
 #elif defined(ADLPLUG_OPN2)
     gp.lfo_enable = pl.lfo_enabled();
     gp.lfo_frequency = pl.lfo_frequency();
@@ -79,6 +80,7 @@ void set_player_global_parameters(Player &pl, const Instrument_Global_Parameters
 #if defined(ADLPLUG_OPL3)
     pl.set_deep_tremolo(gp.deep_tremolo);
     pl.set_deep_vibrato(gp.deep_vibrato);
+    pl.set_mt32_defaults(gp.mt32_defaults);
 #elif defined(ADLPLUG_OPN2)
     pl.set_lfo_enabled(gp.lfo_enable);
     pl.set_lfo_frequency(gp.lfo_frequency);

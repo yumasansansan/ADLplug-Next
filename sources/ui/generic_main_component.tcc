@@ -122,8 +122,16 @@ void Generic_Main_Component<T>::setup_generic_components()
 
     static constexpr const char *note_names[12] =
         {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-    for (int note = 0; note < 128; ++note)
-        self()->cb_percussion_key->addItem(note_names[note % 12] + String(note / 12 - 1), note + 1);
+    // The key of a drum is a byte. libADLMIDI and libOPNMIDI play a key from
+    // 128 on as the key 128 below it, which the menu names too; banks such as
+    // Bisqwit's in libADLMIDI have those keys.
+    for (int key = 0; key < 256; ++key) {
+        const int note = key % 128;
+        String text = note_names[note % 12] + String(note / 12 - 1);
+        if (key >= 128)
+            text += " (" + String(key) + ")";
+        self()->cb_percussion_key->addItem(text, key + 1);
+    }
     self()->cb_percussion_key->setSelectedId(69 + 1, dontSendNotification);
     self()->cb_percussion_key->setScrollWheelEnabled(true);
 
@@ -1090,7 +1098,8 @@ void Generic_Main_Component<T>::save_bank(const File &file)
 #if defined(ADLPLUG_OPL3)
     wopl.opl_flags = static_cast<std::uint8_t>(
         (instrument_gparam_.deep_tremolo ? WOPL_FLAG_DEEP_TREMOLO : 0) |
-        (instrument_gparam_.deep_vibrato ? WOPL_FLAG_DEEP_VIBRATO : 0));
+        (instrument_gparam_.deep_vibrato ? WOPL_FLAG_DEEP_VIBRATO : 0) |
+        (instrument_gparam_.mt32_defaults ? WOPL_FLAG_MT32 : 0));
 #elif defined(ADLPLUG_OPN2)
     wopl.lfo_freq = static_cast<std::uint8_t>(
         (instrument_gparam_.lfo_enable ? 8 : 0) |
