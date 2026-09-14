@@ -22,3 +22,6 @@
 [submodule "thirdparty/simpleini"]
 	path = thirdparty/simpleini
 	url = https://github.com/brofield/simpleini.git
+[submodule "thirdparty/OPN2BankEditor"]
+	path = thirdparty/OPN2BankEditor
+	url = https://github.com/Wohlstand/OPN2BankEditor.git

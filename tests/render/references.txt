@@ -18,13 +18,13 @@
 # systems' maths libraries differ (plan D42). When a change to the sound is
 # meant, update the lines and say why in the commit message.
 
-linux-x86_64-avx2 ADLplug ec4d81e1fe9705f1 26fa035bb8bb2477
-linux-x86_64-avx2 OPNplug 9115450c6714e0b2 3de28fbd4fed7f4b
-linux-x86_64-baseline ADLplug 517de525268ba85c 26fa035bb8bb2477
-linux-x86_64-baseline OPNplug 1bf7d705a03cab2f 3de28fbd4fed7f4b
-macos-arm64 ADLplug ec4d81e1fe9705f1 26fa035bb8bb2477
-macos-arm64 OPNplug 9115450c6714e0b2 3de28fbd4fed7f4b
-windows-x86_64-avx2 ADLplug ec4d81e1fe9705f1 26fa035bb8bb2477
-windows-x86_64-avx2 OPNplug 9115450c6714e0b2 3de28fbd4fed7f4b
-windows-x86_64-baseline ADLplug 517de525268ba85c 26fa035bb8bb2477
-windows-x86_64-baseline OPNplug 1bf7d705a03cab2f 3de28fbd4fed7f4b
+linux-x86_64-avx2 ADLplug ee85755f418eb648 173006bc262b405b
+linux-x86_64-avx2 OPNplug fcf52c92dfa53694 99e708be01590e6c
+linux-x86_64-baseline ADLplug ee85755f418eb648 173006bc262b405b
+linux-x86_64-baseline OPNplug f3e4cf3eb7f07586 99e708be01590e6c
+macos-arm64 ADLplug ee85755f418eb648 173006bc262b405b
+macos-arm64 OPNplug fcf52c92dfa53694 99e708be01590e6c
+windows-x86_64-avx2 ADLplug ee85755f418eb648 173006bc262b405b
+windows-x86_64-avx2 OPNplug fcf52c92dfa53694 99e708be01590e6c
+windows-x86_64-baseline ADLplug ee85755f418eb648 173006bc262b405b
+windows-x86_64-baseline OPNplug f3e4cf3eb7f07586 99e708be01590e6c

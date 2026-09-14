@@ -101,9 +101,18 @@ ADLPLUG_TEST(embedded_banks)
     CHECK(pak.init_with_data(Res::banks_pak.data, Res::banks_pak.size));
     CHECK(pak.entry_count() > 0);
 
+#if defined(ADLPLUG_OPL3)
+    unsigned mt32_banks = 0;
+#endif
     for (std::size_t i = 0; i < pak.entry_count(); ++i) {
         const std::string &name = pak.name(i);
         std::string data = pak.extract(i);
+
+        // The editor finds the text of a bank by the bank's title, which holds
+        // 64 bytes (AdlplugAudioProcessor::bank_title_size_max).
+        CHECK(!name.empty() && name.size() <= 64 && pak.find(name) == i);
+        const std::string info = pak.info(i);
+        CHECK(!info.empty() && juce::CharPointer_UTF8::isValidString(info.data(), static_cast<int>(info.size())));
         int error = 0;
         const WOPx::BankFile_Ptr file(WOPx::LoadBankFromMem(data.data(), data.size(), &error));
         if (file == nullptr) {
@@ -132,8 +141,15 @@ ADLPLUG_TEST(embedded_banks)
         CHECK(Instrument_Global_Parameters::from_properties(igp.to_properties()) == igp);
 #if defined(ADLPLUG_OPL3)
         CHECK(igp.mt32_defaults == ((file->opl_flags & WOPL_FLAG_MT32) != 0));
+        if (igp.mt32_defaults)
+            ++mt32_banks;
 #endif
     }
+#if defined(ADLPLUG_OPL3)
+    // Some of libADLMIDI's banks are made for the MT-32 defaults, and the pack
+    // keeps their flag.
+    CHECK(mt32_banks > 0);
+#endif
 }
 
 ADLPLUG_TEST(instrument_flags_in_state)

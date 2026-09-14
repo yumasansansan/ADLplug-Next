@@ -50,6 +50,7 @@ option(ADLplug_WERROR "Treat warnings in ADLplug's own sources as errors" OFF)
 option(ADLplug_LTO "Use link-time optimisation (ThinLTO with Clang) in Release builds" ON)
 option(ADLplug_BUILD_TOOLS "Build developer tools (tools/render: offline VST3 renderer)" OFF)
 option(ADLplug_BUILD_TESTS "Build the tests and register them with CTest (render tests need ADLplug_BUILD_TOOLS)" OFF)
+option(ADLplug_GREYZONE_BANKS "Include the instrument banks of the grey zone, for which no license or permission of their authors is known" OFF)
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
 set(ADLplug_ARCH "baseline" CACHE STRING "Instruction set of x86-64 builds (baseline, avx2)")
@@ -340,6 +341,75 @@ target_include_directories(simple-ini SYSTEM INTERFACE "thirdparty/simpleini")
 target_link_libraries(ADLplug PUBLIC simple-ini)
 
 # --------------------------------------------------------------------------
+# Instrument banks
+#
+# tools/bankgen generates the pack of instrument banks from the submodules in
+# thirdparty/ when the plugin is built (README, "Instrument banks"), and
+# sources/resources.c embeds it with #embed <banks.pak>. The tool is built for
+# the chip of the plugin. With ADLplug_GREYZONE_BANKS, the pack includes the
+# banks of the grey zone.
+
+juce_add_console_app(ADLplug_bankgen)
+adlplug_set_language_standard(ADLplug_bankgen)
+target_sources(ADLplug_bankgen PRIVATE "tools/bankgen/bankgen.cc")
+target_include_directories(ADLplug_bankgen PRIVATE "sources")
+target_compile_definitions(ADLplug_bankgen PRIVATE
+  "ADLPLUG_${ADLplug_CHIP}"
+  JUCE_USE_CURL=0
+  JUCE_WEB_BROWSER=0)
+target_link_libraries(ADLplug_bankgen PRIVATE
+  simple-ini
+  juce::juce_core
+  juce::juce_recommended_config_flags)
+if(ADLplug_CHIP STREQUAL "OPL3")
+  target_sources(ADLplug_bankgen PRIVATE "tools/bankgen/woplx.cc")
+  target_link_libraries(ADLplug_bankgen PRIVATE wopl)
+else()
+  # The banks converted from other formats are measured as the plugin measures
+  # its instruments, on libOPNMIDI's MameOPN2.
+  target_sources(ADLplug_bankgen PRIVATE
+    "tools/bankgen/opn2_import.cc"
+    "sources/opn2/adl/instrument.cc"
+    "sources/opn2/adl/measurer/measurer.cpp")
+  target_include_directories(ADLplug_bankgen SYSTEM PRIVATE "thirdparty/libOPNMIDI/src")
+  target_link_libraries(ADLplug_bankgen PRIVATE wopn OPNMIDI_static)
+endif()
+
+set(ADLplug_BANKS_DIR "${CMAKE_CURRENT_BINARY_DIR}/banks")
+set(ADLplug_BANKS_PAK "${ADLplug_BANKS_DIR}/banks.pak")
+set(ADLplug_BANKS_NOTICES "${ADLplug_BANKS_DIR}/${ADLplug_NAME}-banks.txt")
+set(ADLplug_BANKGEN_ARGS --source "${CMAKE_CURRENT_SOURCE_DIR}")
+if(ADLplug_CHIP STREQUAL "OPN2")
+  list(APPEND ADLplug_BANKGEN_ARGS --list "${CMAKE_CURRENT_SOURCE_DIR}/resources/opn2/banks.ini")
+endif()
+set(ADLplug_BANKGEN_GREYZONE "")
+if(ADLplug_GREYZONE_BANKS)
+  set(ADLplug_BANKGEN_GREYZONE --greyzone)
+endif()
+
+# The tool writes a depfile of the files it read, so that a change to any of
+# them generates the pack again.
+add_custom_command(
+  OUTPUT "${ADLplug_BANKS_PAK}" "${ADLplug_BANKS_NOTICES}"
+  COMMAND ADLplug_bankgen ${ADLplug_BANKGEN_ARGS} ${ADLplug_BANKGEN_GREYZONE}
+    --pak "${ADLplug_BANKS_PAK}" --notices "${ADLplug_BANKS_NOTICES}"
+    --depfile "${ADLplug_BANKS_DIR}/banks.d"
+  DEPENDS ADLplug_bankgen
+  DEPFILE "${ADLplug_BANKS_DIR}/banks.d"
+  COMMENT "Generating the instrument banks"
+  VERBATIM)
+add_custom_target(ADLplug_banks DEPENDS "${ADLplug_BANKS_PAK}" "${ADLplug_BANKS_NOTICES}")
+add_dependencies(ADLplug ADLplug_banks)
+
+# Lets a source file embed the pack. Source file properties belong to the
+# directory that sets them, so tests/ calls this for what it compiles too, after
+# adlplug_own_sources(), which replaces the compile options.
+function(adlplug_embed_banks source)
+  set_property(SOURCE "${source}" APPEND PROPERTY COMPILE_OPTIONS "--embed-dir=${ADLplug_BANKS_DIR}")
+  set_property(SOURCE "${source}" APPEND PROPERTY OBJECT_DEPENDS "${ADLplug_BANKS_PAK}")
+endfunction()
+
+# --------------------------------------------------------------------------
 # Developer tools
 
 if(ADLplug_BUILD_TOOLS)
@@ -386,6 +456,10 @@ if(TARGET ADLplug_render)
   list(FILTER ADLplug_RENDER_SOURCES INCLUDE REGEX "^tools/")
   list(APPEND ADLplug_OWN_SOURCES ${ADLplug_RENDER_SOURCES})
 endif()
+get_target_property(ADLplug_BANKGEN_SOURCES ADLplug_bankgen SOURCES)
+list(FILTER ADLplug_BANKGEN_SOURCES INCLUDE REGEX "^(sources|tools)/")
+list(APPEND ADLplug_OWN_SOURCES ${ADLplug_BANKGEN_SOURCES})
+list(REMOVE_DUPLICATES ADLplug_OWN_SOURCES)
 
 set(ADLplug_OWN_COMPILE_DEFINITIONS "")
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -442,6 +516,7 @@ function(adlplug_own_sources)
 endfunction()
 
 adlplug_own_sources(${ADLplug_OWN_SOURCES})
+adlplug_embed_banks("sources/resources.c")
 
 # --------------------------------------------------------------------------
 # Tests
@@ -477,6 +552,8 @@ if(NOT (CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "Darw
         RENAME "${ADLplug_NAME}.png")
     endforeach()
   endif()
+  install(FILES "${ADLplug_BANKS_NOTICES}"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/${ADLplug_NAME}")
 endif()
 
 include("CPackLists.txt")

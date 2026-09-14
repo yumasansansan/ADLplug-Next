@@ -19,8 +19,11 @@
 #include "JuceHeader.h"
 #include <cstring>
 #include <limits>
+#include <utility>
 
 namespace {
+
+constexpr char pak_magic[4] {'P', 'A', 'K', '2'};
 
 std::uint32_t read_big_endian_u32(const std::uint8_t *p) noexcept
 {
@@ -45,21 +48,41 @@ const std::string &Pak_File_Reader::name(std::size_t nth) const
 std::string Pak_File_Reader::extract(std::size_t nth) const
 {
     const Entry &entry = entries_.at(nth);
-    if (entry.size > static_cast<std::uint32_t>(std::numeric_limits<int>::max()))
+    return read_content(entry.offset, entry.size);
+}
+
+std::string Pak_File_Reader::info(std::size_t nth) const
+{
+    const Entry &entry = entries_.at(nth);
+    return read_content(entry.info_offset, entry.info_size);
+}
+
+std::optional<std::size_t> Pak_File_Reader::find(std::string_view name) const
+{
+    for (std::size_t i = 0; i < entries_.size(); ++i) {
+        if (entries_[i].name == name)
+            return i;
+    }
+    return std::nullopt;
+}
+
+std::string Pak_File_Reader::read_content(std::uint32_t offset, std::uint32_t size) const
+{
+    if (size == 0 || size > static_cast<std::uint32_t>(std::numeric_limits<int>::max()))
         return {};
 
     MemoryInputStream mem_stream(data_ + content_offset_, size_ - content_offset_, false);
-    GZIPDecompressorInputStream gz_stream(&mem_stream, false, GZIPDecompressorInputStream::gzipFormat);
+    GZIPDecompressorInputStream zlib_stream(&mem_stream, false, GZIPDecompressorInputStream::zlibFormat);
 
-    if (!gz_stream.setPosition(entry.offset))
+    if (!zlib_stream.setPosition(offset))
         return {};
 
-    std::string data(entry.size, '\0');
-    const int size = static_cast<int>(entry.size);
-    if (gz_stream.read(data.data(), size) != size)
+    std::string content(size, '\0');
+    const int length = static_cast<int>(size);
+    if (zlib_stream.read(content.data(), length) != length)
         return {};
 
-    return data;
+    return content;
 }
 
 bool Pak_File_Reader::read_dictionary()
@@ -68,25 +91,29 @@ bool Pak_File_Reader::read_dictionary()
     entries_.reserve(256);
     content_offset_ = 0;
 
-    const std::uint8_t *ptr = data_;
-    std::size_t left = size_;
+    if (size_ < sizeof pak_magic || std::memcmp(data_, pak_magic, sizeof pak_magic) != 0)
+        return false;
+
+    const std::uint8_t *ptr = data_ + sizeof pak_magic;
+    std::size_t left = size_ - sizeof pak_magic;
+    const auto take_u32 = [&ptr, &left](std::uint32_t &value) {
+        if (left < 4)
+            return false;
+        value = read_big_endian_u32(ptr);
+        ptr += 4;
+        left -= 4;
+        return true;
+    };
+
     for (;;) {
         Entry ent;
 
-        if (left < 4)
+        if (!take_u32(ent.size))
             return false;
-        ent.size = read_big_endian_u32(ptr);
-        ptr += 4;
-        left -= 4;
-
         if (ent.size == 0)
             break;
-
-        if (left < 4)
+        if (!take_u32(ent.offset) || !take_u32(ent.info_size) || !take_u32(ent.info_offset))
             return false;
-        ent.offset = read_big_endian_u32(ptr);
-        ptr += 4;
-        left -= 4;
 
         const auto *name_end = static_cast<const std::uint8_t *>(std::memchr(ptr, 0, left));
         if (!name_end)

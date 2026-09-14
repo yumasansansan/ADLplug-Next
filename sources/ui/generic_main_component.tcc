@@ -80,7 +80,8 @@ template <class T>
 Generic_Main_Component<T>::~Generic_Main_Component()
 {
     // The dialogs act on this component; do not leave them behind.
-    for (DialogWindow *dialog : {dlg_new_program_.getComponent(), dlg_edit_program_.getComponent(), dlg_about_.getComponent()})
+    for (DialogWindow *dialog : {dlg_new_program_.getComponent(), dlg_edit_program_.getComponent(),
+                                 dlg_about_.getComponent(), dlg_bank_information_.getComponent()})
         delete dialog;
 
     midi_kb_state_.removeListener(this);
@@ -747,6 +748,12 @@ void Generic_Main_Component<T>::handle_load_bank(Component *clicked)
         menu.addSubMenu("Load from collection", pak_submenu);
     }
 
+    // What the sources say of the bank of the collection that is loaded, found
+    // by its title: a bank loaded from a file, or renamed, has nothing.
+    menu.addSeparator();
+    menu.addItem(bank_information_id, "Bank information...",
+                 pak.find(self()->edt_bank_name->getText().toStdString()).has_value());
+
     const Component::SafePointer<Generic_Main_Component<T>> safe(this);
     menu.showMenuAsync(PopupMenu::Options().withTargetComponent(clicked),
                        [safe](int selection) {
@@ -813,6 +820,9 @@ void Generic_Main_Component<T>::finish_load_bank(int selection)
             safe->load_single_instrument(static_cast<std::uint32_t>(program_selection - 1), file, format);
         });
     }
+    else if (selection == bank_information_id) {
+        show_bank_information();
+    }
     else if (selection >= load_collection_first_id) {
         Pak_File_Reader pak;
         [[maybe_unused]] const bool pak_ok = pak.init_with_data(Res::banks_pak.data, Res::banks_pak.size);
@@ -824,6 +834,37 @@ void Generic_Main_Component<T>::finish_load_bank(int selection)
         const std::string data = pak.extract(index);
         load_bank_mem(reinterpret_cast<const std::uint8_t *>(data.data()), data.size(), String(pak.name(index)), 0);
     }
+}
+
+template <class T>
+void Generic_Main_Component<T>::show_bank_information()
+{
+    Pak_File_Reader pak;
+    [[maybe_unused]] const bool pak_ok = pak.init_with_data(Res::banks_pak.data, Res::banks_pak.size);
+    assert(pak_ok);
+    const std::optional<std::size_t> index = pak.find(self()->edt_bank_name->getText().toStdString());
+    if (!index)
+        return;
+    const std::string info = pak.info(*index);
+
+    // One window at a time, on the bank that is loaded now.
+    delete dlg_bank_information_.getComponent();
+
+    auto text = std::make_unique<TextEditor>();
+    text->setMultiLine(true, true);
+    text->setReadOnly(true);
+    text->setCaretVisible(false);
+    text->setScrollbarsShown(true);
+    text->setFont(FontOptions(Font::getDefaultMonospacedFontName(), 13.0f, Font::plain));
+    text->setText(String::fromUTF8(info.data(), static_cast<int>(info.size())), false);
+    text->setSize(680, 520);
+
+    DialogWindow::LaunchOptions dlgopts;
+    dlgopts.dialogTitle = String::fromUTF8(pak.name(*index).c_str());
+    dlgopts.content.set(text.release(), true);
+    dlgopts.componentToCentreAround = this;
+    dlgopts.resizable = true;
+    dlg_bank_information_ = dlgopts.launchAsync();
 }
 
 template <class T>

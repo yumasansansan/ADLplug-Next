@@ -94,6 +94,7 @@ public:
 
     void handle_load_bank(Component *clicked);
     void finish_load_bank(int selection);
+    void show_bank_information();
     void handle_save_bank(Component *clicked);
     void finish_save_bank(int selection);
     void confirm_overwrite(const File &file, std::function<void()> on_confirmed);
@@ -142,10 +143,11 @@ private:
     static void write_file_for_saving(const File &file, std::span<const std::uint8_t> data, const char *error_title);
 
     // Ids in the menu which loads banks: the files of the collection follow
-    // the two fixed entries.
+    // the three fixed entries.
     static constexpr int load_bank_file_id = 1;
     static constexpr int load_instrument_file_id = 2;
-    static constexpr int load_collection_first_id = 3;
+    static constexpr int bank_information_id = 3;
+    static constexpr int load_collection_first_id = 4;
 
     struct Pending_Message {
         unsigned tag = 0;
@@ -213,6 +215,7 @@ protected:
     std::unique_ptr<FileChooser> file_chooser_;
     Component::SafePointer<DialogWindow> dlg_edit_program_;
     Component::SafePointer<DialogWindow> dlg_about_;
+    Component::SafePointer<DialogWindow> dlg_bank_information_;
 
     class Mouse_Hover_Listener : public MouseListener {
     public:

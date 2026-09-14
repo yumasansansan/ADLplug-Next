@@ -18,11 +18,19 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
-// Reads the bank archive: a dictionary of (size, offset, name) entries followed
-// by one gzip stream that holds all the files.
+// Reads the pack of instrument banks that tools/bankgen generates:
+//
+//   "PAK2"
+//   for each bank: the size and the offset of its file, the size and the
+//     offset of its text, as 32-bit big-endian numbers, then its name, ended
+//     by a zero byte
+//   a size of zero, which ends the list
+//   one zlib stream, which holds the files and the texts at those offsets
 class Pak_File_Reader {
 public:
     bool init_with_data(const std::uint8_t *data, std::size_t size);
@@ -30,12 +38,19 @@ public:
         { return entries_.size(); }
 
     const std::string &name(std::size_t nth) const;
+    // The bank file, in WOPL or WOPN format.
     std::string extract(std::size_t nth) const;
+    // What the sources say of the bank, in UTF-8.
+    std::string info(std::size_t nth) const;
+    // The bank of the given name, if there is one.
+    std::optional<std::size_t> find(std::string_view name) const;
 
 private:
     struct Entry {
         std::uint32_t size = 0;
         std::uint32_t offset = 0;
+        std::uint32_t info_size = 0;
+        std::uint32_t info_offset = 0;
         std::string name;
     };
 
@@ -46,4 +61,5 @@ private:
     std::size_t content_offset_ = 0;
 
     bool read_dictionary();
+    std::string read_content(std::uint32_t offset, std::uint32_t size) const;
 };

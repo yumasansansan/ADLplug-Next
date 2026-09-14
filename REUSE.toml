@@ -7,10 +7,10 @@
 # (LICENSES/GPL-3.0-or-later.txt).
 #
 # The copyright holders and licenses of the files that cannot name them in a
-# comment of their own: images, fonts, sounds, the bank packs, the generated
-# HTML manuals, JSON and the Windows resource scripts. Every other file names
-# them at its top. The license texts are in LICENSES/, and `reuse lint` checks
-# the repository in the CI.
+# comment of their own: images, fonts, sounds, the generated HTML manuals, JSON
+# and the Windows resource scripts. Every other file names them at its top. The
+# license texts are in LICENSES/, and `reuse lint` checks the repository in the
+# CI.
 
 version = 1
 
@@ -90,21 +90,6 @@ SPDX-FileCopyrightText = [
     "2012 Red Hat, Inc., with Reserved Font Name Liberation",
 ]
 SPDX-License-Identifier = "OFL-1.1-RFN"
-
-# The instrument banks. They come from many authors, and for many of them no
-# license is known: the LicenseRef files list the origin and the known terms of
-# each bank.
-[[annotations]]
-path = "resources/opl3/banks.pak"
-precedence = "override"
-SPDX-FileCopyrightText = "The authors of the banks listed in LICENSES/LicenseRef-OPL3-Banks.txt"
-SPDX-License-Identifier = "LicenseRef-OPL3-Banks"
-
-[[annotations]]
-path = "resources/opn2/banks.pak"
-precedence = "override"
-SPDX-FileCopyrightText = "The authors of the banks listed in LICENSES/LicenseRef-OPN2-Banks.txt"
-SPDX-License-Identifier = "LicenseRef-OPN2-Banks"
 
 # The user manual: the HTML is generated from manual.txt, which names the same
 # holders and license, and the pictures and sounds are part of it.

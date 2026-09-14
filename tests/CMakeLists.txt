@@ -8,6 +8,7 @@
 #
 # The tests, registered with CTest when ADLplug_BUILD_TESTS is on:
 #  - unit.<name>: each ADLPLUG_TEST in unit/, run by ADLplug_unit_tests;
+#  - bankgen.greyzone: tools/bankgen with the banks of the grey zone;
 #  - format.*: pluginval and lv2lint validating the plugins, when they are
 #    installed;
 #  - render.*: tools/render loading this build's VST3 plugin, playing the fixed
@@ -66,6 +67,9 @@ target_link_libraries(ADLplug_unit_tests PRIVATE
   juce::juce_core
   juce::juce_recommended_config_flags)
 adlplug_own_sources(${ADLplug_UNIT_TEST_SOURCES} ${ADLplug_UNIT_TESTED_SOURCES})
+# resources.c embeds the pack of banks generated for the plugin.
+adlplug_embed_banks("${PROJECT_SOURCE_DIR}/sources/resources.c")
+add_dependencies(ADLplug_unit_tests ADLplug_banks)
 
 foreach(source IN LISTS ADLplug_UNIT_TEST_SOURCES)
   file(STRINGS "${source}" declarations REGEX "^ADLPLUG_TEST\\([A-Za-z0-9_]+\\)")
@@ -75,6 +79,14 @@ foreach(source IN LISTS ADLplug_UNIT_TEST_SOURCES)
   endforeach()
 endforeach()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ADLplug_UNIT_TEST_SOURCES})
+
+# The generator with the banks of the grey zone too, into a pack of its own.
+# The build leaves them out by default, and they need what the other banks do
+# not, such as the conversion of GYB and GEMS banks.
+add_test(NAME bankgen.greyzone
+  COMMAND ADLplug_bankgen ${ADLplug_BANKGEN_ARGS} --greyzone
+    --pak "${CMAKE_CURRENT_BINARY_DIR}/greyzone/banks.pak"
+    --notices "${CMAKE_CURRENT_BINARY_DIR}/greyzone/${ADLplug_NAME}-banks.txt")
 
 # --------------------------------------------------------------------------
 # Format tests
