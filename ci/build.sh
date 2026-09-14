@@ -4,15 +4,16 @@
 #
 #   ci/build.sh <preset> <baseline|avx2|arm64>
 #
-# Configures and builds a CMake preset, developer tools included, for the given
-# instruction set (arm64 stands for the macOS build, which has no choice). Then
-# lists the artefacts and the libraries the VST3 plugin links against.
+# Configures and builds a CMake preset, with the developer tools and the tests,
+# for the given instruction set (arm64 stands for the macOS build, which has no
+# choice). Then lists the -march flags of the compile commands, the artefacts,
+# and the libraries the VST3 plugin links against.
 set -euo pipefail
 
 preset=$1
 arch=$2
 
-args=(--preset "$preset" -DADLplug_BUILD_TOOLS=ON)
+args=(--preset "$preset" -DADLplug_BUILD_TOOLS=ON -DADLplug_BUILD_TESTS=ON)
 case $arch in
   baseline | avx2) args+=("-DADLplug_ARCH=$arch") ;;
   arm64) ;;
@@ -21,6 +22,9 @@ esac
 
 cmake "${args[@]}"
 cmake --build --preset "$preset"
+
+echo "== -march flags in the compile commands"
+grep -o -E -- '-march=[a-z0-9-]+' "build/$preset/compile_commands.json" | sort | uniq -c || echo "(none)"
 
 artefacts=build/$preset/ADLplug_artefacts
 echo "== artefacts"

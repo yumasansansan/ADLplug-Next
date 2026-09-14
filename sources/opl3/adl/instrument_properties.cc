@@ -42,6 +42,8 @@ PropertySet Instrument::to_properties() const
     set.setValue("midi_velocity_offset", midi_velocity_offset);
     set.setValue("second_voice_detune", second_voice_detune);
     set.setValue("percussion_key_number", percussion_key_number);
+    set.setValue("rhythm_mode", rhythm_mode());
+    set.setValue("fixed_note", fixed_note());
 
     for (unsigned opnum = 0; opnum < 4; ++opnum) {
         const String opfx = op_prefix[opnum];
@@ -81,6 +83,9 @@ Instrument Instrument::from_properties(const juce::PropertySet &set)
     ins.midi_velocity_offset = clamp_to<std::int8_t>(set.getIntValue("midi_velocity_offset"));
     ins.second_voice_detune = clamp_to<std::int8_t>(set.getIntValue("second_voice_detune"));
     ins.percussion_key_number = clamp_to<std::uint8_t>(set.getIntValue("percussion_key_number"));
+    // States saved without these read as no rhythm mode and no fixed note.
+    ins.rhythm_mode(std::clamp(set.getIntValue("rhythm_mode"), 0, 5));
+    ins.fixed_note(set.getBoolValue("fixed_note"));
 
     for (unsigned opnum = 0; opnum < 4; ++opnum) {
         const String opfx = op_prefix[opnum];

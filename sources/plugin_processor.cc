@@ -399,8 +399,12 @@ void AdlplugAudioProcessor::process_parameter_changes()
 
     for (unsigned p = 0; p < 16; ++p) {
         if (unmark_parameter_as_changed(Cb_Instrument1 + p)) {
-            const Instrument ins = pb.part[p].instrument();
+            // The parameters hold most of an instrument. The rest, such as the
+            // rhythm-mode drum type of OPL3 percussion, stays as the program has it.
             const Selection &sel = selection_[p];
+            Instrument current;
+            bm.find_program(sel.bank, sel.program, current);
+            const Instrument ins = pb.part[p].instrument(current);
             bm.load_program(
                 sel.bank, sel.program, ins,
                 Bank_Manager::LP_Notify | Bank_Manager::LP_NeedMeasurement | Bank_Manager::LP_KeepName);

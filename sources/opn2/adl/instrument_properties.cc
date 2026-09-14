@@ -30,7 +30,7 @@ PropertySet Instrument::to_properties() const
 {
     PropertySet set;
 
-    // set.setValue("pseudo_eight_op", pseudo_eight_op());
+    set.setValue("pseudo_eight_op", pseudo_eight_op());
     set.setValue("blank", blank());
     set.setValue("note_offset", note_offset);
     set.setValue("feedback", feedback());
@@ -66,7 +66,7 @@ Instrument Instrument::from_properties(const juce::PropertySet &set)
 {
     Instrument ins;
 
-    // ins.pseudo_eight_op(set.getBoolValue("pseudo_eight_op"));
+    ins.pseudo_eight_op(set.getBoolValue("pseudo_eight_op"));
     ins.blank(set.getBoolValue("blank"));
     ins.note_offset = clamp_to<std::int16_t>(set.getIntValue("note_offset"));
     ins.feedback(set.getIntValue("feedback"));

@@ -171,11 +171,10 @@ void Parameter_Block::set_global_parameters(const Instrument_Global_Parameters &
     *p_deepvib = gp.deep_vibrato;
 }
 
-Instrument Parameter_Block::Part::instrument() const
+Instrument Parameter_Block::Part::instrument(const Instrument &base) const
 {
-    Instrument ins;
+    Instrument ins = base;
     ins.version = Instrument::latest_version;
-    ins.inst_flags = 0;
 
     ins.four_op(p_is4op->get());
     ins.pseudo_four_op(p_ps4op->get());

@@ -85,5 +85,20 @@
     { "name": "opn-debug",          "configurePreset": "opn-debug" },
     { "name": "opn-relwithdebinfo", "configurePreset": "opn-relwithdebinfo" },
     { "name": "opn-release",        "configurePreset": "opn-release" }
+  ],
+
+  "testPresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "timeout": 1200 }
+    },
+    { "name": "adl-debug",          "configurePreset": "adl-debug",          "inherits": "base" },
+    { "name": "adl-relwithdebinfo", "configurePreset": "adl-relwithdebinfo", "inherits": "base" },
+    { "name": "adl-release",        "configurePreset": "adl-release",        "inherits": "base" },
+    { "name": "opn-debug",          "configurePreset": "opn-debug",          "inherits": "base" },
+    { "name": "opn-relwithdebinfo", "configurePreset": "opn-relwithdebinfo", "inherits": "base" },
+    { "name": "opn-release",        "configurePreset": "opn-release",        "inherits": "base" }
   ]
 }

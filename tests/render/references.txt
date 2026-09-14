@@ -1,0 +1,14 @@
+# Render references for tests/CMakeLists.txt: the hashes (FNV-1a, 64 bits)
+# that tools/render reports for the fixed sequence, 20 s after a 5000 ms
+# warm-up, with each plugin's default emulator. One line per system,
+# instruction set and plugin:
+#
+#   <system>-<processor>[-<instruction set>] <plugin> <output> <state>
+#
+# Debug and Release builds have to agree. Other keys may give other outputs:
+# where the target has FMA instructions, Clang fuses multiply-adds, and the
+# systems' maths libraries differ (plan D42). When a change to the sound is
+# meant, update the lines and say why in the commit message.
+
+windows-x86_64-baseline ADLplug 517de525268ba85c 6b5e1f99c1e18cea
+windows-x86_64-baseline OPNplug 1bf7d705a03cab2f 3fd721d6292f9008

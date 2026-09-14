@@ -46,7 +46,7 @@ struct Instrument : OPN2_Instrument
         { Field_Bitops::set##opt<shift, size>(operators[op].field, value); }
 
     PARAMETER(bool, blank, inst_flags, 1, 1,)
-    // PARAMETER(bool, pseudo_eight_op, inst_flags, 2, 1,)
+    PARAMETER(bool, pseudo_eight_op, inst_flags, 0, 1,)
     PARAMETER(int, feedback, fbalg, 3, 3,)
     PARAMETER(int, algorithm, fbalg, 0, 3,)
     PARAMETER(int, ams, lfosens, 4, 2,)

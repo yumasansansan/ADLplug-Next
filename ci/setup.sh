@@ -2,14 +2,16 @@
 # Part of ADLplug, distributed under the GNU GPL v3 or later.
 #               (See accompanying file LICENSE.)
 #
-# Sets up a GitHub Actions runner to build ADLplug: Clang, LLD and the LLVM
-# tools of one pinned version, put first on PATH for the later steps, and on
-# Linux the development packages that JUCE needs. Every download is checked:
-# the apt.llvm.org signing key by its fingerprint, LLVM's release archives by
-# their SHA-256.
+# Sets up a GitHub Actions runner to build and test ADLplug: Clang, LLD and the
+# LLVM tools of one pinned version, pluginval, and on Linux the development
+# packages that JUCE needs, the tools for the tests and lv2lint. The tools go
+# first on PATH for the later steps. Every download is checked: the
+# apt.llvm.org signing key by its fingerprint, archives by their SHA-256, and
+# lv2lint's source by its commit.
 #
-# To move to another LLVM version, change the values below. GitHub lists the
-# SHA-256 of each release archive as the asset's digest.
+# To move to another version of a tool, change the values below. GitHub lists
+# the SHA-256 of release archives as the asset's digest; pluginval's releases
+# are older than that, so their SHA-256 were taken from the downloads.
 set -euo pipefail
 
 llvm_major=23
@@ -24,6 +26,17 @@ macos_sha256=2c4a0fdd1ec6a32d4fd57ff32aa714ec8b3c71bf02a24ec38608a4f23f8aca89
 # Linux: the packages of apt.llvm.org, signed with this key.
 apt_key_fingerprint=6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
 
+# pluginval, which loads the plugins as hosts do and tests them.
+pluginval_version=v1.0.4
+pluginval_windows_sha256=c08e61ce3b96db41636f8ec7e76f4c7e2c13ebdac7fa1b5a1f52b4f32ec715ab
+pluginval_linux_sha256=c01c49d8063965c4c2dea8324468336768f5c9139e0b1caebde14c2400b55352
+pluginval_macos_sha256=3c4c533bda0c5059eea3ddaea752d757ee2025041f0f47e6bcb0e87f6082b29f
+
+# lv2lint, which checks LV2 bundles, is not packaged by Ubuntu. It is built
+# from its 0.16.2 release, at the commit of that tag in the sfztools mirror.
+lv2lint_repository=https://github.com/sfztools/lv2lint.git
+lv2lint_commit=ea7126042356d245610ecf7a56354dd196fafff7
+
 # Development packages for the JUCE modules ADLplug uses, from JUCE's
 # docs/Linux Dependencies.md. curl and WebKit are left out: the build disables
 # both.
@@ -33,6 +46,10 @@ linux_packages=(
   libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxi-dev
   libxinerama-dev libxrandr-dev libxrender-dev
 )
+# For the tests (ci/test.sh): xwfb-run, which runs a command on Xwayland under
+# a headless Weston, and what lv2lint is built with.
+linux_packages+=(xwayland-run weston xwayland xauth)
+linux_packages+=(meson liblilv-dev lv2-dev libelf-dev)
 
 # Pipelines below are written so that no command stops reading early: with
 # pipefail, a writer killed by SIGPIPE would fail the script.
@@ -67,6 +84,14 @@ extract() {  # archive directory tar static-library-suffix
   rm -f "$1"
 }
 
+# Downloads pluginval into <directory>/pluginval.
+setup_pluginval() {  # system sha256 directory
+  local archive=$3/pluginval.zip
+  download "https://github.com/Tracktion/pluginval/releases/download/$pluginval_version/pluginval_$1.zip" "$archive" "$2"
+  unzip -q -o "$archive" -d "$3/pluginval"
+  rm -f "$archive"
+}
+
 setup_linux() {
   local key=$RUNNER_TEMP/apt.llvm.org.asc
   local keyring=/usr/share/keyrings/apt.llvm.org.gpg
@@ -89,6 +114,26 @@ setup_linux() {
   sudo apt-get install -y -qq --no-install-recommends \
     "clang-$llvm_major" "lld-$llvm_major" "llvm-$llvm_major" "${linux_packages[@]}"
   llvm_bin=/usr/lib/llvm-$llvm_major/bin
+
+  setup_pluginval Linux "$pluginval_linux_sha256" "$RUNNER_TEMP"
+  chmod +x "$RUNNER_TEMP/pluginval/pluginval"
+  tool_paths+=("$RUNNER_TEMP/pluginval")
+
+  # lv2lint, with Clang and LLD like everything else.
+  local source=$RUNNER_TEMP/lv2lint
+  git -c init.defaultBranch=main init --quiet "$source"
+  git -C "$source" fetch --quiet --depth 1 "$lv2lint_repository" "$lv2lint_commit"
+  git -C "$source" checkout --quiet --detach FETCH_HEAD
+  if [ "$(git -C "$source" rev-parse HEAD)" != "$lv2lint_commit" ]; then
+    echo "error: lv2lint is not at commit $lv2lint_commit" >&2
+    exit 1
+  fi
+  # lv2lint enables LTO by default. It is turned off: the archiver meson would
+  # pick up is binutils' ar, which cannot index Clang's bitcode.
+  PATH=$llvm_bin:$PATH CC=clang CC_LD=lld meson setup --buildtype release -Db_lto=false \
+    -Delf-tests=enabled -Dx11-tests=enabled "$source/build" "$source"
+  PATH=$llvm_bin:$PATH ninja -C "$source/build"
+  tool_paths+=("$source/build")
 }
 
 setup_windows() {
@@ -97,6 +142,9 @@ setup_windows() {
   download "$(release_url "$windows_archive")" "$temp/$windows_archive" "$windows_sha256"
   extract "$temp/$windows_archive" "$temp/llvm" tar .lib
   llvm_bin=$temp/llvm/bin
+
+  setup_pluginval Windows "$pluginval_windows_sha256" "$temp"
+  tool_paths+=("$temp/pluginval")
 }
 
 setup_macos() {
@@ -107,8 +155,12 @@ setup_macos() {
   # the toolchain first.
   rm -rf "$RUNNER_TEMP/llvm/include/c++"
   llvm_bin=$RUNNER_TEMP/llvm/bin
+
+  setup_pluginval macOS "$pluginval_macos_sha256" "$RUNNER_TEMP"
+  tool_paths+=("$RUNNER_TEMP/pluginval/pluginval.app/Contents/MacOS")
 }
 
+tool_paths=()
 case "${RUNNER_OS:-}" in
   Linux) setup_linux ;;
   Windows) setup_windows ;;
@@ -126,8 +178,10 @@ esac
 cmake --version
 ninja --version
 
-if [ "$RUNNER_OS" = Windows ]; then
-  cygpath --windows "$llvm_bin" >> "$GITHUB_PATH"
-else
-  echo "$llvm_bin" >> "$GITHUB_PATH"
-fi
+for path in "$llvm_bin" ${tool_paths[@]+"${tool_paths[@]}"}; do
+  if [ "$RUNNER_OS" = Windows ]; then
+    cygpath --windows "$path"
+  else
+    echo "$path"
+  fi
+done >> "$GITHUB_PATH"

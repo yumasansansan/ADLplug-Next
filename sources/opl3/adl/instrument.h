@@ -50,6 +50,10 @@ struct Instrument : ADL_Instrument
     PARAMETER(bool, four_op, inst_flags, 0, 1,)
     PARAMETER(bool, pseudo_four_op, inst_flags, 1, 1,)
     PARAMETER(bool, blank, inst_flags, 2, 1,)
+    // The rhythm-mode drum type, from 0 for none to 5 (WOPL_RhythmMode >> 3),
+    // and whether the instrument always plays one note.
+    PARAMETER(int, rhythm_mode, inst_flags, 3, 3,)
+    PARAMETER(bool, fixed_note, inst_flags, 6, 1,)
     PARAMETER(bool, con12, fb_conn1_C0, 0, 1,)
     PARAMETER(bool, con34, fb_conn2_C0, 0, 1,)
     PARAMETER(int, fb12, fb_conn1_C0, 1, 3,)

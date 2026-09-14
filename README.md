@@ -145,6 +145,7 @@ This package is able to build several plugins from a single source:
 | -DADLplug_ASSERTIONS=ON/OFF                   | Force building with assertions regardless of build type         |
 | -DADLplug_WERROR=ON/OFF                       | Treat warnings in ADLplug's own code as errors (presets: ON)    |
 | -DADLplug_BUILD_TOOLS=ON/OFF                  | Build developer tools (offline VST3 renderer)                   |
+| -DADLplug_BUILD_TESTS=ON/OFF                  | Build the tests and register them with CTest                    |
 
 Every emulator core is built by default. Each has an option of the library it
 comes from, `-DUSE_<core>_EMULATOR=ON/OFF`, named in the tables under
@@ -154,6 +155,29 @@ being built is affected. `USE_DOSBOX_EMULATOR` (ADLplug) and
 `USE_MAME_EMULATOR` (OPNplug) have to stay on, because the plugins measure
 their instruments on those cores. A project saved with a core that a build
 leaves out plays on that build's default core for the same chip.
+
+### Testing
+
+Configure with the tests and the developer tools, build, and run CTest:
+
+```
+cmake --preset adl-debug -DADLplug_BUILD_TESTS=ON -DADLplug_BUILD_TOOLS=ON
+cmake --build --preset adl-debug
+ctest --preset adl-debug
+```
+
+- The unit tests (`tests/unit`) check ADLplug's own utilities and the banks it
+  embeds.
+- The render tests load the VST3 plugin into `tools/render`, play a fixed
+  sequence, and compare the output with `tests/render/references.txt`. They
+  also check that opening the editor and restoring the saved state change
+  nothing and, in Release builds, that every emulator core plays.
+- When [pluginval](https://github.com/Tracktion/pluginval) or
+  [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint) is on the
+  `PATH` at configure time, it validates the VST3 or LV2 plugin as well.
+
+The editor tests open windows, so on Linux they need an X11 display, such as
+Xwayland.
 
 ### Installing
 

@@ -55,6 +55,7 @@ static constexpr auto &CalculateBankFileSize = WOPL_CalculateBankFileSize;
 static constexpr auto &CalculateInstFileSize = WOPL_CalculateInstFileSize;
 static constexpr auto &SaveBankToMem = WOPL_SaveBankToMem;
 static constexpr auto &SaveInstToMem = WOPL_SaveInstToMem;
+static constexpr auto &BanksCmp = WOPL_BanksCmp;
 
 using BankFile_Deleter = WOPLFile_Deleter;
 using BankFile_Ptr = WOPLFile_Ptr;
@@ -81,6 +82,7 @@ static constexpr auto &CalculateBankFileSize = WOPN_CalculateBankFileSize;
 static constexpr auto &CalculateInstFileSize = WOPN_CalculateInstFileSize;
 static constexpr auto &SaveBankToMem = WOPN_SaveBankToMem;
 static constexpr auto &SaveInstToMem = WOPN_SaveInstToMem;
+static constexpr auto &BanksCmp = WOPN_BanksCmp;
 
 using BankFile_Deleter = WOPNFile_Deleter;
 using BankFile_Ptr = WOPNFile_Ptr;

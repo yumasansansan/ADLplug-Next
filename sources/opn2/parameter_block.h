@@ -42,7 +42,9 @@ struct Parameter_Block : Basic_Parameter_Block {
     };
 
     struct Part {
-        Instrument instrument() const;
+        // The instrument the parameters describe, over base: what no parameter
+        // holds, such as the pseudo eight-operator flag, keeps base's value.
+        Instrument instrument(const Instrument &base) const;
         void set_instrument(const Instrument &ins);
 
         // AudioParameterBool *p_ps8op = nullptr;

@@ -37,6 +37,7 @@ option(ADLplug_ASSERTIONS "Enable assertions" OFF)
 option(ADLplug_WERROR "Treat warnings in ADLplug's own sources as errors" OFF)
 option(ADLplug_LTO "Use link-time optimisation (ThinLTO with Clang) in Release builds" ON)
 option(ADLplug_BUILD_TOOLS "Build developer tools (tools/render: offline VST3 renderer)" OFF)
+option(ADLplug_BUILD_TESTS "Build the tests and register them with CTest (render tests need ADLplug_BUILD_TOOLS)" OFF)
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
 set(ADLplug_ARCH "baseline" CACHE STRING "Instruction set of x86-64 builds (baseline, avx2)")
@@ -357,6 +358,7 @@ if(TARGET ADLplug_render)
   list(APPEND ADLplug_OWN_SOURCES "tools/render/render.cc")
 endif()
 
+set(ADLplug_OWN_COMPILE_DEFINITIONS "")
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   # NOMINMAX / WIN32_LEAN_AND_MEAN keep <windows.h> from defining min/max macros
   # that break std::min and std::max. JUCE defines NOMINMAX in its own native
@@ -365,8 +367,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   # _CRT_SECURE_NO_WARNINGS: strncpy and sscanf are used deliberately for
   # fixed-width, zero-padded fields; the MSVC CRT flags every such call and
   # suggests its non-portable *_s forms.
-  set_source_files_properties(${ADLplug_OWN_SOURCES}
-    PROPERTIES COMPILE_DEFINITIONS "NOMINMAX;WIN32_LEAN_AND_MEAN;_CRT_SECURE_NO_WARNINGS")
+  set(ADLplug_OWN_COMPILE_DEFINITIONS NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
 endif()
 
 if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
@@ -398,8 +399,27 @@ if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
     # Falling off the end of a non-void function is undefined behaviour.
     list(APPEND ADLplug_WARNING_FLAGS -Werror=return-type)
   endif()
-  set_source_files_properties(${ADLplug_OWN_SOURCES}
-    PROPERTIES COMPILE_OPTIONS "${ADLplug_WARNING_FLAGS}")
+endif()
+
+# Gives source files the settings above. Source file properties belong to the
+# directory that sets them, so tests/ calls this again for what it compiles.
+function(adlplug_own_sources)
+  if(ADLplug_OWN_COMPILE_DEFINITIONS)
+    set_source_files_properties(${ARGN} PROPERTIES COMPILE_DEFINITIONS "${ADLplug_OWN_COMPILE_DEFINITIONS}")
+  endif()
+  if(ADLplug_WARNING_FLAGS)
+    set_source_files_properties(${ARGN} PROPERTIES COMPILE_OPTIONS "${ADLplug_WARNING_FLAGS}")
+  endif()
+endfunction()
+
+adlplug_own_sources(${ADLplug_OWN_SOURCES})
+
+# --------------------------------------------------------------------------
+# Tests
+
+if(ADLplug_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(tests)
 endif()
 
 # --------------------------------------------------------------------------

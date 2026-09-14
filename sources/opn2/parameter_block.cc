@@ -181,13 +181,11 @@ void Parameter_Block::set_global_parameters(const Instrument_Global_Parameters &
     *p_lfofreq = gp.lfo_frequency;
 }
 
-Instrument Parameter_Block::Part::instrument() const
+Instrument Parameter_Block::Part::instrument(const Instrument &base) const
 {
-    Instrument ins;
+    Instrument ins = base;
     ins.version = Instrument::latest_version;
-    ins.inst_flags = 0;
 
-    // ins.pseudo_eight_op(p_ps8op->get());
     ins.blank(p_blank->get());
     ins.note_offset = static_cast<std::int16_t>(p_tune->get());
     // ins.note_offset2 = p_tune34->get();

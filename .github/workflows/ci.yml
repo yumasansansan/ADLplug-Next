@@ -1,10 +1,11 @@
 # Part of ADLplug, distributed under the GNU GPL v3 or later.
 #               (See accompanying file LICENSE.)
 #
-# Builds ADLplug and OPNplug with Clang and LLD on Windows, Linux and macOS, in
-# Debug and Release; x86-64 builds are made both for the baseline instruction
-# set and for AVX2. The workflow uses no actions: the checkout is plain git,
-# and ci/setup.sh installs a pinned toolchain.
+# Builds and tests ADLplug and OPNplug with Clang and LLD on Windows, Linux and
+# macOS, in Debug and Release; x86-64 builds are made both for the baseline
+# instruction set and for AVX2. The checkout is plain git, and ci/setup.sh
+# installs a pinned toolchain. The one action, actions/upload-artifact, keeps
+# the pictures of the editor; it is pinned to the commit of its release.
 
 name: CI
 
@@ -59,3 +60,15 @@ jobs:
 
       - name: Build
         run: bash ci/build.sh "${{ matrix.preset }}" "${{ matrix.arch }}"
+
+      - name: Test
+        run: bash ci/test.sh "${{ matrix.preset }}"
+
+      - name: Keep the editor pictures
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: editor-${{ matrix.preset }}-${{ matrix.arch }}
+          path: build/${{ matrix.preset }}/tests/render/*.png
+          if-no-files-found: warn
+          retention-days: 14

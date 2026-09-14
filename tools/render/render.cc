@@ -6,6 +6,8 @@
 //     ADLplug_render <plugin.vst3> <output.f32> [seconds] [warm-up ms]
 //                    [--editor] [--snapshot <file.png>] [--no-teardown]
 //                    [--state <file>] [--restore <file>] [--emulator <number>]
+//                    [--save-hashes <file>] [checks]
+//     ADLplug_render --compare <hashes file> <output hash> <state hash>
 //
 // Writes the plugin's output as interleaved 32-bit float samples and prints a
 // one-line summary with a hash, so two builds -- Debug against Release with
@@ -50,6 +52,17 @@
 // so renders with other emulators are reproducible as well. The summary names
 // the emulator the plug-in reports afterwards, which for a number the build
 // lacks is the one it plays instead.
+//
+// For the tests in tests/, the exit status can report a result. --save-hashes
+// <file> writes the output and state hashes, as "<output> <state>" in
+// hexadecimal. The checks run after the summary: --expect-output <hash> and
+// --expect-state <hash> compare a hash with a value, --expect-output-of <file>
+// and --expect-state-of <file> with a file from --save-hashes,
+// --require-emulator <name> compares the emulator the plug-in reports, and
+// --require-sound requires output that is not silent and has only finite
+// samples. A failed check is printed and makes the exit status 1, after the
+// teardown has run as usual. --compare checks a file from --save-hashes
+// against given hashes without loading any plug-in; "-" skips a hash.
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -58,6 +71,7 @@
 #endif
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -67,7 +81,9 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace {
@@ -115,6 +131,40 @@ std::uint64_t state_hash(juce::AudioPluginInstance &plugin)
     std::uint64_t hash = fnv1a64_basis;
     fnv1a64_add(hash, state.getData(), state.getSize());
     return hash;
+}
+
+// Hashes are written and read as 16 hexadecimal digits.
+std::string hash_text(std::uint64_t hash)
+{
+    char text[17];
+    std::snprintf(text, sizeof text, "%016llx", static_cast<unsigned long long>(hash));
+    return text;
+}
+
+std::optional<std::uint64_t> parse_hash(const std::string &text)
+{
+    std::uint64_t value = 0;
+    const char *const end = text.data() + text.size();
+    const auto [last, error] = std::from_chars(text.data(), end, value, 16);
+    if (text.empty() || error != std::errc{} || last != end)
+        return std::nullopt;
+    return value;
+}
+
+// Reads "<output hash> <state hash>" from a file written by --save-hashes.
+bool read_hashes(const std::string &path, std::uint64_t &output, std::uint64_t &state)
+{
+    std::ifstream in(path);
+    std::string output_text, state_text;
+    if (!(in >> output_text >> state_text))
+        return false;
+    const std::optional<std::uint64_t> output_hash = parse_hash(output_text);
+    const std::optional<std::uint64_t> saved_state_hash = parse_hash(state_text);
+    if (!output_hash || !saved_state_hash)
+        return false;
+    output = *output_hash;
+    state = *saved_state_hash;
+    return true;
 }
 
 // Sets the emulator number in the plug-in's state as the host keeps it.
@@ -295,6 +345,26 @@ std::vector<Scheduled_Event> make_sequence(double seconds)
 
 int main(int argc, char *argv[])
 {
+    if (argc == 5 && std::strcmp(argv[1], "--compare") == 0) {
+        std::uint64_t output = 0;
+        std::uint64_t state = 0;
+        if (!read_hashes(argv[2], output, state)) {
+            print_line(std::string("error: cannot read hashes from ") + argv[2]);
+            return 2;
+        }
+        bool same = true;
+        const auto compare = [&same](const char *what, std::uint64_t actual, const std::string &expected) {
+            if (expected == "-")
+                return;
+            const bool equal = parse_hash(expected) == actual;
+            print_line(std::string(what) + " " + hash_text(actual) + (equal ? " as expected" : ", expected " + expected));
+            same = same && equal;
+        };
+        compare("output", output, argv[3]);
+        compare("state", state, argv[4]);
+        return same ? 0 : 1;
+    }
+
     std::vector<std::string> args;
     bool open_editor = false;
     bool teardown = true;
@@ -302,6 +372,13 @@ int main(int argc, char *argv[])
     std::string restore_file;
     std::string snapshot_file;
     int emulator_number = -1;
+    std::string save_hashes_file;
+    std::optional<std::uint64_t> expected_output;
+    std::optional<std::uint64_t> expected_state;
+    std::string expected_output_file;
+    std::string expected_state_file;
+    std::string required_emulator;
+    bool require_sound = false;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--editor")
@@ -316,17 +393,58 @@ int main(int argc, char *argv[])
             restore_file = argv[++i];
         else if (arg == "--emulator" && i + 1 < argc)
             emulator_number = juce::String(argv[++i]).getIntValue();
+        else if (arg == "--save-hashes" && i + 1 < argc)
+            save_hashes_file = argv[++i];
+        else if ((arg == "--expect-output" || arg == "--expect-state") && i + 1 < argc) {
+            const std::optional<std::uint64_t> value = parse_hash(argv[++i]);
+            if (!value) {
+                print_line("error: " + arg + " needs a hash in hexadecimal");
+                return 2;
+            }
+            (arg == "--expect-output" ? expected_output : expected_state) = value;
+        }
+        else if (arg == "--expect-output-of" && i + 1 < argc)
+            expected_output_file = argv[++i];
+        else if (arg == "--expect-state-of" && i + 1 < argc)
+            expected_state_file = argv[++i];
+        else if (arg == "--require-emulator" && i + 1 < argc)
+            required_emulator = argv[++i];
+        else if (arg == "--require-sound")
+            require_sound = true;
         else
             args.push_back(arg);
     }
     if (args.size() < 2) {
         print_line("usage: ADLplug_render <plugin.vst3> <output.f32> [seconds] [warm-up ms] [--editor] "
-                   "[--snapshot <file.png>] [--no-teardown] [--state <file>] [--restore <file>] [--emulator <number>]");
+                   "[--snapshot <file.png>] [--no-teardown] [--state <file>] [--restore <file>] [--emulator <number>] "
+                   "[--save-hashes <file>] [--expect-output <hash>] [--expect-state <hash>] [--expect-output-of <file>] "
+                   "[--expect-state-of <file>] [--require-emulator <name>] [--require-sound]\n"
+                   "       ADLplug_render --compare <hashes file> <output hash|-> <state hash|->");
         return 2;
+    }
+
+    // Hashes expected from files are read now, so a missing file stops the run
+    // before anything is loaded.
+    std::uint64_t file_output = 0;
+    std::uint64_t file_state = 0;
+    if (!expected_output_file.empty()) {
+        if (!read_hashes(expected_output_file, file_output, file_state)) {
+            print_line("error: cannot read hashes from " + expected_output_file);
+            return 2;
+        }
+        expected_output = file_output;
+    }
+    if (!expected_state_file.empty()) {
+        if (!read_hashes(expected_state_file, file_output, file_state)) {
+            print_line("error: cannot read hashes from " + expected_state_file);
+            return 2;
+        }
+        expected_state = file_state;
     }
     const double seconds = args.size() > 2 ? juce::String(args[2]).getDoubleValue() : 20.0;
     const int warmup_ms = args.size() > 3 ? juce::String(args[3]).getIntValue() : 5000;
 
+    int exit_status = 0;
     milestone("start");
     {
         juce::ScopedJuceInitialiser_GUI juce_init;
@@ -491,6 +609,29 @@ int main(int argc, char *argv[])
                       static_cast<unsigned long long>(hash));
         print_line(summary);
 
+        if (!save_hashes_file.empty()) {
+            std::ofstream hashes_out(save_hashes_file);
+            hashes_out << hash_text(hash) << ' ' << hash_text(state) << '\n';
+            if (!hashes_out) {
+                print_line("error: cannot write " + save_hashes_file);
+                return 1;
+            }
+        }
+
+        std::vector<std::string> failures;
+        if (expected_output && *expected_output != hash)
+            failures.push_back("output " + hash_text(hash) + ", expected " + hash_text(*expected_output));
+        if (expected_state && *expected_state != state)
+            failures.push_back("state " + hash_text(state) + ", expected " + hash_text(*expected_state));
+        if (!required_emulator.empty() && emulator != required_emulator)
+            failures.push_back("emulator '" + emulator + "', expected '" + required_emulator + "'");
+        if (require_sound && (peak <= 0.0f || nonfinite != 0))
+            failures.push_back("the output is silent or has samples that are not finite");
+        for (const std::string &failure : failures)
+            print_line("check failed: " + failure);
+        if (!failures.empty())
+            exit_status = 1;
+
         if (open_editor || !snapshot_file.empty()) {
             std::unique_ptr<juce::AudioProcessorEditor> editor(plugin->createEditorAndMakeActive());
             if (editor == nullptr) {
@@ -525,7 +666,7 @@ int main(int argc, char *argv[])
 
         if (!teardown) {
             milestone("exiting without teardown");
-            std::_Exit(0);
+            std::_Exit(exit_status);
         }
 
         plugin->releaseResources();
@@ -536,5 +677,5 @@ int main(int argc, char *argv[])
         pump_messages(100);
     }
     milestone("JUCE shut down");
-    return 0;
+    return exit_status;
 }
