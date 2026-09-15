@@ -140,26 +140,48 @@ endif()
 # Release builds are optimised as far as the meaning of the code allows. Besides
 # -O3 and LTO at level 3, every target, the dependencies included, is compiled
 # with these:
-# - -fomit-frame-pointer: the frame pointer register is left to the code, on
-#   Apple's arm64 systems too, where frames are otherwise kept for backtraces.
 # - -fno-math-errno: the math functions are not expected to set errno, so that
 #   the compiler can put instructions in their place and vectorise loops that
 #   call them. What they compute stays IEEE's.
+# - -ffinite-loops: loops whose condition is not a constant are assumed to end.
+#   Clang assumes it for C11 and C++11 code anyway; this extends it to the C90
+#   code of the libraries.
+# - -fomit-frame-pointer, except on Apple's systems: the frame pointer register
+#   is left to the code. Apple's arm64 ABI wants it to address a valid frame
+#   record at all times; given there, auval aborted on an ausdk::AUException
+#   that the plugin's own dispatch code catches otherwise. Clang already leaves
+#   frame records out of leaf functions there.
+# - -fvisibility-inlines-hidden-static-local-var (Linux): the static variables
+#   of hidden inline member functions are hidden too, and reached without the
+#   GOT. It is the default on Apple's systems.
 # - -fno-plt (Linux): calls into shared libraries go through the GOT, without
 #   the PLT's stubs.
 # - -mtls-dialect=gnu2 (x86-64 Linux): thread-local variables of a shared
 #   object are reached through TLS descriptors, without a call to
 #   __tls_get_addr. The link gives it to the LTO backend as well.
+# LLD is given optimisations of its own on Linux: -O3 (branches to branches go
+# straight to their targets, and strings share their tails), --icf=safe
+# (identical functions whose addresses are not taken are folded) and
+# --Bsymbolic-functions (a shared object calls its own functions directly); and
+# --icf=safe on Apple's systems. lld-link folds and removes code by default.
 # Nothing here trades the precision of floating-point results (no -ffast-math
 # or its parts; contraction stays as the compiler has it), protections, or the
 # defaults of Windows builds that keep MSVC's semantics (-fwrapv, no strict
 # aliasing), on which Windows code may rely.
 
 add_compile_options(
-  "$<$<CONFIG:Release>:-fomit-frame-pointer>"
-  "$<$<CONFIG:Release>:-fno-math-errno>")
+  "$<$<CONFIG:Release>:-fno-math-errno>"
+  "$<$<CONFIG:Release>:-ffinite-loops>")
+if(APPLE)
+  add_link_options("$<$<CONFIG:Release>:LINKER:--icf=safe>")
+else()
+  add_compile_options("$<$<CONFIG:Release>:-fomit-frame-pointer>")
+endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  add_compile_options("$<$<CONFIG:Release>:-fno-plt>")
+  add_compile_options(
+    "$<$<CONFIG:Release>:-fno-plt>"
+    "$<$<CONFIG:Release>:$<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden-static-local-var>>")
+  add_link_options("$<$<CONFIG:Release>:LINKER:-O3,--icf=safe,--Bsymbolic-functions>")
   if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
     add_compile_options("$<$<CONFIG:Release>:-mtls-dialect=gnu2>")
     add_link_options("$<$<CONFIG:Release>:-mtls-dialect=gnu2>")
