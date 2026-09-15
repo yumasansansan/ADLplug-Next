@@ -135,6 +135,38 @@ elseif(NOT ADLplug_ARCH STREQUAL "baseline")
 endif()
 
 # --------------------------------------------------------------------------
+# Optimisation flags
+#
+# Release builds are optimised as far as the meaning of the code allows. Besides
+# -O3 and LTO at level 3, every target, the dependencies included, is compiled
+# with these:
+# - -fomit-frame-pointer: the frame pointer register is left to the code, on
+#   Apple's arm64 systems too, where frames are otherwise kept for backtraces.
+# - -fno-math-errno: the math functions are not expected to set errno, so that
+#   the compiler can put instructions in their place and vectorise loops that
+#   call them. What they compute stays IEEE's.
+# - -fno-plt (Linux): calls into shared libraries go through the GOT, without
+#   the PLT's stubs.
+# - -mtls-dialect=gnu2 (x86-64 Linux): thread-local variables of a shared
+#   object are reached through TLS descriptors, without a call to
+#   __tls_get_addr. The link gives it to the LTO backend as well.
+# Nothing here trades the precision of floating-point results (no -ffast-math
+# or its parts; contraction stays as the compiler has it), protections, or the
+# defaults of Windows builds that keep MSVC's semantics (-fwrapv, no strict
+# aliasing), on which Windows code may rely.
+
+add_compile_options(
+  "$<$<CONFIG:Release>:-fomit-frame-pointer>"
+  "$<$<CONFIG:Release>:-fno-math-errno>")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options("$<$<CONFIG:Release>:-fno-plt>")
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+    add_compile_options("$<$<CONFIG:Release>:-mtls-dialect=gnu2>")
+    add_link_options("$<$<CONFIG:Release>:-mtls-dialect=gnu2>")
+  endif()
+endif()
+
+# --------------------------------------------------------------------------
 # Plugin identity
 #
 # The names, the maker and the identifiers differ from those of upstream
@@ -166,6 +198,21 @@ set(ADLplug_BUNDLE_ID "io.github.yumasansansan.${ADLplug_NAME}")
 
 include(ADLMIDI)
 add_subdirectory("thirdparty/JUCE" EXCLUDE_FROM_ALL SYSTEM)
+
+# On Linux, JUCE gives its modules the system libraries they need through
+# pkg-config, with the compile options of the libraries' .pc files besides the
+# include directories: AlmaLinux's add -pthread and -DWITH_GZFILEOP (zlib-ng),
+# which nothing here needs. Those options go; the include directories, the
+# libraries and the link options stay. JUCE creates the targets in its own
+# directory and in that of its modules.
+foreach(ADLplug_JUCE_DIRECTORY IN ITEMS "thirdparty/JUCE" "thirdparty/JUCE/modules")
+  get_property(ADLplug_JUCE_TARGETS DIRECTORY "${ADLplug_JUCE_DIRECTORY}" PROPERTY BUILDSYSTEM_TARGETS)
+  foreach(ADLplug_JUCE_TARGET IN LISTS ADLplug_JUCE_TARGETS)
+    if(ADLplug_JUCE_TARGET MATCHES "^pkgconfig_")
+      set_property(TARGET "${ADLplug_JUCE_TARGET}" PROPERTY INTERFACE_COMPILE_OPTIONS "")
+    endif()
+  endforeach()
+endforeach()
 
 set(ADLplug_FORMATS "")
 if(ADLplug_VST3)

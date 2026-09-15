@@ -276,6 +276,13 @@ else()
     "12|YMF276-LLE OPN2|USE_NUKED_OPN2_LLE_EMULATOR|0")
 endif()
 
+# The fallback renders last 2 seconds, after the warm-up of the main render
+# test. The warm-up is when the plugin's worker thread measures the instruments,
+# in real time; the render of an instrument measured later differs. A Debug
+# build on a busy machine did not always finish within 1 second (render.fallback.1
+# failed in CI, and 6 renders at once reproduced it), and does within 5.
+set(fallback_sequence 2 5000)
+
 set(fallback_cores "")
 foreach(core IN LISTS cores)
   string(REPLACE "|" ";" core_fields "${core}")
@@ -312,14 +319,14 @@ foreach(core IN LISTS cores)
   if(NOT core_substitute IN_LIST fallback_cores)
     list(APPEND fallback_cores ${core_substitute})
     add_test(NAME render.fallback.to.${core_substitute}
-      COMMAND ADLplug_render "${plugin}" "${render_out}/fallback-to-${core_substitute}.f32" 2 1000
+      COMMAND ADLplug_render "${plugin}" "${render_out}/fallback-to-${core_substitute}.f32" ${fallback_sequence}
         --emulator ${core_substitute} --require-sound
         --save-hashes "${render_out}/fallback-to-${core_substitute}.hashes")
     set_tests_properties(render.fallback.to.${core_substitute} PROPERTIES
       FIXTURES_SETUP fallback-to-${core_substitute} TIMEOUT 600 LABELS fallback)
   endif()
   add_test(NAME render.fallback.${core_index}
-    COMMAND ADLplug_render "${plugin}" "${render_out}/fallback${core_index}.f32" 2 1000
+    COMMAND ADLplug_render "${plugin}" "${render_out}/fallback${core_index}.f32" ${fallback_sequence}
       --emulator ${core_index} --expect-output-of "${render_out}/fallback-to-${core_substitute}.hashes")
   set_tests_properties(render.fallback.${core_index} PROPERTIES
     FIXTURES_REQUIRED fallback-to-${core_substitute} TIMEOUT 600 LABELS fallback)
