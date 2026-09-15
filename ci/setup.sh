@@ -140,8 +140,11 @@ setup_linux() {
     sudo tee /etc/apt/sources.list.d/apt.llvm.org.list > /dev/null
 
   sudo apt-get update -qq
+  # libclang-rt has the profile runtime that the instrumented build of
+  # profile-guided optimisation links (cmake/PGO.cmake).
   sudo apt-get install -y -qq --no-install-recommends \
-    "clang-$llvm_major" "lld-$llvm_major" "llvm-$llvm_major" "${linux_packages[@]}"
+    "clang-$llvm_major" "lld-$llvm_major" "llvm-$llvm_major" "libclang-rt-$llvm_major-dev" \
+    "${linux_packages[@]}"
   llvm_bin=/usr/lib/llvm-$llvm_major/bin
 
   setup_pluginval Linux "$pluginval_linux_sha256" "$RUNNER_TEMP"

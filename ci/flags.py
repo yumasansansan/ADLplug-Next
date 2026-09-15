@@ -49,7 +49,8 @@ KINDS = [
 
 
 def kind_of(token):
-    if token.startswith(('-', '@')):
+    # NAME=value, as in cmake -E env CC=clang, names a program without running it.
+    if token.startswith(('-', '@')) or '=' in token:
         return None
     name = program(token)
     return next((kind for kind, pattern in KINDS if pattern.match(name)), None)

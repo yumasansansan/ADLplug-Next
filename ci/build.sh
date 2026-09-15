@@ -17,8 +17,9 @@
 # summary of the job. Before building, it checks the -march flags of the
 # compile commands, and ThinLTO in those of Release builds, whose every compile
 # and link option it lists (ci/flags.py). Then it builds, with every command
-# shown in full, and lists the artefacts and the libraries the VST3 plugin
-# links against.
+# shown in full, those of the builds that the build starts included (the
+# instrumented build of profile-guided optimisation), and lists the artefacts
+# and the libraries the VST3 plugin links against.
 set -euo pipefail
 
 preset=$1
@@ -103,8 +104,10 @@ case $preset in
     ;;
 esac
 
-# Ninja shows every command in full (-v), rather than its short description.
-cmake --build --preset "$preset" --verbose
+# Ninja shows every command in full, rather than its short description. The
+# VERBOSE variable carries that into the builds that CMake starts within the
+# build, such as the instrumented build of cmake/PGO.cmake.
+VERBOSE=1 cmake --build --preset "$preset"
 
 artefacts=build/$preset/ADLplug_artefacts
 echo "== artefacts"

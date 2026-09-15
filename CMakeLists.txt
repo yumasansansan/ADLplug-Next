@@ -188,6 +188,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   endif()
 endif()
 
+# Profile-guided optimisation of Release builds, with ADLplug_PGO
+# (cmake/PGO.cmake).
+include(PGO)
+
 # --------------------------------------------------------------------------
 # Plugin identity
 #
@@ -214,6 +218,10 @@ else()
 endif()
 set(ADLplug_LV2URI "${PROJECT_HOMEPAGE}#${ADLplug_NAME}")
 set(ADLplug_BUNDLE_ID "io.github.yumasansansan.${ADLplug_NAME}")
+
+# The emulator cores of the chip (cmake/Cores.cmake), for the tests and for the
+# training of profile-guided optimisation.
+include(Cores)
 
 # --------------------------------------------------------------------------
 # Dependencies
