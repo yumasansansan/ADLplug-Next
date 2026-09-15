@@ -11,7 +11,7 @@
 #
 # Makes the rpm package of a Release build of ci/build.sh, for RHEL and
 # AlmaLinux 10 or later and openSUSE (plan D59), in the AlmaLinux container of
-# the Nightly workflow: what the build installs under /usr, with the texts of
+# CI (.github/workflows/ci.yml): what the build installs under /usr, with the texts of
 # the banks and the licenses (ci/licenses.py). Those systems keep their
 # libraries in lib64, and so do their LV2 hosts look there: the build has to be
 # configured with -DADLplug_INSTALL_LV2DIR=lib64/lv2. The AVX2 build is the

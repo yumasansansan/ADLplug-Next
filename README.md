@@ -42,17 +42,17 @@ which the copyright lines of ADLplug-Next's code carry.
 ## Development builds
 
 [![CI](https://github.com/yumasansansan/ADLplug-Next/actions/workflows/ci.yml/badge.svg)](https://github.com/yumasansansan/ADLplug-Next/actions/workflows/ci.yml)
-[![Nightly](https://github.com/yumasansansan/ADLplug-Next/actions/workflows/nightly.yml/badge.svg)](https://github.com/yumasansansan/ADLplug-Next/actions/workflows/nightly.yml)
 
 Every push and pull request is built by GitHub Actions on Windows, Linux and
 macOS, in Debug and Release; x86-64 builds are made both for the baseline
 instruction set and for AVX2.
 
-Every day at 18:00 UTC, when `main` has changed, the Nightly workflow builds
-and tests it again, and replaces the
+A push to `main` also packs its Release builds, builds the rpm packages and
+the builds that leave cores out, and, once every job of the run has passed,
+replaces the
 [Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly)
-pre-release with the new builds: an archive for each system, and packages for
-Ubuntu and for RHEL, AlmaLinux and openSUSE (see [Installing](#installing)).
+pre-release with them: an archive for each system, and packages for Ubuntu
+and for RHEL, AlmaLinux and openSUSE (see [Installing](#installing)).
 
 Until the first release, the versions are 1.99.N, where N counts the commits
 of `main` since the last commit of upstream ADLplug. The plugins show the time

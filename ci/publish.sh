@@ -10,7 +10,7 @@
 #   ci/publish.sh assemble <artifacts> <assets> <notes>
 #   ci/publish.sh release <assets> <notes>
 #
-# The last job of the Nightly workflow (.github/workflows/nightly.yml).
+# The publish job of CI on a push to main (.github/workflows/ci.yml).
 #
 # assemble merges the packs of both chips that ci/package.sh made into one
 # archive for each system and instruction set, ADLplug-Next-<version>-<system>

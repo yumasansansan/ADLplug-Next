@@ -9,13 +9,25 @@
 # Builds and tests ADLplug-Next and OPNplug-Next with Clang and LLD on Windows,
 # Linux and macOS, in Debug and Release; x86-64 builds are made both for the
 # baseline instruction set and for AVX2. The checkout is plain git, and
-# ci/setup.sh installs a pinned toolchain. The one action,
-# actions/upload-artifact, keeps the pictures of the editor, and the packs of
-# the Release builds when the Nightly workflow (nightly.yml) calls this one
-# with package set (ci/package.sh); it is pinned to the commit of its release.
+# ci/setup.sh installs a pinned toolchain.
 #
 # The reuse job checks with reuse lint, from Ubuntu's reuse package, that every
 # file names its copyright holders and license (see REUSE.toml and LICENSES/).
+#
+# A push to main also makes the Nightly release (plan D44):
+#  - the Release builds are packed, with a deb package from each Ubuntu build
+#    (ci/package.sh);
+#  - an AlmaLinux 10 container builds and tests the Release configurations for
+#    the rpm packages (ci/package-rpm.sh);
+#  - builds without the emulator cores that can be left out check that other
+#    cores play in their place (the render.fallback tests);
+#  - when every job of the run has passed, the publish job replaces the
+#    pre-release "Nightly" with the archive of each system, the packages and
+#    SHA256SUMS, and moves the tag nightly to the commit (ci/publish.sh).
+# Only the publish job can write to the repository. The one action,
+# actions/upload-artifact, keeps the pictures of the editor and the packs; it
+# is pinned to the commit of its release. The publish job downloads the packs
+# with gh.
 
 name: CI
 
@@ -23,21 +35,15 @@ on:
   push:
   pull_request:
   workflow_dispatch:
-  workflow_call:
-    inputs:
-      package:
-        description: Pack the Release builds for the Nightly release
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
-# A workflow that calls this one gives its own name as github.workflow, so
-# that its run and the runs of pushes do not cancel each other.
+# A push cancels the run of an earlier push to the same branch, except on main:
+# there the run waits for the one before, which may be publishing the release.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 defaults:
   run:
@@ -83,17 +89,17 @@ jobs:
         run: bash ci/test.sh "${{ matrix.preset }}"
 
       - name: Pack for the Nightly release
-        if: ${{ inputs.package && endsWith(matrix.preset, '-release') }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && endsWith(matrix.preset, '-release') }}
         run: bash ci/package.sh "${{ matrix.preset }}" "${{ matrix.arch }}" package
 
       - name: Keep the pack
-        if: ${{ inputs.package && endsWith(matrix.preset, '-release') }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && endsWith(matrix.preset, '-release') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: package-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.preset }}
           path: package/
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 1
 
       - name: Keep the editor pictures
         if: ${{ !cancelled() && runner.os == 'Windows' }}
@@ -129,3 +135,128 @@ jobs:
 
       - name: Check the licensing of every file
         run: reuse lint
+
+  fallback:
+    name: ${{ matrix.preset }} without ${{ matrix.without }}
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: adl-debug
+            without: the optional cores
+            options: >-
+              -DUSE_NUKED_EMULATOR=OFF -DUSE_OPAL_EMULATOR=OFF -DUSE_JAVA_EMULATOR=OFF
+              -DUSE_ESFMU_EMULATOR=OFF -DUSE_MAME_EMULATOR=OFF -DUSE_YMFM_EMULATOR=OFF
+              -DUSE_NUKED_OPL2_LLE_EMULATOR=OFF -DUSE_NUKED_OPL3_LLE_EMULATOR=OFF
+          - preset: opn-debug
+            without: the optional cores
+            options: >-
+              -DUSE_NUKED_EMULATOR=OFF -DUSE_GENS_EMULATOR=OFF -DUSE_YMFM_EMULATOR=OFF
+              -DUSE_NP2_EMULATOR=OFF -DUSE_MAME_2608_EMULATOR=OFF
+              -DUSE_NUKED_OPN2_LLE_EMULATOR=OFF -DUSE_NUKED_OPNA_LLE_EMULATOR=OFF
+          - preset: opn-debug
+            without: the OPNA cores but MAME YM2608
+            options: >-
+              -DUSE_NP2_EMULATOR=OFF -DUSE_YMFM_EMULATOR=OFF -DUSE_NUKED_OPNA_LLE_EMULATOR=OFF
+
+    steps:
+      - name: Check out
+        run: |
+          git config --global core.autocrlf false
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git submodule update --init --depth 1 --jobs 4
+          git log -1 --format='%H %s'
+
+      - name: Set up the toolchain
+        run: bash ci/setup.sh
+
+      - name: Build
+        run: bash ci/build.sh "${{ matrix.preset }}" baseline ${{ matrix.options }}
+
+      - name: Test
+        run: bash ci/test.sh "${{ matrix.preset }}"
+
+  rpm:
+    name: rpm ${{ matrix.preset }} (almalinux:10, ${{ matrix.arch }})
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    # AlmaLinux 10.2 of 2026-09-02; move the digest to update it.
+    container: almalinux:10@sha256:957738702313e6ee452cdb17bc1431542c467be9a4e2f4da3b8e551b0ebb9677
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [baseline, avx2]
+        preset: [adl-release, opn-release]
+
+    steps:
+      - name: Check out
+        run: |
+          dnf install -y -q git
+          git config --global core.autocrlf false
+          git config --global --add safe.directory "$PWD"
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git submodule update --init --depth 1 --jobs 4
+          git log -1 --format='%H %s'
+
+      - name: Set up the toolchain
+        run: bash ci/setup.sh
+
+      - name: Build
+        run: bash ci/build.sh "${{ matrix.preset }}" "${{ matrix.arch }}" -DADLplug_INSTALL_LV2DIR=lib64/lv2
+
+      - name: Test
+        run: bash ci/test.sh "${{ matrix.preset }}" --no-gui
+
+      - name: Pack
+        run: bash ci/package-rpm.sh "${{ matrix.preset }}" "${{ matrix.arch }}" package
+
+      - name: Keep the package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-rpm-${{ matrix.arch }}-${{ matrix.preset }}
+          path: package/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Nightly release
+    needs: [build, reuse, fallback, rpm]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - name: Check out
+        run: |
+          git config --global core.autocrlf false
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git log -1 --format='%H %s'
+
+      - name: Download the packs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --dir artifacts --pattern 'package-*'
+
+      - name: Assemble the release
+        run: bash ci/publish.sh assemble artifacts assets notes.md
+
+      - name: Replace the Nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ci/publish.sh release assets notes.md

@@ -146,8 +146,7 @@ else()
   string(TOLOWER "${CMAKE_SYSTEM_NAME}" ADLplug_RENDER_SYSTEM)
 endif()
 # A Linux distribution other than Ubuntu has its own version of the maths
-# library, so its references have a key of their own, as AlmaLinux has in the
-# Nightly workflow.
+# library, so its references have a key of their own, as AlmaLinux has in CI.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   cmake_host_system_information(RESULT ADLplug_DISTRIBUTION QUERY DISTRIB_ID)
   if(ADLplug_DISTRIBUTION AND NOT ADLplug_DISTRIBUTION STREQUAL "ubuntu")
@@ -301,7 +300,7 @@ foreach(core IN LISTS cores)
   # default core when the build leaves that one out too: asking for it gives
   # the output of that core. The parameters keep the number asked for (plan
   # D54), so the outputs are compared rather than the names. Only builds that
-  # leave cores out have these tests, such as those of the Nightly workflow.
+  # leave cores out have these tests, such as those CI makes on a push to main.
   foreach(other IN LISTS cores)
     string(REPLACE "|" ";" other_fields "${other}")
     list(GET other_fields 0 other_index)

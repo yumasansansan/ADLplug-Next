@@ -10,8 +10,8 @@
 # Sets up a GitHub Actions runner to build and test ADLplug-Next: Clang, LLD and the
 # LLVM tools of one pinned version, pluginval, and on Linux the development
 # packages that JUCE needs, the tools for the tests and lv2lint. In the
-# AlmaLinux container of the Nightly workflow, which builds the rpm packages,
-# it sets up LLVM and the development packages alone, as root. The tools go
+# AlmaLinux container where CI builds the rpm packages, it sets up LLVM and
+# the development packages alone, as root. The tools go
 # first on PATH for the later steps. Every download is checked: the
 # apt.llvm.org signing key by its fingerprint, archives by their SHA-256, and
 # lv2lint's source by its commit.
@@ -31,6 +31,14 @@ macos_archive=LLVM-$llvm_release-macOS-ARM64.tar.zst
 macos_sha256=2c4a0fdd1ec6a32d4fd57ff32aa714ec8b3c71bf02a24ec38608a4f23f8aca89
 linux_archive=LLVM-$llvm_release-Linux-X64.tar.zst
 linux_sha256=b7ddbabd70fa1d206948bc83f59e59aa84eaf4cd09b6b89cc3ece28177710a6f
+
+# The Linux archive is built on Ubuntu 22.04, and its LLD needs that system's
+# ICU 70 (libicuuc.so.70, libicui18n.so.70), through the libxml2 linked into
+# it; AlmaLinux 10 has ICU 74. The libraries come from Ubuntu 22.04's package
+# and are found through LD_LIBRARY_PATH; nothing else asks for their version.
+icu70_package=libicu70_70.1-2_amd64.deb
+icu70_url=https://launchpad.net/ubuntu/+archive/primary/+files/$icu70_package
+icu70_sha256=58a154f6307289813da2276f900498ef536ae7c0522d2cf31a3c3c5cf62dfd9a
 
 # Linux: the packages of apt.llvm.org, signed with this key.
 apt_key_fingerprint=6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
@@ -69,14 +77,14 @@ almalinux_packages=(
   alsa-lib-devel fontconfig-devel freetype-devel
   libX11-devel libXcomposite-devel libXcursor-devel libXext-devel libXi-devel
   libXinerama-devel libXrandr-devel libXrender-devel
-  cmake ninja-build gcc-c++ git python3 tar xz zstd rpm-build
+  cmake ninja-build gcc-c++ binutils git python3 tar xz zstd rpm-build
 )
 
 # Pipelines below are written so that no command stops reading early: with
 # pipefail, a writer killed by SIGPIPE would fail the script.
 
 download() {  # url file sha256
-  curl --fail --location --silent --show-error --retry 3 --output "$2" "$1"
+  curl --fail --location --silent --show-error --retry 3 --retry-all-errors --output "$2" "$1"
   local actual
   if command -v sha256sum > /dev/null; then
     actual=$(sha256sum "$2")
@@ -116,7 +124,7 @@ setup_pluginval() {  # system sha256 directory
 setup_linux() {
   local key=$RUNNER_TEMP/apt.llvm.org.asc
   local keyring=/usr/share/keyrings/apt.llvm.org.gpg
-  curl --fail --location --silent --show-error --retry 3 --output "$key" \
+  curl --fail --location --silent --show-error --retry 3 --retry-all-errors --output "$key" \
     https://apt.llvm.org/llvm-snapshot.gpg.key
   local fingerprint
   fingerprint=$(gpg --show-keys --with-colons "$key" | awk -F : '$1 == "fpr" && !found { print $10; found = 1 }')
@@ -186,6 +194,17 @@ setup_almalinux() {
   download "$(release_url "$linux_archive")" "$RUNNER_TEMP/$linux_archive" "$linux_sha256"
   extract "$RUNNER_TEMP/$linux_archive" "$RUNNER_TEMP/llvm" tar .a
   llvm_bin=$RUNNER_TEMP/llvm/bin
+
+  local package=$RUNNER_TEMP/$icu70_package icu=$RUNNER_TEMP/icu70
+  download "$icu70_url" "$package" "$icu70_sha256"
+  mkdir -p "$icu/deb"
+  (cd "$icu/deb" && ar x "$package")
+  tar -x -f "$icu/deb"/data.tar.* -C "$icu/deb" --wildcards './usr/lib/x86_64-linux-gnu/libicu*.so.70*'
+  mv "$icu/deb/usr/lib/x86_64-linux-gnu"/libicu* "$icu/"
+  rm -rf "$icu/deb" "$package"
+  export LD_LIBRARY_PATH=$icu
+  echo "LD_LIBRARY_PATH=$icu" >> "$GITHUB_ENV"
+  "$llvm_bin/ld.lld" --version
 }
 
 tool_paths=()

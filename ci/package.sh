@@ -9,8 +9,8 @@
 #
 #   ci/package.sh <preset> <baseline|avx2|arm64> <directory>
 #
-# Packs a Release build of ci/build.sh for the Nightly workflow
-# (.github/workflows/nightly.yml) into <directory>:
+# Packs a Release build of ci/build.sh for the Nightly release, which CI makes
+# on a push to main (.github/workflows/ci.yml), into <directory>:
 #  - <system>-<machine>-<chip>.tar: the plugins and the standalone program as
 #    the build made them, the texts of the banks, the licenses
 #    (ci/licenses.py) and version.txt, which ci/publish.sh merges with the

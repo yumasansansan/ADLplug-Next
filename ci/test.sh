@@ -12,8 +12,8 @@
 # Runs the tests of a preset that ci/build.sh built. On Linux the editor opens
 # on Xwayland under a headless Weston, with a window manager, as it would in a
 # Wayland session; --no-gui leaves out the tests that open windows instead, for
-# systems that have none of those, as the AlmaLinux container of the Nightly
-# workflow. On macOS the Audio Unit also goes through auval. The render hashes
+# systems that have none of those, as the AlmaLinux container of CI. On macOS
+# the Audio Unit also goes through auval. The render hashes
 # are printed at the end, with a warning when tests/render/references.txt has
 # none for this system.
 set -euo pipefail
