@@ -15,8 +15,10 @@
 # configuration checks the toolchain (cmake/LLVMToolchain.cmake), and this
 # script shows what it checked, in the log and, in GitHub Actions, in the
 # summary of the job. Before building, it checks the -march flags of the
-# compile commands, and ThinLTO in those of Release builds. Then it builds, and
-# lists the artefacts and the libraries the VST3 plugin links against.
+# compile commands, and ThinLTO in those of Release builds, whose every compile
+# and link option it lists (ci/flags.py). Then it builds, with every command
+# shown in full, and lists the artefacts and the libraries the VST3 plugin
+# links against.
 set -euo pipefail
 
 preset=$1
@@ -82,10 +84,27 @@ case $preset in
       grep -v -- '-flto=thin' <<< "$commands" | head -n 5 >&2 || true
       exit 1
     fi
+
+    # Every option that reaches the compilers, the linker and the resource
+    # compiler, wherever it comes from, for the log to show.
+    case "$(uname -s)" in
+      MINGW* | MSYS* | CYGWIN*) python=python ;;
+      *) python=python3 ;;
+    esac
+    if [ -n "${GITHUB_ACTIONS:-}" ]; then
+      echo "::group::== options of the compile and link commands (ci/flags.py)"
+    else
+      echo "== options of the compile and link commands (ci/flags.py)"
+    fi
+    "$python" ci/flags.py "build/$preset"
+    if [ -n "${GITHUB_ACTIONS:-}" ]; then
+      echo "::endgroup::"
+    fi
     ;;
 esac
 
-cmake --build --preset "$preset"
+# Ninja shows every command in full (-v), rather than its short description.
+cmake --build --preset "$preset" --verbose
 
 artefacts=build/$preset/ADLplug_artefacts
 echo "== artefacts"

@@ -31,16 +31,37 @@ set(WITH_HQ_RESAMPLER OFF CACHE BOOL "" FORCE)
 # it out of this build's warning output on Windows.
 set(ADLplug_UPSTREAM_CRT_DEFS $<$<PLATFORM_ID:Windows>:_CRT_SECURE_NO_WARNINGS>)
 
-# For GCC-style compilers both libraries rewrite their Release flags: -O3 is
-# replaced with -O2, and -fno-omit-frame-pointer (a debugging/profiling aid) is
-# forced on. Release is the distribution build and should be fully optimised
-# with no debugging aids, so put both back for Release only. Target options
-# follow CMAKE_<LANG>_FLAGS_RELEASE on the command line, so these take effect.
-# RelWithDebInfo keeps the libraries' own choices.
-set(ADLplug_UPSTREAM_RELEASE_OPTS "")
-if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
-  set(ADLplug_UPSTREAM_RELEASE_OPTS $<$<CONFIG:Release>:-O3> $<$<CONFIG:Release>:-fomit-frame-pointer>)
-endif()
+# For compilers other than MSVC, both libraries change the compiler and linker
+# flags of their directories: -O3 becomes -O2 with -ffunction-sections and
+# -fdata-sections, and -fno-omit-frame-pointer, -Wall -Wextra, -std=c89 or
+# -std=c++98 and -Wl,--no-undefined are added. Their libraries also get
+# -fvisibility options of their own. None of that is wanted: the libraries are
+# compiled with the flags of the rest of the build. A directory's flags are
+# those it holds when its processing ends, so the flags saved here are put back
+# then: CMake includes cmake/UpstreamFlags.cmake at the end of each library's
+# project() call, and that file defers adlplug_restore_upstream_flags() to the
+# end of the library's directory. The language standards that the libraries
+# set for their code (C90, C++98 or C++14, and C++14 for the YMFM sources)
+# stay.
+set(ADLplug_UPSTREAM_FLAG_VARIABLES "")
+foreach(ADLplug_KIND IN ITEMS C CXX EXE_LINKER SHARED_LINKER MODULE_LINKER)
+  foreach(ADLplug_CONFIG IN ITEMS "" _DEBUG _RELEASE _RELWITHDEBINFO _MINSIZEREL)
+    list(APPEND ADLplug_UPSTREAM_FLAG_VARIABLES "CMAKE_${ADLplug_KIND}_FLAGS${ADLplug_CONFIG}")
+  endforeach()
+endforeach()
+foreach(ADLplug_VARIABLE IN LISTS ADLplug_UPSTREAM_FLAG_VARIABLES)
+  set("ADLplug_SAVED_${ADLplug_VARIABLE}" "${${ADLplug_VARIABLE}}")
+endforeach()
+
+# A macro, so that it sets the variables of the directory it is called in.
+macro(adlplug_restore_upstream_flags)
+  foreach(ADLplug_VARIABLE IN LISTS ADLplug_UPSTREAM_FLAG_VARIABLES)
+    set("${ADLplug_VARIABLE}" "${ADLplug_SAVED_${ADLplug_VARIABLE}}")
+  endforeach()
+endmacro()
+
+set(CMAKE_PROJECT_libADLMIDI_INCLUDE "${CMAKE_CURRENT_LIST_DIR}/UpstreamFlags.cmake")
+set(CMAKE_PROJECT_libOPNMIDI_INCLUDE "${CMAKE_CURRENT_LIST_DIR}/UpstreamFlags.cmake")
 
 # Emulator cores: each library builds a core when its USE_*_EMULATOR option is
 # ON, and README lists them. ADLplug builds every core: the choice of chips and
@@ -61,7 +82,6 @@ set(libADLMIDI_SHARED OFF CACHE BOOL "" FORCE)
 add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/libADLMIDI" EXCLUDE_FROM_ALL SYSTEM)
 target_compile_definitions(ADLMIDI_static PRIVATE "ADLMIDI_EXPORT=" ${ADLplug_UPSTREAM_CRT_DEFS})
 target_compile_definitions(ADLMIDI_static PUBLIC "ADLMIDI_UNSTABLE_API=")
-target_compile_options(ADLMIDI_static PRIVATE ${ADLplug_UPSTREAM_RELEASE_OPTS})
 
 set(libOPNMIDI_STATIC ON CACHE BOOL "" FORCE)
 set(libOPNMIDI_SHARED OFF CACHE BOOL "" FORCE)
@@ -69,7 +89,20 @@ set(USE_VGM_FILE_DUMPER OFF CACHE BOOL "" FORCE)
 add_subdirectory("${PROJECT_SOURCE_DIR}/thirdparty/libOPNMIDI" EXCLUDE_FROM_ALL SYSTEM)
 target_compile_definitions(OPNMIDI_static PRIVATE "OPNMIDI_EXPORT=" ${ADLplug_UPSTREAM_CRT_DEFS})
 target_compile_definitions(OPNMIDI_static PUBLIC "OPNMIDI_UNSTABLE_API=")
-target_compile_options(OPNMIDI_static PRIVATE ${ADLplug_UPSTREAM_RELEASE_OPTS})
+
+unset(CMAKE_PROJECT_libADLMIDI_INCLUDE)
+unset(CMAKE_PROJECT_libOPNMIDI_INCLUDE)
+
+# The -fvisibility options that the libraries give their targets go; the
+# visibility settings of the build apply to them as to every other target.
+foreach(ADLplug_TARGET IN ITEMS ADLMIDI_static OPNMIDI_static)
+  get_target_property(ADLplug_OPTIONS ${ADLplug_TARGET} COMPILE_OPTIONS)
+  if(ADLplug_OPTIONS)
+    list(REMOVE_ITEM ADLplug_OPTIONS
+      "-fvisibility=hidden" "$<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden>")
+    set_property(TARGET ${ADLplug_TARGET} PROPERTY COMPILE_OPTIONS "${ADLplug_OPTIONS}")
+  endif()
+endforeach()
 
 # The measurers (sources/*/adl/measurer) run on these cores, and the plugins
 # select them by default.

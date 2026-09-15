@@ -100,6 +100,17 @@ endif()
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 
+# With ThinLTO, LLD runs the optimisation across modules and the code generation
+# when it links, at levels of its own, which are 2 unless it is told otherwise.
+# Clang passes the -O3 of the link command on to LLD for ELF (-plugin-opt=O3),
+# but not for Windows or Apple systems. The levels are given to LLD itself, on
+# every system.
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  add_link_options("$<$<CONFIG:Release>:LINKER:/opt:lldlto=3,/opt:lldltocgo=3>")
+else()
+  add_link_options("$<$<CONFIG:Release>:LINKER:--lto-O3,--lto-CGO3>")
+endif()
+
 # --------------------------------------------------------------------------
 # Instruction set
 #
@@ -216,6 +227,12 @@ juce_generate_juce_header(ADLplug)
 get_target_property(ADLplug_JUCE_LIBRARY_CODE ADLplug JUCE_GENERATED_SOURCES_DIRECTORY)
 target_include_directories(ADLplug SYSTEM PRIVATE "${ADLplug_JUCE_LIBRARY_CODE}")
 adlplug_set_language_standard(ADLplug)
+# JUCE builds each format in a target of its own, which asks for C++17 and so,
+# left alone, is compiled as GNU C++17 (-std=gnu++17, or no flag where that is
+# the compiler's default). The formats are compiled as the shared code is.
+foreach(ADLplug_FORMAT IN LISTS ADLplug_FORMATS)
+  adlplug_set_language_standard("ADLplug_${ADLplug_FORMAT}")
+endforeach()
 
 if(TARGET ADLplug_LV2)
   # JUCE writes the whole numbers of the parameters' atom:Float ranges as

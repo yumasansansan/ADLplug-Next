@@ -12,7 +12,8 @@
 # Makes the rpm package of a Release build of ci/build.sh, for RHEL and
 # AlmaLinux 10 or later and openSUSE (plan D59), in the AlmaLinux container of
 # CI (.github/workflows/ci.yml): what the build installs under /usr, with the texts of
-# the banks and the licenses (ci/licenses.py). Those systems keep their
+# the banks and the licenses (ci/licenses.py); rpmbuild compiles nothing and
+# sets no build flags. Those systems keep their
 # libraries in lib64, and so do their LV2 hosts look there: the build has to be
 # configured with -DADLplug_INSTALL_LV2DIR=lib64/lv2. The AVX2 build is the
 # x86_64_v3 package of the same name.
@@ -71,6 +72,12 @@ cat > "$work/package.spec" << EOF
 %global debug_package %{nil}
 %global __os_install_post %{nil}
 %global _build_id_links none
+# Nothing is compiled here. The distribution's compiler and linker flags, which
+# redhat-rpm-config would export to the scriptlets, are left out, and the
+# installation checks that none are set.
+%undefine _auto_set_build_flags
+%global optflags %{nil}
+%global build_ldflags %{nil}
 # The plugins are no libraries for other packages to require.
 %global __provides_exclude_from ^/usr/($vst3dir|$lv2dir)/
 
@@ -98,6 +105,12 @@ as VST3 and LV2 plugins and as a standalone program.
 This is version $display.$note
 
 %install
+for variable in CC CXX CFLAGS CXXFLAGS FFLAGS FCFLAGS VALAFLAGS RUSTFLAGS LDFLAGS RPM_OPT_FLAGS RPM_LD_FLAGS; do
+  if [ -n "\$(printenv "\$variable")" ]; then
+    echo "error: rpmbuild has set \$variable" >&2
+    exit 1
+  fi
+done
 cp -a "$root/." "%{buildroot}/"
 
 %files
