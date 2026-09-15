@@ -30,7 +30,6 @@
         "CMAKE_READELF": "llvm-readelf",
         "CMAKE_ADDR2LINE": "llvm-addr2line",
         "CMAKE_DLLTOOL": "llvm-dlltool",
-        "CMAKE_RC_COMPILER": "llvm-rc",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "ADLplug_WERROR": "ON"
       }

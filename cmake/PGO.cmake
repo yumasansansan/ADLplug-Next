@@ -14,12 +14,15 @@
 # - it renders the fixed sequence of the render tool with every core of the
 #   build (cmake/PGOTrain.cmake, the cores of cmake/Cores.cmake) and merges the
 #   profiles with llvm-profdata into pgo/profile.profdata;
-# - it compiles every target with the profile (-fprofile-use), and ThinLTO
-#   carries it into the link.
-# Every object depends on the profile, which is written again only when the
-# instrumented plugin or the render tool changes. The training runs the plugin,
-# so the machine that builds has to run it: an AVX2 build needs a processor
-# with AVX2. Where it cannot, and to build faster, turn ADLplug_PGO off.
+# - it compiles the plugin with the profile (-fprofile-use), and ThinLTO
+#   carries it into the link. The programs that the build runs or that test
+#   the plugin, the bank generator, the render tool and the unit tests, are
+#   compiled without it: it does not describe them.
+# Every object of the plugin depends on the profile, which is written again
+# only when the instrumented plugin or the render tool changes. The training
+# runs the plugin, so the machine that builds has to run it: an AVX2 build
+# needs a processor with AVX2. Where it cannot, and to build faster, turn
+# ADLplug_PGO off.
 #
 # Included after the other flags of the build and before any target. The
 # instrumented build is told so with the internal ADLplug_PGO_STAGE.
@@ -60,20 +63,21 @@ adlplug_check_llvm_tool("profile merger" "${ADLplug_LLVM_PROFDATA}" "^llvm-profd
 set(ADLplug_PGO_DIR "${CMAKE_BINARY_DIR}/pgo")
 set(ADLplug_PGO_PROFILE "${ADLplug_PGO_DIR}/profile.profdata")
 set(ADLplug_PGO_TRAIN_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/PGOTrain.cmake")
-add_compile_options("-fprofile-use=${ADLplug_PGO_PROFILE}")
 
 # LLVM optimises for size the code that a profile shows little of (PGSO):
 # code that the training does not reach, the editor's for one, and cores that
 # the heavier ones outweigh in the profile. ESFMu rendered 9 % slower for it. It
 # is turned off, in the compilers and in the LTO backend of the link.
-add_compile_options("-mllvm=-pgso=false")
+set(ADLplug_PGO_COMPILE_OPTIONS "-fprofile-use=${ADLplug_PGO_PROFILE}" "-mllvm=-pgso=false")
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-  add_link_options("LINKER:/mllvm:-pgso=false")
+  set(ADLplug_PGO_LINK_OPTIONS "LINKER:/mllvm:-pgso=false")
 elseif(APPLE)
-  add_link_options("LINKER:-mllvm,-pgso=false")
+  set(ADLplug_PGO_LINK_OPTIONS "LINKER:-mllvm,-pgso=false")
 else()
-  add_link_options("LINKER:--plugin-opt=-pgso=false")
+  set(ADLplug_PGO_LINK_OPTIONS "LINKER:--plugin-opt=-pgso=false")
 endif()
+add_compile_options(${ADLplug_PGO_COMPILE_OPTIONS})
+add_link_options(${ADLplug_PGO_LINK_OPTIONS})
 
 # At the end of the top-level directory, when every target and setting exists:
 # the instrumented build, the training, and the dependencies on the profile.
@@ -158,9 +162,33 @@ function(adlplug_pgo_train)
       DIRECTORY "${libadlmidi}" APPEND PROPERTY COMPILE_OPTIONS -fno-profile-instr-use)
   endif()
 
-  # Every compiled target waits for the profile, and every source it compiles,
-  # those of JUCE's modules included, is compiled again when the profile
-  # changes.
+  # The programs that the build runs or that test the plugin are not what the
+  # training renders, and are compiled without the profile. Each compiles
+  # JUCE's modules with settings of its own, which the profile of the plugin
+  # does not match either ("function control flow change detected").
+  set(programs ADLplug_bankgen ADLplug_render ADLplug_unit_tests)
+  foreach(program IN LISTS programs)
+    if(NOT TARGET ${program})
+      continue()
+    endif()
+    foreach(property IN ITEMS COMPILE_OPTIONS LINK_OPTIONS)
+      get_target_property(options ${program} ${property})
+      if(options)
+        list(REMOVE_ITEM options ${ADLplug_PGO_COMPILE_OPTIONS} ${ADLplug_PGO_LINK_OPTIONS})
+        set_property(TARGET ${program} PROPERTY ${property} "${options}")
+      endif()
+    endforeach()
+  endforeach()
+
+  # Every other compiled target waits for the profile, and every source it
+  # compiles, those of JUCE's modules included, is compiled again when the
+  # profile changes: the compilers do not name the profile among the
+  # dependencies that they write. The resource libraries that JUCE makes for
+  # the programs on Windows go with the programs. A source's dependencies
+  # belong to its directory, so the programs of this directory still depend on
+  # the profile for the sources of JUCE's modules, which the plugin compiles as
+  # well.
+  list(JOIN programs "|" program_names)
   set(directories "${CMAKE_SOURCE_DIR}")
   set(compiled "")
   set(interface_sources "")
@@ -176,7 +204,8 @@ function(adlplug_pgo_train)
         if(sources)
           list(APPEND interface_sources ${sources})
         endif()
-      elseif(type MATCHES "^(STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY|EXECUTABLE)$")
+      elseif(type MATCHES "^(STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY|EXECUTABLE)$"
+          AND NOT target MATCHES "^(${program_names})(_rc_lib)?$")
         list(APPEND compiled ${target})
       endif()
     endforeach()

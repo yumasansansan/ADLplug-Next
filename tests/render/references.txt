@@ -18,6 +18,10 @@
 # systems' maths libraries differ (plan D42). When a change to the sound is
 # meant, update the lines and say why in the commit message.
 
+linux-almalinux-x86_64-avx2 ADLplug-Next ee85755f418eb648 173006bc262b405b
+linux-almalinux-x86_64-avx2 OPNplug-Next fcf52c92dfa53694 99e708be01590e6c
+linux-almalinux-x86_64-baseline ADLplug-Next ee85755f418eb648 173006bc262b405b
+linux-almalinux-x86_64-baseline OPNplug-Next f3e4cf3eb7f07586 99e708be01590e6c
 linux-x86_64-avx2 ADLplug-Next ee85755f418eb648 173006bc262b405b
 linux-x86_64-avx2 OPNplug-Next fcf52c92dfa53694 99e708be01590e6c
 linux-x86_64-baseline ADLplug-Next ee85755f418eb648 173006bc262b405b

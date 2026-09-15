@@ -264,15 +264,14 @@ An option chooses whether ADLplug-Next or OPNplug-Next is built:
 | -DADLplug_INSTALL_LV2DIR=<dir>  | lib/lv2                                | Install directory of the LV2 plugin (Linux)                                                   |
 
 With `ADLplug_PGO`, a Release build trains (collects a profile) before it
-compiles. In `pgo/instrumented` under the build directory, it builds a VST3
-plugin and the offline renderer with code that collects the profile (data on
-which code runs most), renders with every emulator core of the build, and
-compiles every target (the plugins and the rest that the build makes) with
-that profile; the profile is made again only when the plugin changes. It
-needs `llvm-profdata` and the profile runtime of LLVM's compiler-rt (in the
-`libclang-rt-<version>-dev` package of apt.llvm.org), and a machine that can
-run the plugin it builds: to build the AVX2 variant on a CPU without AVX2, or
-to build faster, turn it off.
+compiles. In `pgo/instrumented` under the build directory, it builds the
+offline renderer and a VST3 plugin with code that collects the profile (data
+on which code runs most), renders with every emulator core of the build, and
+compiles the plugins with that profile; the profile is made again only when
+the plugin changes. It needs `llvm-profdata` and the profile runtime of LLVM's
+compiler-rt (in the `libclang-rt-<version>-dev` package of apt.llvm.org), and
+a machine that can run the plugin it builds: to build the AVX2 variant on a
+CPU without AVX2, or to build faster, turn it off.
 
 Every emulator core is built by default. To leave cores out, turn off options
 in the Build option column of the tables under

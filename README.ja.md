@@ -173,7 +173,7 @@ cmake --build --preset adl-release     # 上と同様です．
 | -DADLplug_INSTALL_VST3DIR=<dir> | lib/vst3                               | VST3 プラグインの，インストール先ディレクトリ（Linux） |
 | -DADLplug_INSTALL_LV2DIR=<dir>  | lib/lv2                                | LV2 プラグインの，インストール先ディレクトリ（Linux） |
 
-`ADLplug_PGO` を有効にすると，Release ビルドはコンパイルの前に学習（プロファイルの取得）を行います．ビルドディレクトリの `pgo/instrumented` に，プロファイル（どの処理がよく使われるかを計測したデータ）を取るためのコードを埋め込んだ VST3 プラグインとオフラインレンダラをビルドし，ビルドに含まれるすべてのエミュレータコアでレンダリングして，そのプロファイルを使ってすべてのターゲット（プラグインなど，ビルドするもの）をコンパイルします．プロファイルを作り直すのは，プラグインが変わったときだけになります．`llvm-profdata` と LLVM の compiler-rt のプロファイル用ランタイム（apt.llvm.org では `libclang-rt-<version>-dev` パッケージに含まれます）に加えて，ビルドしたプラグインを実行できるマシンが必要です．AVX2 のない CPU で AVX2 版をビルドするときや，ビルドを速く済ませたいときは，無効にしてください．
+`ADLplug_PGO` を有効にすると，Release ビルドはコンパイルの前に学習（プロファイルの取得）を行います．ビルドディレクトリの `pgo/instrumented` に，オフラインレンダラと，プロファイル（どの処理がよく使われるかを計測したデータ）を取るためのコードを埋め込んだ VST3 プラグインをビルドし，ビルドに含まれるすべてのエミュレータコアでレンダリングして，そのプロファイルを使ってプラグインをコンパイルします．プロファイルを作り直すのは，プラグインが変わったときだけになります．`llvm-profdata` と LLVM の compiler-rt のプロファイル用ランタイム（apt.llvm.org では `libclang-rt-<version>-dev` パッケージに含まれます）に加えて，ビルドしたプラグインを実行できるマシンが必要です．AVX2 のない CPU で AVX2 版をビルドするときや，ビルドを速く済ませたいときは，無効にしてください．
 
 エミュレータコアは，デフォルトですべてビルドされます．コアを除くには，[FM 音源コアの特徴](#fm-音源コアの特徴) の表の「ビルドオプション」の列にあるオプションを OFF にします（例: `-DUSE_OPAL_EMULATOR=OFF`）．`USE_NUKED_EMULATOR` のように，1 つで複数のコアをまとめて除くオプションや，libADLMIDI と libOPNMIDI の両方にある名前のオプションもあります．両方にある名前でも，影響するのはビルドするプラグインの側（ADLplug-Next なら libADLMIDI）だけです．`USE_DOSBOX_EMULATOR`（ADLplug-Next）と `USE_MAME_EMULATOR`（OPNplug-Next）は，プラグインが音色の計測に使うため，OFF にすることはできません（configure の時点でエラーになります）．
 
