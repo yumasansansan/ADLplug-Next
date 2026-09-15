@@ -10,7 +10,7 @@
 # changes are under the GNU General Public License, version 3 or any later
 # version (LICENSES/GPL-3.0-or-later.txt).
 
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.29)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # macOS builds are for Apple Silicon and macOS 26 or later. Both have to be set
@@ -37,6 +37,18 @@ if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang" OR NOT CMAKE_CXX_COMPILER_ID MATCHES 
     "CMAKE_C_COMPILER=clang and CMAKE_CXX_COMPILER=clang++, as the presets do.")
 endif()
 
+# LLD links everything, on every system: CMake gives CMAKE_LINKER_TYPE to
+# every target and to try_compile(). The presets give -fuse-ld=lld, through
+# LDFLAGS, to the helpers that JUCE builds as projects of their own too.
+if(NOT CMAKE_LINKER_TYPE STREQUAL "LLD")
+  message(FATAL_ERROR
+    "ADLplug is linked with LLD, but CMAKE_LINKER_TYPE is '${CMAKE_LINKER_TYPE}'. "
+    "Configure with -DCMAKE_LINKER_TYPE=LLD, as the presets do.")
+endif()
+
+# The toolchain has to be LLVM's, of one version (cmake/LLVMToolchain.cmake).
+include(LLVMToolchain)
+
 include(GNUInstallDirs)
 include(SystemOption)
 
@@ -52,7 +64,6 @@ system_option(ADLplug_ASIO "Enable ASIO support (Windows, GPLv3)" OFF "Windows" 
 
 option(ADLplug_ASSERTIONS "Enable assertions" OFF)
 option(ADLplug_WERROR "Treat warnings in ADLplug's own sources as errors" OFF)
-option(ADLplug_LTO "Use link-time optimisation (ThinLTO with Clang) in Release builds" ON)
 option(ADLplug_BUILD_TOOLS "Build developer tools (tools/render: offline VST3 renderer)" OFF)
 option(ADLplug_BUILD_TESTS "Build the tests and register them with CTest (render tests need ADLplug_BUILD_TOOLS)" OFF)
 option(ADLplug_GREYZONE_BANKS "Include the instrument banks of the grey zone, for which no license or permission of their authors is known" OFF)
@@ -80,20 +91,14 @@ endif()
 # --------------------------------------------------------------------------
 # Link-time optimisation
 #
-# Enabled before any dependency is added, so CMAKE_INTERPROCEDURAL_OPTIMIZATION_
-# RELEASE initialises every target below -- JUCE, libADLMIDI and libOPNMIDI
-# included -- and the synthesis code can be inlined across library boundaries.
-# With Clang, CMake's IPO support means ThinLTO (-flto=thin).
+# Release builds are made with link-time optimisation, for every target: it is
+# set before any dependency is added, so JUCE, libADLMIDI and libOPNMIDI get
+# it too, and the synthesis code can be inlined across library boundaries.
+# With Clang, CMake's IPO support means ThinLTO (-flto=thin). There is no way
+# around it: CMake stops if the compiler cannot do it, and so does the build if
+# the linker cannot.
 
-if(ADLplug_LTO)
-  include(CheckIPOSupported)
-  check_ipo_supported(RESULT ADLplug_LTO_SUPPORTED OUTPUT ADLplug_LTO_ERROR LANGUAGES C CXX)
-  if(ADLplug_LTO_SUPPORTED)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-  else()
-    message(WARNING "ADLplug_LTO is on but LTO is not supported here: ${ADLplug_LTO_ERROR}")
-  endif()
-endif()
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 
 # --------------------------------------------------------------------------
 # Instruction set
@@ -314,7 +319,12 @@ if(ADLplug_ASIO)
   target_compile_definitions(ADLplug PUBLIC JUCE_ASIO=1)
 endif()
 
-target_link_libraries(ADLplug PUBLIC
+# The modules are linked privately, as JUCE's plugin targets expect: the shared
+# code compiles them once, and the plugin wrappers see their headers through
+# JUCE's own settings. Linked publicly, every wrapper compiled all the modules
+# again, and LLD stopped on duplicate symbols when a link took a module's object
+# from the shared code as well (the standalone program, in AlmaLinux).
+target_link_libraries(ADLplug PRIVATE
   juce::juce_audio_utils
   juce::juce_audio_processors
   juce::juce_audio_devices
@@ -327,7 +337,7 @@ target_link_libraries(ADLplug PUBLIC
   juce::juce_events
   juce::juce_core)
 
-# LTO comes from ADLplug_LTO above rather than juce_recommended_lto_flags,
+# LTO comes from the Release setting above rather than juce_recommended_lto_flags,
 # which would add full -flto to this target alone.
 target_link_libraries(ADLplug PRIVATE juce::juce_recommended_config_flags)
 
@@ -624,4 +634,16 @@ if(NOT (CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "Darw
   endif()
   install(FILES "${ADLplug_BANKS_NOTICES}"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/${ADLplug_NAME}")
+endif()
+
+# --------------------------------------------------------------------------
+# The resource compiler
+#
+# On Windows, the resources of the plugins are compiled by LLVM's resource
+# compiler, which is checked here, once the targets that have resources are
+# set up, as the rest of the toolchain was at the top
+# (cmake/LLVMToolchain.cmake).
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  adlplug_check_llvm_tool("resource compiler" "${CMAKE_RC_COMPILER}" "^llvm-rc(\\.exe)?$")
 endif()

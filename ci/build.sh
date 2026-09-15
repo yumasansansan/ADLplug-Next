@@ -9,11 +9,14 @@
 #
 #   ci/build.sh <preset> <baseline|avx2|arm64> [<cmake option>...]
 #
-# Configures and builds a CMake preset, with the developer tools and the tests,
-# for the given instruction set (arm64 stands for the macOS build, which has no
-# choice) and any further options, such as emulator cores to leave out. Then
-# lists the -march flags of the compile commands, the artefacts, and the
-# libraries the VST3 plugin links against.
+# Configures a CMake preset, with the developer tools and the tests, for the
+# given instruction set (arm64 stands for the macOS build, which has no choice)
+# and any further options, such as emulator cores to leave out. The
+# configuration checks the toolchain (cmake/LLVMToolchain.cmake), and this
+# script shows what it checked, in the log and, in GitHub Actions, in the
+# summary of the job. Before building, it checks the -march flags of the
+# compile commands, and ThinLTO in those of Release builds. Then it builds, and
+# lists the artefacts and the libraries the VST3 plugin links against.
 set -euo pipefail
 
 preset=$1
@@ -29,10 +32,60 @@ esac
 args+=("$@")
 
 cmake "${args[@]}"
-cmake --build --preset "$preset"
+
+# Every tool that the configuration checked, with the version it reported
+# (none for llvm-rc, which has to lie beside the compiler instead). A missing
+# record means that the check did not run, and the build does not go on.
+toolchain=build/$preset/llvm-toolchain.txt
+if [ ! -s "$toolchain" ]; then
+  echo "error: the configuration left no record of its toolchain check ($toolchain)" >&2
+  exit 1
+fi
+echo "== LLVM toolchain, as the configuration checked it"
+if [ -n "${ADLplug_LLVM_MAJOR:-}" ]; then
+  echo "   required major version (ADLplug_LLVM_MAJOR): $ADLplug_LLVM_MAJOR"
+fi
+while IFS=$'\t' read -r part version program; do
+  printf '   %-8s  %-26s %s\n' "$version" "$part" "$program"
+done < "$toolchain"
+if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+  {
+    echo "### LLVM toolchain of $preset ($arch)"
+    echo
+    if [ -n "${ADLplug_LLVM_MAJOR:-}" ]; then
+      echo "Required major version (\`ADLplug_LLVM_MAJOR\`): $ADLplug_LLVM_MAJOR"
+      echo
+    fi
+    echo "| Version | Part | Program |"
+    echo "| --- | --- | --- |"
+    while IFS=$'\t' read -r part version program; do
+      echo "| $version | $part | \`$program\` |"
+    done < "$toolchain"
+    echo
+  } >> "$GITHUB_STEP_SUMMARY"
+fi
 
 echo "== -march flags in the compile commands"
 grep -o -E -- '-march=[a-z0-9-]+' "build/$preset/compile_commands.json" | sort | uniq -c || echo "(none)"
+
+# Release builds are made with ThinLTO throughout, and a compile command
+# without it would mean code left out of link-time optimisation with nothing
+# to say so. Windows resource scripts are not code.
+case $preset in
+  *-release)
+    commands=$(grep '"command"' "build/$preset/compile_commands.json" | grep -v -E 'cmake_llvm_rc|\.rc\.res' || true)
+    total=$(grep -c . <<< "$commands" || true)
+    without=$(grep -v -c -- '-flto=thin' <<< "$commands" || true)
+    echo "== ThinLTO: $((total - without)) of $total compile commands"
+    if [ "$total" -eq 0 ] || [ "$without" -ne 0 ]; then
+      echo "error: $preset has compile commands without -flto=thin:" >&2
+      grep -v -- '-flto=thin' <<< "$commands" | head -n 5 >&2 || true
+      exit 1
+    fi
+    ;;
+esac
+
+cmake --build --preset "$preset"
 
 artefacts=build/$preset/ADLplug_artefacts
 echo "== artefacts"

@@ -238,3 +238,7 @@ for path in "$llvm_bin" ${tool_paths[@]+"${tool_paths[@]}"}; do
     echo "$path"
   fi
 done >> "$GITHUB_PATH"
+
+# The configuration of every build checks that its toolchain is of this
+# version of LLVM (cmake/LLVMToolchain.cmake).
+echo "ADLplug_LLVM_MAJOR=$llvm_major" >> "$GITHUB_ENV"

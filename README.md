@@ -182,9 +182,11 @@ runs on X11, which means XWayland in a Wayland session: JUCE has no Wayland
 backend.
 
 Install required dependencies:
-- CMake 3.25 or newer, and Ninja
-- Clang and LLD 19 or newer, for C23 / C++23 (GCC is not supported; the CI
-  builds with LLVM 23)
+- CMake 3.29 or newer, and Ninja
+- LLVM 19 or newer, for C23 / C++23: Clang, LLD, `llvm-ar`, `llvm-ranlib`
+  and, on Windows, `llvm-rc`, all of one version. The configuration checks
+  this before anything is built. GCC and GNU binutils are not supported; the
+  CI builds with LLVM 23.
 - Windows: the MSVC libraries and the Windows SDK, from Visual Studio or its
   Build Tools
 - Linux: development packages for ALSA, FreeType, Fontconfig and X11; on
@@ -206,9 +208,10 @@ cmake --build --preset adl-release
 ```
 
 The presets in `CMakePresets.json` work on all three systems. They select
-Clang, LLD and Ninja without fixing their versions, and treat warnings in
-ADLplug-Next's own code as errors. To configure by hand instead, pass the options
-below to `cmake` directly.
+Clang, LLD (`CMAKE_LINKER_TYPE=LLD`), LLVM's tools and Ninja without fixing
+their versions, and treat warnings in ADLplug-Next's own code as errors. To
+configure by hand instead, pass the options below to `cmake` directly, with
+those settings. Release builds are always made with link-time optimisation.
 
 This package is able to build several plugins from a single source:
 - to build the OPL3 variant, define the option `ADLplug_CHIP` to `OPL3`;
@@ -225,7 +228,6 @@ This package is able to build several plugins from a single source:
 | -DADLplug_CHIP=OPL3/OPN2        | OPL3 (the opn-* presets set OPN2)      | Build a variant for the given chip type                          |
 | -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | Include the banks of the grey zone (see below)                   |
 | -DADLplug_ARCH=baseline/avx2    | baseline                               | x86-64 instruction set: baseline or AVX2 (x86-64-v3)             |
-| -DADLplug_LTO=ON/OFF            | ON                                     | Link-time optimisation (ThinLTO) in Release builds               |
 | -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | Force building with assertions regardless of build type          |
 | -DADLplug_WERROR=ON/OFF         | OFF (the presets set ON)               | Treat warnings in ADLplug-Next's own code as errors              |
 | -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | Build developer tools (offline VST3 renderer)                    |

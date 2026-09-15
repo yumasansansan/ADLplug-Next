@@ -1,6 +1,6 @@
 {
   "version": 6,
-  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "cmakeMinimumRequired": { "major": 3, "minor": 29, "patch": 0 },
 
   "configurePresets": [
     {
@@ -8,12 +8,29 @@
       "hidden": true,
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}",
+      "environment": {
+        "CC": "clang",
+        "CXX": "clang++",
+        "RC": "llvm-rc",
+        "LDFLAGS": "-fuse-ld=lld"
+      },
       "cacheVariables": {
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_LINKER_TYPE": "LLD",
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
         "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld",
         "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld",
+        "CMAKE_AR": "llvm-ar",
+        "CMAKE_RANLIB": "llvm-ranlib",
+        "CMAKE_NM": "llvm-nm",
+        "CMAKE_OBJCOPY": "llvm-objcopy",
+        "CMAKE_OBJDUMP": "llvm-objdump",
+        "CMAKE_STRIP": "llvm-strip",
+        "CMAKE_READELF": "llvm-readelf",
+        "CMAKE_ADDR2LINE": "llvm-addr2line",
+        "CMAKE_DLLTOOL": "llvm-dlltool",
+        "CMAKE_RC_COMPILER": "llvm-rc",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "ADLplug_WERROR": "ON"
       }
@@ -43,7 +60,7 @@
     {
       "name": "release",
       "hidden": true,
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "ADLplug_LTO": "ON" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
     },
 
     {
