@@ -24,6 +24,10 @@
 # once failed go in regressions/<chip>/<name>/, with the commit that fixes them;
 # they are found when CMake configures. Dictionaries are in dict/, for
 # libFuzzer's -dict=.
+#
+# Beside each libFuzzer program, ADLplug_fuzz_<name>.args lists the arguments
+# it runs with, one to a line: its dictionary, its seed inputs and its
+# regression inputs. ci/fuzz.sh runs every target by these files.
 
 if(ADLplug_SANITIZERS)
   cmake_language(DEFER CALL adlplug_sanitizer_test_environment)
@@ -33,6 +37,7 @@ if(ADLplug_CHIP STREQUAL "OPL3")
   set(ADLplug_FUZZ_CHIP "opl3")
   set(ADLplug_FUZZ_LIBRARY "${PROJECT_SOURCE_DIR}/thirdparty/libADLMIDI")
   set(ADLplug_FUZZ_FILE_SOURCE "${ADLplug_FUZZ_LIBRARY}/src/wopl/wopl_file.c")
+  set(ADLplug_FUZZ_FILE_DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/wopl.dict")
   set(ADLplug_FUZZ_BANK_SEEDS
     "${ADLplug_FUZZ_LIBRARY}/fm_banks/wopl_files"
     "${ADLplug_FUZZ_LIBRARY}/fm_banks/ibk_files/Inst")
@@ -40,15 +45,22 @@ else()
   set(ADLplug_FUZZ_CHIP "opn2")
   set(ADLplug_FUZZ_LIBRARY "${PROJECT_SOURCE_DIR}/thirdparty/libOPNMIDI")
   set(ADLplug_FUZZ_FILE_SOURCE "${ADLplug_FUZZ_LIBRARY}/src/wopn/wopn_file.c")
+  set(ADLplug_FUZZ_FILE_DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/wopn.dict")
   set(ADLplug_FUZZ_BANK_SEEDS
     "${ADLplug_FUZZ_LIBRARY}/fm_banks"
     "${PROJECT_SOURCE_DIR}/thirdparty/OPN2BankEditor/Bank_Examples")
 endif()
 
 # adlplug_fuzz_target(<name> OWN_SOURCES <file>... OTHER_SOURCES <file>...
-#                     SEEDS <directory>...)
+#                     SEEDS <directory>... [DICTIONARY <file>])
 function(adlplug_fuzz_target name)
-  cmake_parse_arguments(PARSE_ARGV 1 arg "" "" "OWN_SOURCES;OTHER_SOURCES;SEEDS")
+  cmake_parse_arguments(PARSE_ARGV 1 arg "" "DICTIONARY" "OWN_SOURCES;OTHER_SOURCES;SEEDS")
+
+  set(inputs ${arg_SEEDS})
+  set(regressions "${CMAKE_CURRENT_SOURCE_DIR}/regressions/${ADLplug_FUZZ_CHIP}/${name}")
+  if(IS_DIRECTORY "${regressions}")
+    list(APPEND inputs "${regressions}")
+  endif()
 
   set(configurations "")
   if(ADLplug_BUILD_TESTS)
@@ -67,6 +79,13 @@ function(adlplug_fuzz_target name)
       add_executable(${target} "${name}.cc" ${arg_OWN_SOURCES} ${arg_OTHER_SOURCES})
       target_compile_options(${target} PRIVATE -fsanitize=fuzzer)
       target_link_options(${target} PRIVATE -fsanitize=fuzzer)
+      set(arguments "")
+      if(arg_DICTIONARY)
+        list(APPEND arguments "-dict=${arg_DICTIONARY}")
+      endif()
+      list(APPEND arguments ${inputs})
+      list(JOIN arguments "\n" arguments)
+      file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${target}.args" "${arguments}\n")
     endif()
     adlplug_set_language_standard(${target})
     target_compile_definitions(${target} PRIVATE
@@ -80,11 +99,6 @@ function(adlplug_fuzz_target name)
   adlplug_own_sources(replay.cc "${name}.cc" ${arg_OWN_SOURCES})
 
   if(ADLplug_BUILD_TESTS)
-    set(inputs ${arg_SEEDS})
-    set(regressions "${CMAKE_CURRENT_SOURCE_DIR}/regressions/${ADLplug_FUZZ_CHIP}/${name}")
-    if(IS_DIRECTORY "${regressions}")
-      list(APPEND inputs "${regressions}")
-    endif()
     add_test(NAME "fuzz.${name}" COMMAND "ADLplug_fuzz_${name}_replay" ${inputs})
     set_tests_properties("fuzz.${name}" PROPERTIES TIMEOUT 900 LABELS fuzz)
   endif()
@@ -94,4 +108,5 @@ endfunction()
 adlplug_fuzz_target(bank_file
   OWN_SOURCES "${PROJECT_SOURCE_DIR}/sources/${ADLplug_FUZZ_CHIP}/adl/instrument.cc"
   OTHER_SOURCES "${ADLplug_FUZZ_FILE_SOURCE}"
-  SEEDS ${ADLplug_FUZZ_BANK_SEEDS})
+  SEEDS ${ADLplug_FUZZ_BANK_SEEDS}
+  DICTIONARY "${ADLplug_FUZZ_FILE_DICTIONARY}")

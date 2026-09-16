@@ -7,10 +7,17 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
+#   ci/publish.sh fuzzing
 #   ci/publish.sh assemble <artifacts> <assets> <notes>
 #   ci/publish.sh release <assets> <notes>
 #
 # The publish job of CI on a push to main (.github/workflows/ci.yml).
+#
+# fuzzing stops the release while the daily fuzzing fails (plan D48): the last
+# run of .github/workflows/fuzz.yml on main that passed or failed decides, and a
+# release goes out only when it passed or there has been none. A run that was
+# cancelled or skipped decides nothing. When gh cannot tell, the release waits
+# as well.
 #
 # assemble merges the packs of both chips that ci/package.sh made into one
 # archive for each system and instruction set, ADLplug-Next-<version>-<system>
@@ -126,8 +133,28 @@ release() {  # assets notes
     --title "Nightly $display" --notes-file "$notes" "$assets"/*
 }
 
+fuzzing() {
+  local last
+  last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow fuzz.yml --branch main \
+    --status completed --limit 20 --json conclusion,url \
+    --jq '[.[] | select(.conclusion == "success" or .conclusion == "failure")][0] // empty | "\(.conclusion) \(.url)"')
+  case $last in
+    "")
+      echo "The daily fuzzing has not finished a run yet."
+      ;;
+    success\ *)
+      echo "The daily fuzzing passed its last run: ${last#success }"
+      ;;
+    *)
+      echo "error: the daily fuzzing failed its last run, and no Nightly goes out until a run passes: ${last#* }" >&2
+      exit 1
+      ;;
+  esac
+}
+
 case ${1:-} in
+  fuzzing) fuzzing ;;
   assemble) assemble "$2" "$3" "$4" ;;
   release) release "$2" "$3" ;;
-  *) echo "usage: ci/publish.sh assemble <artifacts> <assets> <notes> | release <assets> <notes>" >&2; exit 2 ;;
+  *) echo "usage: ci/publish.sh fuzzing | assemble <artifacts> <assets> <notes> | release <assets> <notes>" >&2; exit 2 ;;
 esac

@@ -13,7 +13,10 @@
 #
 # The sanitize jobs build both plugins on Ubuntu and macOS with the address
 # and undefined sanitizers (plan D47) and run the tests, leaving out the
-# programs that load the plugins from outside.
+# programs that load the plugins from outside. On Ubuntu they also build the
+# fuzz targets with libFuzzer and run each for a minute (ci/fuzz.sh, plan D48);
+# an input that fails is kept as an artifact. The long fuzzing runs once a day
+# in .github/workflows/fuzz.yml.
 #
 # The reuse job checks with reuse lint, from Ubuntu's reuse package, that every
 # file names its copyright holders and license (see REUSE.toml and LICENSES/).
@@ -25,9 +28,10 @@
 #    the rpm packages (ci/package-rpm.sh);
 #  - builds without the emulator cores that can be left out check that other
 #    cores play in their place (the render.fallback tests);
-#  - when every job of the run has passed, the publish job replaces the
-#    pre-release "Nightly" with the archive of each system, the packages and
-#    SHA256SUMS, and moves the tag nightly to the commit (ci/publish.sh).
+#  - when every job of the run has passed, and the daily fuzzing passed its
+#    last run, the publish job replaces the pre-release "Nightly" with the
+#    archive of each system, the packages and SHA256SUMS, and moves the tag
+#    nightly to the commit (ci/publish.sh).
 # Only the publish job can write to the repository. The one action,
 # actions/upload-artifact, keeps the pictures of the editor and the packs; it
 # is pinned to the commit of its release. The publish job downloads the packs
@@ -122,10 +126,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-26.04, arch: baseline, preset: adl-sanitize }
-          - { os: ubuntu-26.04, arch: baseline, preset: opn-sanitize }
-          - { os: macos-26, arch: arm64, preset: adl-sanitize }
-          - { os: macos-26, arch: arm64, preset: opn-sanitize }
+          - { os: ubuntu-26.04, arch: baseline, preset: adl-sanitize, fuzz: true }
+          - { os: ubuntu-26.04, arch: baseline, preset: opn-sanitize, fuzz: true }
+          - { os: macos-26, arch: arm64, preset: adl-sanitize, fuzz: false }
+          - { os: macos-26, arch: arm64, preset: opn-sanitize, fuzz: false }
 
     steps:
       - name: Check out
@@ -144,10 +148,23 @@ jobs:
         run: bash ci/setup.sh
 
       - name: Build
-        run: bash ci/build.sh "${{ matrix.preset }}" "${{ matrix.arch }}"
+        run: bash ci/build.sh "${{ matrix.preset }}" "${{ matrix.arch }}" ${{ matrix.fuzz && '-DADLplug_BUILD_FUZZERS=ON' || '' }}
 
       - name: Test
         run: bash ci/test.sh "${{ matrix.preset }}" --no-hosts
+
+      - name: Fuzz for a minute each
+        if: ${{ matrix.fuzz }}
+        run: bash ci/fuzz.sh "${{ matrix.preset }}" 60 fuzz-run/corpora fuzz-run/crashes
+
+      - name: Keep the inputs that failed
+        if: ${{ failure() && matrix.fuzz }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-crashes-${{ matrix.preset }}
+          path: fuzz-run/crashes/
+          if-no-files-found: ignore
+          retention-days: 30
 
   reuse:
     name: REUSE compliance
@@ -286,6 +303,11 @@ jobs:
           git fetch --no-tags --quiet origin "$GITHUB_SHA"
           git checkout --quiet --detach "$GITHUB_SHA"
           git log -1 --format='%H %s'
+
+      - name: Check the daily fuzzing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ci/publish.sh fuzzing
 
       - name: Download the packs
         env:

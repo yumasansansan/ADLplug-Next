@@ -1,0 +1,113 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# The long fuzzing (plan D48). Once a day, and whenever it is started by hand,
+# every fuzz target of both plugins runs for fifteen minutes with libFuzzer and
+# the address and undefined sanitizers, on Ubuntu (ci/fuzz.sh). The short runs
+# of a minute are part of CI (.github/workflows/ci.yml).
+#
+# A run carries on from the corpus that the last decided run (one that passed
+# or failed) grew and kept as an artifact; when that is gone, it starts again
+# from the seed inputs. The inputs that failed are kept as well, and the next
+# run replays them before anything else, so that a failure lasts until it is
+# fixed, not until fuzzing happens to miss it. While the last decided run has
+# failed, CI's publish job makes no Nightly (ci/publish.sh fuzzing). An input
+# that failed goes into fuzz/regressions with the commit that fixes it.
+#
+# Only gh and the one action that CI uses, actions/upload-artifact, pinned to
+# the commit of its release, take part.
+
+name: Fuzz
+
+on:
+  schedule:
+    - cron: '27 17 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+# Two runs at once would carry over from the same corpus and race to keep it.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fuzz:
+    name: ${{ matrix.preset }} (ubuntu-26.04)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [adl-sanitize, opn-sanitize]
+
+    steps:
+      - name: Check out
+        run: |
+          # The commit with its whole history, the submodules at depth 1. Git
+          # keeps the files as committed, CRLF or LF, on every runner.
+          git config --global core.autocrlf false
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git submodule update --init --depth 1 --jobs 4
+          git log -1 --format='%H %s'
+
+      - name: Set up the toolchain
+        run: bash ci/setup.sh
+
+      - name: Build
+        run: bash ci/build.sh "${{ matrix.preset }}" baseline -DADLplug_BUILD_FUZZERS=ON
+
+      - name: Carry over the corpus and the inputs that failed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p fuzz-run/corpora fuzz-run/earlier
+          last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow fuzz.yml --branch main \
+            --status completed --limit 20 --json conclusion,databaseId \
+            --jq '[.[] | select(.conclusion == "success" or .conclusion == "failure")][0].databaseId // empty')
+          if [ -z "$last" ]; then
+            echo "No earlier run: the corpus starts from the seed inputs."
+            exit 0
+          fi
+          echo "Carrying over from run $last."
+          gh run download "$last" --repo "$GITHUB_REPOSITORY" \
+            --name "fuzz-corpora-${{ matrix.preset }}" --dir fuzz-run/corpora \
+            || echo "Run $last kept no corpus: the corpus starts from the seed inputs."
+          gh run download "$last" --repo "$GITHUB_REPOSITORY" \
+            --name "fuzz-crashes-${{ matrix.preset }}" --dir fuzz-run/earlier \
+            || echo "Run $last kept no inputs that failed."
+
+      - name: Fuzz for fifteen minutes each
+        run: bash ci/fuzz.sh "${{ matrix.preset }}" 900 fuzz-run/corpora fuzz-run/crashes fuzz-run/earlier
+
+      - name: Keep the corpus
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-corpora-${{ matrix.preset }}
+          path: fuzz-run/corpora/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Keep the inputs that failed
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-crashes-${{ matrix.preset }}
+          path: fuzz-run/crashes/
+          if-no-files-found: ignore
+          retention-days: 90
