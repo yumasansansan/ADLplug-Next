@@ -104,6 +104,39 @@ foreach(ADLplug_TARGET IN ITEMS ADLMIDI_static OPNMIDI_static)
   endif()
 endforeach()
 
+# The low-level emulators (LLE) simulate their chips gate by gate and keep the
+# latches in int. A bit shifted left through one of them passes the sign in the
+# end, which C leaves undefined and which the sanitizers stop the program at
+# (plan D47):
+#
+#   nuked_fmopl3.c:48:48: runtime error: left shift of 2147483647 by 1 places
+#   cannot be represented in type 'int'
+#
+# Wrapping is what the code means, since a hardware shift register does nothing
+# else, and -fwrapv promises exactly that. These sources are compiled with it in
+# every build: the code means the same thing whether or not the sanitizers are
+# on, and the flag only keeps the compiler from assuming the overflow cannot
+# happen. The shifts are in hundreds of places here, so the patches of D79,
+# which are for faults with one right answer each, are not the way.
+set(ADLplug_ADLMIDI_LLE_SOURCES
+  "src/chips/ym3812_lle/nopl2.c" "src/chips/ym3812_lle/nuked_fmopl2.c"
+  "src/chips/ymf262_lle/nopl3.c" "src/chips/ymf262_lle/nuked_fmopl3.c")
+set(ADLplug_OPNMIDI_LLE_SOURCES
+  "src/chips/nuked_lle/fmopn2.c" "src/chips/nuked_lle/fmopna_2608.c"
+  "src/chips/nuked_lle/fmopna_2610.c" "src/chips/nuked_lle/fmopna_2612.c"
+  "src/chips/nuked_lle/nopn2.c" "src/chips/nuked_lle/nopn2f.c"
+  "src/chips/nuked_lle/nopna.c")
+
+foreach(ADLplug_LIBRARY IN ITEMS ADLMIDI OPNMIDI)
+  set(ADLplug_LLE_FILES "")
+  foreach(ADLplug_LLE_SOURCE IN LISTS ADLplug_${ADLplug_LIBRARY}_LLE_SOURCES)
+    list(APPEND ADLplug_LLE_FILES
+      "${PROJECT_SOURCE_DIR}/thirdparty/lib${ADLplug_LIBRARY}/${ADLplug_LLE_SOURCE}")
+  endforeach()
+  set_property(SOURCE ${ADLplug_LLE_FILES}
+    TARGET_DIRECTORY ${ADLplug_LIBRARY}_static APPEND PROPERTY COMPILE_OPTIONS -fwrapv)
+endforeach()
+
 # The measurers (sources/*/adl/measurer) run on these cores, and the plugins
 # select them by default.
 if(ADLplug_CHIP STREQUAL "OPL3" AND NOT USE_DOSBOX_EMULATOR)
