@@ -77,3 +77,5 @@ adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0002-ym2612-the-dac-value-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0003-mame-phase-modulation-without-shifting-a-negative.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0004-mame-feedback-and-dac-without-shifting-a-negative.patch")

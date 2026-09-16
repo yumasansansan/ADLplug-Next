@@ -1,0 +1,72 @@
+SPDX-FileCopyrightText: Jarek Burczynski
+SPDX-FileCopyrightText: Tatsuyuki Satoh
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-2.0-or-later
+
+MAME FM: the feedback and the DAC without shifting a negative number
+
+Two more places where a signed value is scaled with a left shift, which is
+undefined behaviour when it is negative. UndefinedBehaviorSanitizer stops the
+program at the first of them:
+
+  src/chips/mame/mame_ym2612fm.c:1714:68: runtime error: left shift of
+  negative value -12
+
+* chan_calc() scales the feedback, the sum of the two previous outputs of
+  operator 1, by the feedback shift. The shift is 0 or 7 to 13 and the sum
+  stays within about 16384, so the product is well inside an int.
+
+* The YM2612's DAC value is the byte of register 0x2A, centred on 0x80 and
+  scaled by 64, in the two places that set it.
+
+Multiplications say the same thing and are defined. The YM2612 and the
+YM2608 cores share the feedback line; the DAC belongs to the YM2612 alone.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/mame/mame_ym2612fm.c b/src/chips/mame/mame_ym2612fm.c
+index 4ac3de0..72ad38a 100644
+--- a/src/chips/mame/mame_ym2612fm.c
++++ b/src/chips/mame/mame_ym2612fm.c
+@@ -1711,7 +1711,7 @@ INLINE void chan_calc(YM2612 *F2612, FM_OPN *OPN, FM_CH *CH)
+       if (!CH->FB)
+         out=0;
+ 
+-      CH->op1_out[1] = op_calc1(CH->SLOT[SLOT1].phase, eg_out, (out<<CH->FB) );
++      CH->op1_out[1] = op_calc1(CH->SLOT[SLOT1].phase, eg_out, (out * (1 << CH->FB)) );
+     }
+   }
+ 
+@@ -2581,7 +2581,7 @@ void ym2612_postload(void *chip)
+ 		int r;
+ 
+ 		/* DAC data & port */
+-		F2612->dacout = ((int)F2612->REGS[0x2a] - 0x80) << 6;	/* level unknown */
++		F2612->dacout = ((int)F2612->REGS[0x2a] - 0x80) * 64;	/* level unknown */
+ 		F2612->dacen  = F2612->REGS[0x2d] & 0x80;
+ 		/* OPN registers */
+ 		/* DT / MULTI , TL , KS / AR , AMON / DR , SR , SL / RR , SSG-EG */
+@@ -2789,7 +2789,7 @@ int ym2612_write(void *chip, int a, UINT8 v)
+ 			{
+ 			case 0x2a:	/* DAC data (YM2612) */
+ 				ym2612_update_one(chip, DUMMYBUF, 0);
+-				F2612->dacout = ((int)v - 0x80) << 6;	/* level unknown */
++				F2612->dacout = ((int)v - 0x80) * 64;	/* level unknown */
+ 				break;
+ 			case 0x2b:	/* DAC Sel  (YM2612) */
+ 				/* b7 = dac enable */
+diff --git a/src/chips/mamefm/fm.cpp b/src/chips/mamefm/fm.cpp
+index 3fda9f1..e59160a 100644
+--- a/src/chips/mamefm/fm.cpp
++++ b/src/chips/mamefm/fm.cpp
+@@ -1423,7 +1423,7 @@ static inline void chan_calc(FM_OPN *OPN, FM_CH *CH, int chnum)
+ 			if (!CH->FB)
+ 				out=0;
+ 
+-			CH->op1_out[1] = op_calc1(CH->SLOT[SLOT1].phase, eg_out, (out<<CH->FB) );
++			CH->op1_out[1] = op_calc1(CH->SLOT[SLOT1].phase, eg_out, (out * (1 << CH->FB)) );
+ 		}
+ 	}
+ 
