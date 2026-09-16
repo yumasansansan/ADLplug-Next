@@ -46,16 +46,32 @@ if(ADLplug_CHIP STREQUAL "OPL3")
   list(APPEND ADLplug_UNIT_TESTED_SOURCES "${PROJECT_SOURCE_DIR}/sources/opl3/adl/player.cc")
 endif()
 
-# Under the sanitizers, the tests ask ASan to leave leaks alone, as the build
-# preset does for the programs that the build itself runs: the leaks of JUCE's
-# static objects would bury what the sanitizers are here for (plan D47). UBSan
-# names the callers of what it finds. The environment reaches the tests of this
-# directory once they all exist.
+# The environment of the tests under the sanitizers (plan D47). UBSan names the
+# callers of what it finds. It reaches the tests of this directory once they all
+# exist.
+#
+# Leaks: LeakSanitizer comes with ASan and looks for them when a program ends.
+# It is asked for on Linux, where it is at home. Nowhere else needs telling: it
+# is off by default where it does not run, and asking for it there only makes
+# ASan stop with "detect_leaks is not supported on this platform". The programs
+# the build itself runs do have to be told (CMakePresets.json), since on Linux
+# they would otherwise be checked as well, and their leaks say nothing about the
+# plugins.
+#
+# For now a leak is reported and the test still passes (LSAN_OPTIONS=exitcode=0,
+# which means nothing where LeakSanitizer does not run), so that one run of the
+# jobs shows every leak there is instead of stopping at the first. Once they are
+# answered, each fixed or written down in a suppression file with its reason,
+# this becomes a failure like any other finding.
 if(ADLplug_SANITIZERS)
+  set(ADLplug_TEST_ENVIRONMENT
+    "UBSAN_OPTIONS=print_stacktrace=1" "LSAN_OPTIONS=exitcode=0")
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND ADLplug_TEST_ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1")
+  endif()
   function(adlplug_sanitizer_test_environment)
     get_property(tests DIRECTORY PROPERTY TESTS)
-    set_property(TEST ${tests} APPEND PROPERTY ENVIRONMENT
-      "ASAN_OPTIONS=detect_leaks=0" "UBSAN_OPTIONS=print_stacktrace=1")
+    set_property(TEST ${tests} APPEND PROPERTY ENVIRONMENT ${ADLplug_TEST_ENVIRONMENT})
   endfunction()
   cmake_language(DEFER CALL adlplug_sanitizer_test_environment)
 endif()

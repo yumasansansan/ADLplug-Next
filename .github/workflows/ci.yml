@@ -269,7 +269,7 @@ jobs:
 
   publish:
     name: Nightly release
-    needs: [build, reuse, fallback, rpm]
+    needs: [build, reuse, fallback, rpm, sanitize]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-26.04
     timeout-minutes: 30
