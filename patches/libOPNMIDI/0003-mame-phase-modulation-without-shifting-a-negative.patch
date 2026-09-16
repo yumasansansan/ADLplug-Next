@@ -1,0 +1,48 @@
+SPDX-FileCopyrightText: Jarek Burczynski
+SPDX-FileCopyrightText: Tatsuyuki Satoh
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-2.0-or-later
+
+MAME FM: the phase modulation without shifting a negative number
+
+op_calc() scales the phase modulation by 32768 with a left shift, and the
+modulation is signed. The shift of a negative number is undefined behaviour,
+and UndefinedBehaviorSanitizer stops the program at it:
+
+  src/chips/mame/mame_ym2612fm.c:1664:69: runtime error: left shift of
+  negative value -376
+
+A multiplication says the same thing and is defined. The sum it feeds is
+worked out in an unsigned type, as before, so nothing else about the
+expression changes. The YM2612 and the YM2608 cores have the same line.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/mame/mame_ym2612fm.c b/src/chips/mame/mame_ym2612fm.c
+index 6af76a1..4ac3de0 100644
+--- a/src/chips/mame/mame_ym2612fm.c
++++ b/src/chips/mame/mame_ym2612fm.c
+@@ -1661,7 +1661,7 @@ INLINE signed int op_calc(UINT32 phase, unsigned int env, signed int pm)
+ {
+   UINT32 p;
+ 
+-  p = (env<<3) + sin_tab[ ( ((signed int)((phase & ~FREQ_MASK) + (pm<<15))) >> FREQ_SH ) & SIN_MASK ];
++  p = (env<<3) + sin_tab[ ( ((signed int)((phase & ~FREQ_MASK) + (pm * 32768))) >> FREQ_SH ) & SIN_MASK ];
+ 
+   if (p >= TL_TAB_LEN)
+     return 0;
+diff --git a/src/chips/mamefm/fm.cpp b/src/chips/mamefm/fm.cpp
+index fa9b16e..3fda9f1 100644
+--- a/src/chips/mamefm/fm.cpp
++++ b/src/chips/mamefm/fm.cpp
+@@ -1095,7 +1095,7 @@ static inline signed int op_calc(uint32_t phase, unsigned int env, signed int pm
+ {
+ 	uint32_t p;
+ 
+-	p = (env<<3) + sin_tab[ ( ((signed int)((phase & ~FREQ_MASK) + (pm<<15))) >> FREQ_SH ) & SIN_MASK ];
++	p = (env<<3) + sin_tab[ ( ((signed int)((phase & ~FREQ_MASK) + (pm * 32768))) >> FREQ_SH ) & SIN_MASK ];
+ 
+ 	if (p >= TL_TAB_LEN)
+ 		return 0;
