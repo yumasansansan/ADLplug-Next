@@ -1,0 +1,41 @@
+SPDX-FileCopyrightText: 1997-1999 cisc <cisc@retropc.net>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LicenseRef-fmgen
+
+PSG: a noise table that does not overflow a signed int
+
+MakeNoiseTable() shifts 32 bits into an int, one at a time, and the last of
+them overflows it. Signed overflow is undefined behaviour, and
+UndefinedBehaviorSanitizer stops the program at it:
+
+  src/chips/np2/fmgen_psg.cpp:75:11: runtime error: signed integer overflow:
+  1207315479 * 2 cannot be represented in type 'int'
+
+The shift register beside it has the same fault: it is shifted left by 16,
+which leaves its highest bits outside an int as well.
+
+Both are unsigned now. The table they fill is unsigned already
+(PSG::noisetable), the values are never negative, and the numbers that come
+out are the ones the code has always worked with.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/np2/fmgen_psg.cpp b/src/chips/np2/fmgen_psg.cpp
+index aa14588..cab1996 100644
+--- a/src/chips/np2/fmgen_psg.cpp
++++ b/src/chips/np2/fmgen_psg.cpp
+@@ -66,10 +66,10 @@ void PSG::MakeNoiseTable()
+ {
+ 	if (!noisetable[0])
+ 	{
+-		int noise = 14321;
++		uint noise = 14321;
+ 		for (int i=0; i<noisetablesize; i++)
+ 		{
+-			int n = 0;
++			uint n = 0;
+ 			for (int j=0; j<32; j++)
+ 			{
+ 				n = n * 2 + (noise & 1);

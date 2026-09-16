@@ -1,0 +1,61 @@
+SPDX-FileCopyrightText: 2002-2018 The DOSBox Team
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-2.0-or-later
+
+dbopl: the offsets of the channels and operators without a null pointer
+
+InitTables() fills the tables of the channels' and the operators' offsets from
+the start of the chip by taking the address of a member through a null
+pointer. That is undefined behaviour, and UndefinedBehaviorSanitizer stops the
+program at it:
+
+  src/chips/dosbox/dbopl.cpp:1621:47: runtime error: member access within null
+  pointer of type 'DBOPL::Chip'
+
+offsetof gives the same numbers and is defined for these types: Chip, Channel
+and Operator have no base classes and no virtual functions, and all of their
+data members sit in one public section, so they are standard-layout.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/dosbox/dbopl.cpp b/src/chips/dosbox/dbopl.cpp
+index 5f2faa2..56000e5 100644
+--- a/src/chips/dosbox/dbopl.cpp
++++ b/src/chips/dosbox/dbopl.cpp
+@@ -35,6 +35,7 @@
+ 
+ 
+ #include <math.h>
++#include <stddef.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include <vector>
+@@ -1604,7 +1605,6 @@ void InitTables( void ) {
+ 		TremoloTable[TREMOLO_TABLE - 1 - i] = val;
+ 	}
+ 	//Create a table with offsets of the channels from the start of the chip
+-	DBOPL::Chip* chip = 0;
+ 	for ( Bitu i = 0; i < 32; i++ ) {
+ 		Bitu index = i & 0xf;
+ 		if ( index >= 9 ) {
+@@ -1618,7 +1618,7 @@ void InitTables( void ) {
+ 		//Add back the bits for highest ones
+ 		if ( i >= 16 )
+ 			index += 9;
+-		Bitu blah = reinterpret_cast<Bitu>( &(chip->chan[ index ]) );
++		Bitu blah = offsetof( DBOPL::Chip, chan ) + index * sizeof( DBOPL::Channel );
+ 		ChanOffsetTable[i] = static_cast<Bit16u>(blah);
+ 	}
+ 	//Same for operators
+@@ -1632,8 +1632,7 @@ void InitTables( void ) {
+ 		if ( chNum >= 12 )
+ 			chNum += 16 - 12;
+ 		Bitu opNum = ( i % 8 ) / 3;
+-		DBOPL::Channel* chan = 0;
+-		Bitu blah = reinterpret_cast<Bitu>( &(chan->op[opNum]) );
++		Bitu blah = offsetof( DBOPL::Channel, op ) + opNum * sizeof( DBOPL::Operator );
+ 		OpOffsetTable[i] = static_cast<Bit16u>(ChanOffsetTable[ chNum ] + blah);
+ 	}
+ #if 0

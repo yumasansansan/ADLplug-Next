@@ -265,6 +265,10 @@ include(Cores)
 # --------------------------------------------------------------------------
 # Dependencies
 
+# The patches that ADLplug-Next carries for its submodules
+# (cmake/Patches.cmake), applied before anything is built from them.
+include(Patches)
+
 include(ADLMIDI)
 add_subdirectory("thirdparty/JUCE" EXCLUDE_FROM_ALL SYSTEM)
 
@@ -349,6 +353,23 @@ adlplug_set_language_standard(ADLplug)
 foreach(ADLplug_FORMAT IN LISTS ADLplug_FORMATS)
   adlplug_set_language_standard("ADLplug_${ADLplug_FORMAT}")
 endforeach()
+
+# The plugins of a sanitizer build do not carry the sanitizers' runtime: it
+# belongs to the program that loads the plugin, and its symbols are left
+# undefined in the plugin's shared object. JUCE asks the linker to refuse a
+# plugin that has undefined symbols, which is right for a plugin that is to be
+# published and wrong for this one (plan D47).
+if(ADLplug_SANITIZERS)
+  foreach(ADLplug_FORMAT IN LISTS ADLplug_FORMATS)
+    get_target_property(ADLplug_FORMAT_LINK_OPTIONS
+      "ADLplug_${ADLplug_FORMAT}" LINK_OPTIONS)
+    if(ADLplug_FORMAT_LINK_OPTIONS)
+      list(REMOVE_ITEM ADLplug_FORMAT_LINK_OPTIONS "-Wl,--no-undefined")
+      set_property(TARGET "ADLplug_${ADLplug_FORMAT}"
+        PROPERTY LINK_OPTIONS "${ADLplug_FORMAT_LINK_OPTIONS}")
+    endif()
+  endforeach()
+endif()
 
 if(TARGET ADLplug_LV2)
   # JUCE writes the whole numbers of the parameters' atom:Float ranges as

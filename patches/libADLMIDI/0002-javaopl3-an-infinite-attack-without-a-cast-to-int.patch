@@ -1,0 +1,49 @@
+SPDX-FileCopyrightText: 2008 Robson Cozendey <robson@cozendey.com>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+JavaOPL3: an infinite attack period without a cast to int
+
+The attack rates 0 to 3 have an infinite period in the table of the YMF278B
+manual's values (MUGEN), and setActualAttackRate() converts that infinity to
+int. That is undefined behaviour, and UndefinedBehaviorSanitizer stops the
+program at it:
+
+  src/chips/java/JavaOPL3.hpp:1411:35: runtime error: inf is outside the range
+  of representable values of type 'int'
+
+The numbers it works out do not matter there. The increment is the reciprocal
+of the period, which is zero for an infinite one, and it multiplies the
+difference of the two periods in samples, so the minimum of the attack comes
+out the same whatever those two are. An infinite period is now answered
+directly, with the values the rest of the function would have reached.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/java/JavaOPL3.hpp b/src/chips/java/JavaOPL3.hpp
+index e9f0399..7ecf513 100644
+--- a/src/chips/java/JavaOPL3.hpp
++++ b/src/chips/java/JavaOPL3.hpp
+@@ -1408,8 +1408,19 @@ void EnvelopeGenerator::setActualAttackRate(int attackRate, int ksr, int keyScal
+ 	// and 'period10to90' seconds between 10% and 90% of the curve total level.
+ 	actualAttackRate = calculateActualRate(attackRate, ksr, keyScaleNumber);
+ 	double period0to100inSeconds = EnvelopeGeneratorData::attackTimeValuesTable[actualAttackRate][0]/1000.0;
+-	int period0to100inSamples = (int)(period0to100inSeconds*OPL_SAMPLE_RATE);       
+ 	double period10to90inSeconds = EnvelopeGeneratorData::attackTimeValuesTable[actualAttackRate][1]/1000.0;
++	if (period0to100inSeconds == EnvelopeGeneratorData::MUGEN
++		|| period10to90inSeconds == EnvelopeGeneratorData::MUGEN) {
++		// The lowest attack rates take an infinite time (MUGEN), so the
++		// envelope never rises: the increment is zero and the attack begins
++		// at its minimum. Working the periods out in samples would convert
++		// an infinity to int, which is undefined behaviour, and the values
++		// it gives cancel each other out anyway.
++		xAttackIncrement = 0;
++		xMinimumInAttack = percentageToX(0.1);
++		return;
++	}
++	int period0to100inSamples = (int)(period0to100inSeconds*OPL_SAMPLE_RATE);       
+ 	int period10to90inSamples = (int)(period10to90inSeconds*OPL_SAMPLE_RATE);
+ 	// The x increment is dictated by the period between 10% and 90%:
+ 	xAttackIncrement = OPL3DataStruct::calculateIncrement(percentageToX(0.1), percentageToX(0.9), period10to90inSeconds);

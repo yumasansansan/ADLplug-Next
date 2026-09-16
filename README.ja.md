@@ -150,6 +150,8 @@ cmake --build --preset adl-release     # 上と同様です．
 
 `CMakePresets.json` に書かれているプリセット（あらかじめ用意されたビルドの設定）は，Windows，Linux，macOS のどれでも動作します．Clang，LLD（`CMAKE_LINKER_TYPE=LLD`）といった LLVM のツールチェーンと，Ninja が指定されています．バージョンは固定されていませんが，LLVM 23 を推奨します．なお，以下のオプションを `cmake` に渡すと，コンパイルの設定をカスタマイズできます．
 
+また，構成時に `patches/` にあるパッチがサブモジュールに適用されます．同梱しているライブラリに見つかった不具合を，ADLplug-Next が直したものです．それぞれ元のプロジェクトにも提出しており，取り込まれたものは削除します．なお，パッチを適用するとサブモジュールに変更が入るため，`git status` に表示されます．
+
 オプションで，ADLplug-Next をビルドするか，OPNplug-Next をビルドするかを切り替えることができます．
 - OPL3 版（ADLplug-Next）をビルドするには，オプション `ADLplug_CHIP` を `OPL3` に設定します．
 - OPN2 版（OPNplug-Next）をビルドするには，オプション `ADLplug_CHIP` を `OPN2` に設定します．

@@ -70,7 +70,13 @@ WOPLInstrument Instrument::to_wopl() const noexcept
         #undef F
     }
 
-    std::memcpy(ins.inst_name, name, sizeof ins.inst_name);
+    // WOPL keeps 34 characters for the name of an instrument and this keeps
+    // 32, so only 32 are there to copy; the two that are left stay the zeros
+    // that ins was initialised with. Copying the length of the destination
+    // read past the end of this instrument (plan D47).
+    static_assert(sizeof name <= sizeof ins.inst_name,
+        "the name of an instrument does not fit in WOPL's field");
+    std::memcpy(ins.inst_name, name, sizeof name);
 
     return ins;
 }

@@ -238,6 +238,12 @@ and LLD (`CMAKE_LINKER_TYPE=LLD`), and Ninja. Their versions are not fixed,
 but LLVM 23 is recommended. Pass the options below to `cmake` to customise
 the build.
 
+Configuring also applies the patches of `patches/` to the submodules, so that
+every build has them. They are ADLplug-Next's fixes for faults it has found in
+the libraries it ships; each one is offered to the project it came from, and
+goes away once it is there. The submodules are changed by this, as `git
+status` shows.
+
 An option chooses whether ADLplug-Next or OPNplug-Next is built:
 - to build the OPL3 variant (ADLplug-Next), set the option `ADLplug_CHIP` to
   `OPL3`;
