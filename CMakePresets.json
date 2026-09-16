@@ -133,10 +133,12 @@
     { "name": "adl-debug",          "configurePreset": "adl-debug",          "inherits": "base" },
     { "name": "adl-relwithdebinfo", "configurePreset": "adl-relwithdebinfo", "inherits": "base" },
     { "name": "adl-release",        "configurePreset": "adl-release",        "inherits": "base" },
-    { "name": "adl-sanitize",       "configurePreset": "adl-sanitize",       "inherits": "base" },
+    { "name": "adl-sanitize",       "configurePreset": "adl-sanitize",       "inherits": "base",
+      "output": { "outputOnFailure": true, "verbosity": "verbose" } },
     { "name": "opn-debug",          "configurePreset": "opn-debug",          "inherits": "base" },
     { "name": "opn-relwithdebinfo", "configurePreset": "opn-relwithdebinfo", "inherits": "base" },
     { "name": "opn-release",        "configurePreset": "opn-release",        "inherits": "base" },
-    { "name": "opn-sanitize",       "configurePreset": "opn-sanitize",       "inherits": "base" }
+    { "name": "opn-sanitize",       "configurePreset": "opn-sanitize",       "inherits": "base",
+      "output": { "outputOnFailure": true, "verbosity": "verbose" } }
   ]
 }
