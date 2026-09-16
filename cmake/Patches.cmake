@@ -71,6 +71,8 @@ adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0002-javaopl3-an-infinite-attack-without-a-cast-to-int.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0003-ym3812-lle-the-sample-without-shifting-a-negative.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0004-wopl-a-version-of-0-is-not-a-version.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-psg-a-noise-table-that-does-not-overflow.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
@@ -79,3 +81,5 @@ adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0003-mame-phase-modulation-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0004-mame-feedback-and-dac-without-shifting-a-negative.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0005-wopn-a-version-of-0-is-not-a-version.patch")

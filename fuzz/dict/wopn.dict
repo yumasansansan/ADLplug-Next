@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# libFuzzer's dictionary for the OPN2 build's bank_file target (-dict=): the
+# words that open each kind of file it reads, both versions of each, so that
+# made-up inputs get past the first check (libOPNMIDI's wopn_file.c).
+
+wopn_bank_1="WOPN2-BANK\x00"
+wopn_bank_2="WOPN2-B2NK\x00"
+opni_instrument_1="WOPN2-INST\x00"
+opni_instrument_2="WOPN2-IN2T\x00"

@@ -66,6 +66,16 @@ option(ADLplug_ASSERTIONS "Enable assertions" OFF)
 option(ADLplug_WERROR "Treat warnings in ADLplug's own sources as errors" OFF)
 option(ADLplug_BUILD_TOOLS "Build developer tools (tools/render: offline VST3 renderer)" OFF)
 option(ADLplug_BUILD_TESTS "Build the tests and register them with CTest (render tests need ADLplug_BUILD_TOOLS)" OFF)
+option(ADLplug_BUILD_FUZZERS "Build the fuzz targets with libFuzzer (fuzz/; meant for the address and undefined sanitizers)" OFF)
+# libFuzzer runs on Ubuntu (plan D48). On Windows it cannot be linked at all: the
+# libFuzzer that LLVM builds for Windows uses the static C runtime, and
+# ADLplug-Next the dynamic one, and the two cannot go into one program.
+if(ADLplug_BUILD_FUZZERS AND CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  message(FATAL_ERROR
+    "ADLplug_BUILD_FUZZERS is not for Windows: LLVM's libFuzzer for Windows is linked "
+    "with the static C runtime (/MT) and ADLplug-Next with the dynamic one (/MD). "
+    "The fuzz targets still run on their inputs as tests there (ADLplug_BUILD_TESTS).")
+endif()
 option(ADLplug_GREYZONE_BANKS "Include the instrument banks of the grey zone, for which no license or permission of their authors is known" OFF)
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
@@ -202,9 +212,24 @@ endif()
 #
 # Sanitizers are not for Release builds, whose optimisations, link-time
 # optimisation and profile would stand in the way: the *-sanitize presets
-# configure RelWithDebInfo. On Linux, ASan looks for leaks when a program ends;
-# that is turned off, in the build preset and in the environment of the tests,
-# since the leaks of JUCE's static objects would bury what this looks for.
+# configure RelWithDebInfo.
+#
+# The tests run with the environment below, given to them by the directories
+# that register them (tests/, fuzz/) once all their tests exist. UBSan names the
+# callers of what it finds.
+#
+# Leaks: LeakSanitizer comes with ASan and looks for them when a program ends,
+# and a leak fails the test like any other finding. It is asked for on Linux,
+# where it is at home. Nowhere else needs telling: it is off by default where it
+# does not run, and asking for it there only makes ASan stop with "detect_leaks
+# is not supported on this platform". The programs the build itself runs do
+# have to be told (CMakePresets.json), since on Linux they would otherwise be
+# checked as well, and their leaks say nothing about the plugins. LeakSanitizer
+# reports only memory that nothing points to any more, so objects that live
+# until the end, JUCE's among them, never show up. It also says nothing when it
+# finds nothing, which cannot be told from a check that never ran: the test
+# sanitizer.leak_detection leaks on purpose and passes only when that leak is
+# reported, so that the silence of the other tests means something.
 if(ADLplug_SANITIZERS)
   if(CMAKE_BUILD_TYPE STREQUAL "Release")
     message(FATAL_ERROR
@@ -225,7 +250,43 @@ if(ADLplug_SANITIZERS)
   message(STATUS "Sanitizers: ${ADLplug_SANITIZERS}")
   add_compile_options("-fsanitize=${ADLplug_SANITIZERS}" -fno-sanitize-recover=all -fno-omit-frame-pointer)
   add_link_options("-fsanitize=${ADLplug_SANITIZERS}")
+
+  set(ADLplug_SANITIZER_TEST_ENVIRONMENT "UBSAN_OPTIONS=print_stacktrace=1")
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND ADLplug_SANITIZER_TEST_ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1")
+  endif()
+
+  # On Windows the address sanitizer's runtime is a DLL that stays beside the
+  # compiler, where a test does not look for it, and Windows answers a program
+  # that cannot find a DLL with a dialog box instead of an error message. The
+  # tests have its directory put at the front of PATH. The programs that the
+  # build itself runs still need it on PATH from outside.
+  if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND "address" IN_LIST ADLplug_SANITIZER_LIST)
+    execute_process(
+      COMMAND "${CMAKE_CXX_COMPILER}" -print-file-name=clang_rt.asan_dynamic-x86_64.dll
+      OUTPUT_VARIABLE ADLplug_ASAN_RUNTIME OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if(IS_ABSOLUTE "${ADLplug_ASAN_RUNTIME}" AND EXISTS "${ADLplug_ASAN_RUNTIME}")
+      cmake_path(GET ADLplug_ASAN_RUNTIME PARENT_PATH ADLplug_ASAN_RUNTIME_DIRECTORY)
+      set(ADLplug_SANITIZER_TEST_PATH "PATH=path_list_prepend:${ADLplug_ASAN_RUNTIME_DIRECTORY}")
+    else()
+      message(WARNING
+        "The address sanitizer's runtime DLL was not found beside the compiler; the tests "
+        "will need its directory on PATH.")
+    endif()
+  endif()
 endif()
+
+# Gives the tests of the directory it is called in the sanitizers' environment;
+# a directory defers the call until its tests all exist.
+function(adlplug_sanitizer_test_environment)
+  get_property(tests DIRECTORY PROPERTY TESTS)
+  if(tests AND ADLplug_SANITIZER_TEST_ENVIRONMENT)
+    set_property(TEST ${tests} APPEND PROPERTY ENVIRONMENT ${ADLplug_SANITIZER_TEST_ENVIRONMENT})
+  endif()
+  if(tests AND ADLplug_SANITIZER_TEST_PATH)
+    set_property(TEST ${tests} APPEND PROPERTY ENVIRONMENT_MODIFICATION "${ADLplug_SANITIZER_TEST_PATH}")
+  endif()
+endfunction()
 
 # Profile-guided optimisation of Release builds, with ADLplug_PGO
 # (cmake/PGO.cmake).
@@ -747,6 +808,12 @@ adlplug_embed_banks("sources/resources.c")
 if(ADLplug_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
+endif()
+
+# The fuzz targets (fuzz/, plan D48): replayed on their inputs as tests, and
+# built with libFuzzer on request.
+if(ADLplug_BUILD_TESTS OR ADLplug_BUILD_FUZZERS)
+  add_subdirectory(fuzz)
 endif()
 
 # --------------------------------------------------------------------------

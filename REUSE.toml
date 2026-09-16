@@ -21,6 +21,15 @@ precedence = "override"
 SPDX-FileCopyrightText = "2026 Yuma Kakei <yumasansansan@gmail.com>"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# Inputs that once made a fuzz target fail, kept so that the fault stays fixed
+# (fuzz/CMakeLists.txt). A fuzzer made them, or they were written from what it
+# found; besides zeros, they hold only the words that open a WOPL or WOPN file.
+[[annotations]]
+path = "fuzz/regressions/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Yuma Kakei <yumasansansan@gmail.com>"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # The picture in the READMEs: a capture by Yuma Kakei of the two plugins as they
 # are now. The interface it shows comes in part from ADLplug, whose graphics are
 # under the Boost Software License, and in part from ADLplug-Next, whose changes

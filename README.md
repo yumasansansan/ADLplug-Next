@@ -267,6 +267,7 @@ An option chooses whether ADLplug-Next or OPNplug-Next is built:
 | -DADLplug_WERROR=ON/OFF         | OFF (the presets set ON)               | Treat warnings in ADLplug-Next's own code as errors                                           |
 | -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | Build developer tools (a tool that loads the VST3 plugin and writes out its sound)            |
 | -DADLplug_BUILD_TESTS=ON/OFF    | OFF                                    | Build the tests and register them with CTest (CMake's test runner)                            |
+| -DADLplug_BUILD_FUZZERS=ON/OFF  | OFF                                    | Build the fuzz targets with libFuzzer (Linux only; see Testing)                               |
 | -DADLplug_INSTALL_VST3DIR=<dir> | lib/vst3                               | Install directory of the VST3 plugin (Linux)                                                  |
 | -DADLplug_INSTALL_LV2DIR=<dir>  | lib/lv2                                | Install directory of the LV2 plugin (Linux)                                                   |
 
@@ -352,10 +353,33 @@ ctest --preset adl-debug
   - in Release builds, every emulator core plays
   - in a build that leaves cores out, asking for one of them plays another
     core in its place
+- The fuzz tests (`fuzz/`) give the code that loads bank and instrument files
+  the banks and instruments that come with libADLMIDI, libOPNMIDI and OPN2
+  Bank Editor, and the inputs that once made it fail, and check that a file
+  loaded and saved again loads back the same.
 - When [pluginval](https://github.com/Tracktion/pluginval) or
   [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint) (plugin
   validators) is on the `PATH` at configure time, it validates the VST3 or
   LV2 plugin as well.
+
+The same fuzz targets can be built with
+[libFuzzer](https://llvm.org/docs/LibFuzzer.html), which makes up inputs of its
+own and keeps those that reach code that no input has reached before. It works
+on Linux, with the sanitizers; LLVM's libFuzzer for Windows cannot be linked
+with the plugins. For ADLplug-Next, for example:
+
+```
+cmake --preset adl-sanitize -DADLplug_BUILD_FUZZERS=ON
+cmake --build --preset adl-sanitize --target ADLplug_fuzz_bank_file
+mkdir -p corpus
+build/adl-sanitize/fuzz/ADLplug_fuzz_bank_file -dict=fuzz/dict/wopl.dict corpus thirdparty/libADLMIDI/fm_banks/wopl_files
+```
+
+It runs until it finds an input that fails, or until it is stopped
+(`-max_total_time=<seconds>` sets a limit), and writes a failing input to a
+file named `crash-<hash>`. Such an input goes in
+`fuzz/regressions/opl3/bank_file` (`opn2` for OPNplug-Next) together with the
+fix, so that the tests replay it from then on.
 
 The editor tests open windows, so on Linux they need an X11 display with a
 window manager (the software that manages windows); a desktop session runs

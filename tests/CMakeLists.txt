@@ -46,33 +46,12 @@ if(ADLplug_CHIP STREQUAL "OPL3")
   list(APPEND ADLplug_UNIT_TESTED_SOURCES "${PROJECT_SOURCE_DIR}/sources/opl3/adl/player.cc")
 endif()
 
-# The environment of the tests under the sanitizers (plan D47). UBSan names the
-# callers of what it finds. It reaches the tests of this directory once they all
-# exist.
-#
-# Leaks: LeakSanitizer comes with ASan and looks for them when a program ends,
-# and a leak fails the test like any other finding. It is asked for on Linux,
-# where it is at home. Nowhere else needs telling: it is off by default where it
-# does not run, and asking for it there only makes ASan stop with "detect_leaks
-# is not supported on this platform". The programs the build itself runs do
-# have to be told (CMakePresets.json), since on Linux they would otherwise be
-# checked as well, and their leaks say nothing about the plugins.
-#
-# The first run that looked for leaks found none. LeakSanitizer reports only
-# memory that nothing points to any more, so objects that live until the end,
-# JUCE's among them, never show up. It also says nothing when it finds nothing,
-# which cannot be told from a check that never ran; sanitizer.leak_detection
-# leaks on purpose and passes only when that leak is reported, so that the
-# silence of the other tests means something.
+# Under the sanitizers, the tests get their environment from the top
+# (adlplug_sanitizer_test_environment in CMakeLists.txt), and a test shows that
+# LeakSanitizer is really looking: it leaks on purpose and passes only when the
+# leak is reported. On Linux with the address sanitizer only, where leak
+# detection is asked for.
 if(ADLplug_SANITIZERS)
-  set(ADLplug_TEST_ENVIRONMENT "UBSAN_OPTIONS=print_stacktrace=1")
-  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    list(APPEND ADLplug_TEST_ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1")
-  endif()
-  function(adlplug_sanitizer_test_environment)
-    get_property(tests DIRECTORY PROPERTY TESTS)
-    set_property(TEST ${tests} APPEND PROPERTY ENVIRONMENT ${ADLplug_TEST_ENVIRONMENT})
-  endfunction()
   cmake_language(DEFER CALL adlplug_sanitizer_test_environment)
 
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ADLplug_SANITIZERS MATCHES "(^|,)address(,|$)")

@@ -165,8 +165,14 @@ function(adlplug_pgo_train)
   # The programs that the build runs or that test the plugin are not what the
   # training renders, and are compiled without the profile. Each compiles
   # JUCE's modules with settings of its own, which the profile of the plugin
-  # does not match either ("function control flow change detected").
+  # does not match either ("function control flow change detected"). The
+  # programs that replay the fuzz targets' inputs (fuzz/) are among them: they
+  # compile the plugin's sources again, with settings of their own.
   set(programs ADLplug_bankgen ADLplug_render ADLplug_unit_tests)
+  if(ADLplug_BUILD_TESTS OR ADLplug_BUILD_FUZZERS)
+    get_property(fuzz_programs DIRECTORY "${CMAKE_SOURCE_DIR}/fuzz" PROPERTY BUILDSYSTEM_TARGETS)
+    list(APPEND programs ${fuzz_programs})
+  endif()
   foreach(program IN LISTS programs)
     if(NOT TARGET ${program})
       continue()
