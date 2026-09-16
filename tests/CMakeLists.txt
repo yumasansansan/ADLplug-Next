@@ -46,6 +46,20 @@ if(ADLplug_CHIP STREQUAL "OPL3")
   list(APPEND ADLplug_UNIT_TESTED_SOURCES "${PROJECT_SOURCE_DIR}/sources/opl3/adl/player.cc")
 endif()
 
+# Under the sanitizers, the tests ask ASan to leave leaks alone, as the build
+# preset does for the programs that the build itself runs: the leaks of JUCE's
+# static objects would bury what the sanitizers are here for (plan D47). UBSan
+# names the callers of what it finds. The environment reaches the tests of this
+# directory once they all exist.
+if(ADLplug_SANITIZERS)
+  function(adlplug_sanitizer_test_environment)
+    get_property(tests DIRECTORY PROPERTY TESTS)
+    set_property(TEST ${tests} APPEND PROPERTY ENVIRONMENT
+      "ASAN_OPTIONS=detect_leaks=0" "UBSAN_OPTIONS=print_stacktrace=1")
+  endfunction()
+  cmake_language(DEFER CALL adlplug_sanitizer_test_environment)
+endif()
+
 juce_add_console_app(ADLplug_unit_tests)
 juce_generate_juce_header(ADLplug_unit_tests)
 adlplug_set_language_standard(ADLplug_unit_tests)

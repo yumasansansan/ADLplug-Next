@@ -70,6 +70,7 @@ option(ADLplug_GREYZONE_BANKS "Include the instrument banks of the grey zone, fo
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
 set(ADLplug_ARCH "baseline" CACHE STRING "Instruction set of x86-64 builds (baseline, avx2)")
+set(ADLplug_SANITIZERS "" CACHE STRING "Sanitizers to build with, comma-separated (address, undefined, thread)")
 
 # Applied per-target rather than globally: these variables are inherited by
 # add_subdirectory() dependencies, and libADLMIDI/libOPNMIDI build their own
@@ -186,6 +187,44 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_compile_options("$<$<CONFIG:Release>:-mtls-dialect=gnu2>")
     add_link_options("$<$<CONFIG:Release>:-mtls-dialect=gnu2>")
   endif()
+endif()
+
+# --------------------------------------------------------------------------
+# Sanitizers
+#
+# ADLplug_SANITIZERS names the sanitizers of a build, comma-separated (address,
+# undefined, thread), and gives them to every target: ADLplug-Next's own code,
+# JUCE, libADLMIDI and libOPNMIDI. The emulator cores are part of what the
+# plugins ship, so a mistake of memory or an undefined operation in them is the
+# plugin's (plan D47). Undefined behaviour stops the program
+# (-fno-sanitize-recover=all) instead of being reported and passed over, and the
+# frame pointer stays, so that the reports name the callers.
+#
+# Sanitizers are not for Release builds, whose optimisations, link-time
+# optimisation and profile would stand in the way: the *-sanitize presets
+# configure RelWithDebInfo. On Linux, ASan looks for leaks when a program ends;
+# that is turned off, in the build preset and in the environment of the tests,
+# since the leaks of JUCE's static objects would bury what this looks for.
+if(ADLplug_SANITIZERS)
+  if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    message(FATAL_ERROR
+      "ADLplug_SANITIZERS is not for Release builds, which are optimised with LTO and a "
+      "profile. Configure RelWithDebInfo, as the *-sanitize presets do.")
+  endif()
+  string(REPLACE "," ";" ADLplug_SANITIZER_LIST "${ADLplug_SANITIZERS}")
+  foreach(sanitizer IN LISTS ADLplug_SANITIZER_LIST)
+    if(NOT sanitizer MATCHES "^(address|undefined|thread)$")
+      message(FATAL_ERROR
+        "ADLplug_SANITIZERS names '${sanitizer}', which is not one of address, undefined, thread.")
+    endif()
+  endforeach()
+  if("address" IN_LIST ADLplug_SANITIZER_LIST AND "thread" IN_LIST ADLplug_SANITIZER_LIST)
+    message(FATAL_ERROR
+      "ADLplug_SANITIZERS names both address and thread, which cannot be built together.")
+  endif()
+  message(STATUS "Sanitizers: ${ADLplug_SANITIZERS}")
+  add_compile_options("-fsanitize=${ADLplug_SANITIZERS}" -fno-sanitize-recover=all -fno-omit-frame-pointer)
+  add_link_options("-fsanitize=${ADLplug_SANITIZERS}")
 endif()
 
 # Profile-guided optimisation of Release builds, with ADLplug_PGO

@@ -11,6 +11,10 @@
 # baseline instruction set and for AVX2. The checkout is plain git, and
 # ci/setup.sh installs a pinned toolchain.
 #
+# The sanitize jobs build both plugins on Ubuntu and macOS with the address
+# and undefined sanitizers (plan D47) and run the tests, leaving out the
+# programs that load the plugins from outside.
+#
 # The reuse job checks with reuse lint, from Ubuntu's reuse package, that every
 # file names its copyright holders and license (see REUSE.toml and LICENSES/).
 #
@@ -109,6 +113,41 @@ jobs:
           path: build/${{ matrix.preset }}/tests/render/*.png
           if-no-files-found: warn
           retention-days: 14
+
+  sanitize:
+    name: ${{ matrix.preset }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-26.04, arch: baseline, preset: adl-sanitize }
+          - { os: ubuntu-26.04, arch: baseline, preset: opn-sanitize }
+          - { os: macos-26, arch: arm64, preset: adl-sanitize }
+          - { os: macos-26, arch: arm64, preset: opn-sanitize }
+
+    steps:
+      - name: Check out
+        run: |
+          # The commit with its whole history, the submodules at depth 1. Git
+          # keeps the files as committed, CRLF or LF, on every runner.
+          git config --global core.autocrlf false
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git submodule update --init --depth 1 --jobs 4
+          git log -1 --format='%H %s'
+
+      - name: Set up the toolchain
+        run: bash ci/setup.sh
+
+      - name: Build
+        run: bash ci/build.sh "${{ matrix.preset }}" "${{ matrix.arch }}"
+
+      - name: Test
+        run: bash ci/test.sh "${{ matrix.preset }}" --no-hosts
 
   reuse:
     name: REUSE compliance

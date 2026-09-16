@@ -7,35 +7,48 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-#   ci/test.sh <preset> [--no-gui]
+#   ci/test.sh <preset> [--no-gui] [--no-hosts]
 #
 # Runs the tests of a preset that ci/build.sh built. On Linux the editor opens
 # on Xwayland under a headless Weston, with a window manager, as it would in a
 # Wayland session; --no-gui leaves out the tests that open windows instead, for
 # systems that have none of those, as the AlmaLinux container of CI. On macOS
-# the Audio Unit also goes through auval. The render hashes
-# are printed at the end, with a warning when tests/render/references.txt has
-# none for this system.
+# the Audio Unit also goes through auval. --no-hosts leaves out the programs
+# that load the plugins from outside, pluginval, lv2lint and auval: a build made
+# with the sanitizers cannot be loaded into them, since they are built without.
+# The render hashes are printed at the end, with a warning when
+# tests/render/references.txt has none for this system.
 set -euo pipefail
 
 preset=$1
+shift
 gui=true
-if [ "${2:-}" = --no-gui ]; then
-  gui=false
-fi
+hosts=true
+for argument in "$@"; do
+  case $argument in
+    --no-gui) gui=false ;;
+    --no-hosts) hosts=false ;;
+    *) echo "error: unknown argument '$argument'" >&2; exit 2 ;;
+  esac
+done
 build=build/$preset
 status=0
 
+exclude=()
+if [ "$hosts" = false ]; then
+  exclude=(--exclude-regex 'pluginval|lv2lint')
+fi
+
 if [ "$gui" = false ]; then
-  ctest --preset "$preset" --label-exclude gui || status=$?
+  ctest --preset "$preset" --label-exclude gui ${exclude[@]+"${exclude[@]}"} || status=$?
 else
   case "$(uname -s)" in
-    Linux) xwfb-run -- bash ci/with-window-manager.sh ctest --preset "$preset" || status=$? ;;
-    *) ctest --preset "$preset" || status=$? ;;
+    Linux) xwfb-run -- bash ci/with-window-manager.sh ctest --preset "$preset" ${exclude[@]+"${exclude[@]}"} || status=$? ;;
+    *) ctest --preset "$preset" ${exclude[@]+"${exclude[@]}"} || status=$? ;;
   esac
 fi
 
-if [ "$(uname -s)" = Darwin ]; then
+if [ "$(uname -s)" = Darwin ] && [ "$hosts" = true ]; then
   case $preset in
     adl-*) subtype=ADLM ;;
     opn-*) subtype=OPNM ;;
