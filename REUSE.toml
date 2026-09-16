@@ -21,6 +21,20 @@ precedence = "override"
 SPDX-FileCopyrightText = "2026 Yuma Kakei <yumasansansan@gmail.com>"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# The picture in the READMEs: a capture by Yuma Kakei of the two plugins as they
+# are now. The interface it shows comes in part from ADLplug, whose graphics are
+# under the Boost Software License, and in part from ADLplug-Next, whose changes
+# are under the GPL. The picture itself is under CC BY-SA 4.0, as the pictures of
+# the manual are.
+[[annotations]]
+path = "docs/screen.png"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "2018-2019 Jean Pierre Cimalando",
+    "2026 Yuma Kakei <yumasansansan@gmail.com>",
+]
+SPDX-License-Identifier = "BSL-1.0 AND GPL-3.0-or-later AND CC-BY-SA-4.0"
+
 # Made for ADLplug, whose license, the Boost Software License, covers them.
 [[annotations]]
 path = [
@@ -38,7 +52,6 @@ SPDX-License-Identifier = "BSL-1.0"
 
 [[annotations]]
 path = [
-    "docs/screen.png",
     "resources/ui/adl*",
     "resources/ui/opn*",
     "resources/ui/slider-skin.*",
