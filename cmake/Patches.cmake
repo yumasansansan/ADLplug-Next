@@ -69,5 +69,9 @@ adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0001-dbopl-offsets-without-a-null-pointer.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0002-javaopl3-an-infinite-attack-without-a-cast-to-int.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0003-ym3812-lle-the-sample-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-psg-a-noise-table-that-does-not-overflow.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0002-ym2612-the-dac-value-without-shifting-a-negative.patch")

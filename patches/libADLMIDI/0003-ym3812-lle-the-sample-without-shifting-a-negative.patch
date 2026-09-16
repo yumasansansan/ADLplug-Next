@@ -1,0 +1,35 @@
+SPDX-FileCopyrightText: 2023 nukeykt
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-2.0-or-later
+
+YM3812-LLE: the sample without shifting a negative number
+
+The sample is the mantissa of the shifter, centred on 512, scaled by the
+exponent. It is scaled with a left shift, and the shift of a negative number
+is undefined behaviour, which UndefinedBehaviorSanitizer stops the program
+at:
+
+  src/chips/ym3812_lle/nopl2.c:106:41: runtime error: left shift of negative
+  value -512
+
+A multiplication says the same thing and is defined. The value stays within
+an int: the mantissa gives -512 to 511, the shift is at most 6, and the
+product -32768 to 32704.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/ym3812_lle/nopl2.c b/src/chips/ym3812_lle/nopl2.c
+index f9d4715..81cde32 100644
+--- a/src/chips/ym3812_lle/nopl2.c
++++ b/src/chips/ym3812_lle/nopl2.c
+@@ -103,7 +103,7 @@ static void nopl2_cycle(nopl2_t *chip)
+                 if (shift)
+                 {
+                     shift--;
+-                    chip->sample = mant << shift;
++                    chip->sample = mant * (1 << shift);
+                 }
+             }
+ 

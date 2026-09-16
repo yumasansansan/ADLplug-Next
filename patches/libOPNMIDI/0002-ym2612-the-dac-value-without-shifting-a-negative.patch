@@ -1,0 +1,46 @@
+SPDX-FileCopyrightText: 1999-2002 Stéphane Dallongeville
+SPDX-FileCopyrightText: 2003-2004 Stéphane Akhoun
+SPDX-FileCopyrightText: 2008-2010 David Korth
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-2.0-or-later
+
+YM2612: the DAC value without shifting a negative number
+
+The DAC value is the byte written to register 0x2A, centred on 0x80 and
+scaled by 128. It is scaled with a left shift, and the shift of a negative
+number is undefined behaviour, which UndefinedBehaviorSanitizer stops the
+program at:
+
+  src/chips/gens/Ym2612.cpp:1787:43: runtime error: left shift of negative
+  value -128
+
+A multiplication says the same thing and is defined. The value stays within
+an int: the byte gives -128 to 127, and the product -16384 to 16256. Both
+places that work it out are changed.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/gens/Ym2612.cpp b/src/chips/gens/Ym2612.cpp
+index 4535e0d..51d1123 100644
+--- a/src/chips/gens/Ym2612.cpp
++++ b/src/chips/gens/Ym2612.cpp
+@@ -819,7 +819,7 @@ int Ym2612Private::YM_SET(int address, uint8_t data)
+ 
+ 		case 0x2A:
+ 			// Set the DAC value.
+-			state.DACdata = ((int)data - 0x80) << 7;	// donnée du DAC
++			state.DACdata = ((int)data - 0x80) * 128;	// donnée du DAC
+ 			break;
+ 
+ 		case 0x2B:
+@@ -1784,7 +1784,7 @@ int Ym2612::write(unsigned int address, uint8_t data)
+ 		case 1:
+ 			// Trivial optimization for DAC.
+ 			if (d->state.OPNAadr == 0x2A) {
+-				d->state.DACdata = ((int)data - 0x80) << 7;
++				d->state.DACdata = ((int)data - 0x80) * 128;
+ 				return 0;
+ 			}
+ 
