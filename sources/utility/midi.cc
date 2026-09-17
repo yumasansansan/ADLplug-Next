@@ -17,9 +17,9 @@
 
 #include "utility/midi.h"
 
-Midi_Input_Message Midi_Input_Source::midi_cb_for_buffer_cursor(void *cbdata)
+Midi_Input_Message Midi_Input_Source::read_event()
 {
-    Buffer_Cursor &cursor = *static_cast<Buffer_Cursor *>(cbdata);
+    Buffer_Cursor &cursor = cursor_;
     if (cursor.current == cursor.end)
         return {};
     const MidiMessageMetadata event = *cursor.current;

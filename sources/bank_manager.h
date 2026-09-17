@@ -20,9 +20,11 @@
 #include "adl/instrument.h"
 #include "utility/counting_bitset.h"
 #include <array>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 class AdlplugAudioProcessor;
 class Player;
 
@@ -31,7 +33,10 @@ class Player;
 // sent to the editor or measured by the worker. Runs on the audio thread.
 class Bank_Manager {
 public:
-    Bank_Manager(AdlplugAudioProcessor &proc, Player &pl, const void *wopl_data, std::size_t wopl_size);
+    // The loader of WOPL and WOPN files takes the file as writable memory,
+    // although it only reads it, so the bank comes as bytes that may be
+    // written rather than as constant ones cast to writable.
+    Bank_Manager(AdlplugAudioProcessor &proc, Player &pl, std::span<std::uint8_t> wopl_data);
     void clear_banks(bool notify);
 
     void mark_everything_for_notification();
@@ -59,21 +64,25 @@ public:
     // Names are fixed-size fields, not necessarily terminated.
     static constexpr std::size_t name_size = 32;
 
+    // Programs are numbered from 0 to 127. The numbers that come in messages
+    // are bytes, so the functions above ignore any other number.
+    static constexpr unsigned program_count = 128;
+
     struct Bank_Info {
         Bank_Id id;
         Bank_Ref bank;
-        counting_bitset<128> used;
-        counting_bitset<128> to_notify;
-        counting_bitset<128> to_measure;
+        counting_bitset<program_count> used;
+        counting_bitset<program_count> to_notify;
+        counting_bitset<program_count> to_measure;
         char bank_name[name_size] {};
-        char ins_names[128 * name_size] {};
+        std::array<std::array<char, name_size>, program_count> ins_names {};
 
         explicit operator bool() const noexcept
             { return static_cast<bool>(id); }
-        char *program_name(unsigned program) noexcept
-            { return &ins_names[name_size * program]; }
-        const char *program_name(unsigned program) const noexcept
-            { return &ins_names[name_size * program]; }
+        std::span<char, name_size> program_name(unsigned program) noexcept
+            { assert(program < program_count); return ins_names[program]; }
+        std::span<const char, name_size> program_name(unsigned program) const noexcept
+            { assert(program < program_count); return ins_names[program]; }
     };
 
     const std::array<Bank_Info, bank_reserve_size> &bank_infos() const noexcept

@@ -45,7 +45,7 @@ bool load_ini(CSimpleIniA &ini, const File &file)
     ini.Reset();
     MemoryBlock data;
     return file.existsAsFile() && file.loadFileAsData(data) &&
-        ini.LoadData(static_cast<const char *>(data.getData()), data.getSize()) == SI_OK;
+        ini.LoadData(data.begin(), data.getSize()) == SI_OK;
 }
 
 bool save_ini(const CSimpleIniA &ini, const File &file)

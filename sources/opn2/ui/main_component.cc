@@ -1378,19 +1378,20 @@ bool Main_Component::display_info_for_component(Component *c)
     String param;
     int val = 0;
 
-    Knob *kn = static_cast<Knob *>(c);
+    // The value that a knob shows, as the parameter has it.
+    const auto value_of = [](const Knob &knob) { return static_cast<int>(std::lround(knob.value())); };
 
     if (c == kn_feedback.get()) {
         param = "Feedback";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_feedback);
     }
     else if (c == kn_ams.get()) {
         param = "AM sensitivity";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_ams);
     }
     else if (c == kn_fms.get()) {
         param = "FM sensitivity";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_fms);
     }
 
     if (param.isEmpty()) {
@@ -1585,8 +1586,10 @@ static const unsigned char resource_Main_Component_opnmidi_png[] = { 137,80,78,7
 197,137,153,11,68,49,41,128,240,196,1,153,11,138,95,100,145,205,225,156,203,143,26,179,57,54,56,21,122,83,141,47,130,132,234,87,85,166,137,49,198,85,113,102,11,10,234,97,146,41,18,226,3,76,162,121,97,
 42,145,145,34,202,9,143,133,152,57,232,107,239,80,77,47,214,75,156,224,4,147,185,102,94,3,163,200,153,188,244,223,99,107,45,192,181,30,88,44,0,0,0,0,73,69,78,68,174,66,96,130,0,0};
 
-const char* Main_Component::opnmidi_png = reinterpret_cast<const char*>(resource_Main_Component_opnmidi_png);
+const unsigned char* const Main_Component::opnmidi_png = resource_Main_Component_opnmidi_png;
 const int Main_Component::opnmidi_pngSize = 9727;
+// The PNG file is the array less the zeros after it.
+static_assert(9727 <= sizeof resource_Main_Component_opnmidi_png);
 
 
 //[EndFile] You can add extra defines here...

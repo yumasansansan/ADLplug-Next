@@ -51,6 +51,7 @@ Instrument Instrument::from_wopl(const WOPNInstrument &o) noexcept
         #undef F
     }
 
+    static_assert(sizeof ins.name <= sizeof o.inst_name);
     std::memcpy(ins.name, o.inst_name, sizeof ins.name);
 
     return ins;
@@ -70,6 +71,7 @@ WOPNInstrument Instrument::to_wopl() const noexcept
         #undef F
     }
 
+    static_assert(sizeof ins.inst_name <= sizeof name);
     std::memcpy(ins.inst_name, name, sizeof ins.inst_name);
 
     return ins;
@@ -147,6 +149,7 @@ void Midi_Bank::from_wopl(const WOPNFile &wopl, std::vector<Midi_Bank> &banks, I
         bank.id = Bank_Id(src.bank_midi_msb, src.bank_midi_lsb, percussive);
         for (std::size_t p = 0; p < bank.ins.size(); ++p)
             bank.ins[p] = Instrument::from_wopl(src.ins[p]);
+        static_assert(sizeof bank.name <= sizeof src.bank_name);
         std::memcpy(bank.name, src.bank_name, sizeof bank.name);
     }
 

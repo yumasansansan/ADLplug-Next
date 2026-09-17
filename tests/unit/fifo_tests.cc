@@ -15,11 +15,10 @@ ADLPLUG_TEST(simple_fifo_round_trip)
     // Messages of changing lengths go around the ring buffer many times. Each
     // read has to see its message in one piece, also when it was written
     // across the end of the buffer.
-    const unsigned alignment = Simple_Fifo::alignment;
-    Simple_Fifo fifo(8 * alignment);
+    Simple_Fifo fifo(64);
     std::uint8_t next = 0;
-    for (unsigned round = 0; round < 64; ++round) {
-        const unsigned length = 1 + round % (3 * alignment);
+    for (unsigned round = 0; round < 256; ++round) {
+        const unsigned length = 1 + round % 48;
 
         unsigned write_offset = 0;
         std::uint8_t *const written = fifo.write(length, write_offset);
@@ -28,8 +27,6 @@ ADLPLUG_TEST(simple_fifo_round_trip)
             return;
         for (unsigned i = 0; i < length; ++i)
             written[i] = static_cast<std::uint8_t>(next + i);
-        CHECK(fifo.write_padding(write_offset));
-        CHECK(write_offset % alignment == 0);
         fifo.finish_write(write_offset);
 
         unsigned read_offset = 0;
@@ -41,7 +38,6 @@ ADLPLUG_TEST(simple_fifo_round_trip)
         for (unsigned i = 0; i < length; ++i)
             same = same && message[i] == static_cast<std::uint8_t>(next + i);
         CHECK(same);
-        CHECK(fifo.read_padding(read_offset));
         CHECK(read_offset == write_offset);
         fifo.finish_read(read_offset);
         CHECK(fifo.get_num_ready() == 0);
@@ -52,18 +48,29 @@ ADLPLUG_TEST(simple_fifo_round_trip)
 
 ADLPLUG_TEST(simple_fifo_full)
 {
-    // AbstractFifo keeps one byte of its capacity free, so a FIFO of four
-    // alignments takes three aligned messages, and refuses a fourth.
-    const unsigned alignment = Simple_Fifo::alignment;
-    Simple_Fifo fifo(4 * alignment);
+    // AbstractFifo keeps one byte of its capacity free, so a FIFO of 64 bytes
+    // takes three messages of 16, and refuses a fourth.
+    Simple_Fifo fifo(64);
     unsigned messages = 0;
     for (;;) {
         unsigned offset = 0;
-        if (fifo.write(alignment, offset) == nullptr || !fifo.write_padding(offset))
+        if (fifo.write(16, offset) == nullptr)
             break;
         fifo.finish_write(offset);
         ++messages;
     }
     CHECK(messages == 3);
-    CHECK(fifo.get_num_ready() == 3 * alignment);
+    CHECK(fifo.get_num_ready() == 48);
+}
+
+ADLPLUG_TEST(simple_fifo_too_long)
+{
+    // A length that the FIFO could never hold is refused, also one that would
+    // wrap around to a small number when added to the offset.
+    Simple_Fifo fifo(64);
+    unsigned offset = 8;
+    CHECK(fifo.write(0xfffffff8u, offset) == nullptr);
+    CHECK(fifo.read(0xfffffff8u, offset) == nullptr);
+    CHECK(fifo.write(65, offset) == nullptr);
+    CHECK(offset == 8);
 }

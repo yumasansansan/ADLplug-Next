@@ -89,7 +89,7 @@ public:
     void comboBoxChanged (ComboBox* comboBoxThatHasChanged) override;
 
     // Binary resources:
-    static const char* opnmidi_png;
+    static const unsigned char* const opnmidi_png;
     static const int opnmidi_pngSize;
 
 

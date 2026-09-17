@@ -22,8 +22,8 @@
 #include "ui/main_component.h"
 #include "ui/look_and_feel.h"
 #include "utility/functional_timer.h"
+#include "utility/name_field.h"
 #include <cassert>
-#include <cstring>
 
 AdlplugAudioProcessorEditor::AdlplugAudioProcessorEditor(AdlplugAudioProcessor &p, Parameter_Block &pb)
     : AudioProcessorEditor(&p), proc_(p)
@@ -82,7 +82,7 @@ void AdlplugAudioProcessorEditor::process_notifications()
         return;
 
     while (const Buffered_Message msg = Messages::read(*queue)) {
-        switch (static_cast<Fx_Message>(msg.header->tag)) {
+        switch (static_cast<Fx_Message>(msg.header.tag)) {
         case Fx_Message::NotifyReady:
             main.request_state_from_processor();
             break;
@@ -93,7 +93,7 @@ void AdlplugAudioProcessorEditor::process_notifications()
             main.receive_global_parameters(Messages::body<Messages::Fx::NotifyGlobalParameters>(msg).param);
             break;
         case Fx_Message::NotifyInstrument: {
-            const auto &body = Messages::body<Messages::Fx::NotifyInstrument>(msg);
+            const auto body = Messages::body<Messages::Fx::NotifyInstrument>(msg);
             main.receive_instrument(body.bank, body.program, body.instrument);
             break;
         }
@@ -101,7 +101,7 @@ void AdlplugAudioProcessorEditor::process_notifications()
             main.receive_chip_settings(Messages::body<Messages::Fx::NotifyChipSettings>(msg).cs);
             break;
         case Fx_Message::NotifySelection: {
-            const auto &body = Messages::body<Messages::Fx::NotifySelection>(msg);
+            const auto body = Messages::body<Messages::Fx::NotifySelection>(msg);
             main.receive_selection(body.part, body.bank, body.program);
             break;
         }
@@ -109,10 +109,8 @@ void AdlplugAudioProcessorEditor::process_notifications()
             main.on_change_midi_channel(Messages::body<Messages::Fx::NotifyActivePart>(msg).part);
             break;
         case Fx_Message::NotifyBankTitle: {
-            const auto &body = Messages::body<Messages::Fx::NotifyBankTitle>(msg);
-            char title[sizeof body.title + 1] {};
-            std::memcpy(title, body.title, sizeof body.title);
-            main.on_change_bank_title(String::fromUTF8(title), dontSendNotification);
+            const auto body = Messages::body<Messages::Fx::NotifyBankTitle>(msg);
+            main.on_change_bank_title(name_from_field(body.title), dontSendNotification);
             break;
         }
         default:

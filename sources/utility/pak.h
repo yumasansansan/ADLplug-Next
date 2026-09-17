@@ -39,7 +39,7 @@ public:
 
     const std::string &name(std::size_t nth) const;
     // The bank file, in WOPL or WOPN format.
-    std::string extract(std::size_t nth) const;
+    std::vector<std::uint8_t> extract(std::size_t nth) const;
     // What the sources say of the bank, in UTF-8.
     std::string info(std::size_t nth) const;
     // The bank of the given name, if there is one.
@@ -61,5 +61,5 @@ private:
     std::size_t content_offset_ = 0;
 
     bool read_dictionary();
-    std::string read_content(std::uint32_t offset, std::uint32_t size) const;
+    std::vector<std::uint8_t> read_content(std::uint32_t offset, std::uint32_t size) const;
 };

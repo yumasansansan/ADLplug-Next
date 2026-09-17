@@ -100,8 +100,11 @@ public:
     void confirm_overwrite(const File &file, std::function<void()> on_confirmed);
     void load_bank(const File &file, int format);
     void load_single_instrument(std::uint32_t program, const File &file, int format);
-    void load_bank_mem(const std::uint8_t *mem, std::size_t length, const String &bank_name, int format);
-    void load_single_instrument_mem(std::uint32_t program, const std::uint8_t *mem, std::size_t length, const String &bank_name, int format);
+    // The loaders of WOPL and WOPN files take the file as writable memory,
+    // although they only read it, so the file comes as bytes that may be
+    // written rather than as constant ones cast to writable.
+    void load_bank_mem(std::span<std::uint8_t> data, const String &bank_name, int format);
+    void load_single_instrument_mem(std::uint32_t program, std::span<std::uint8_t> data, const String &bank_name, int format);
     void save_bank(const File &file);
     void save_single_instrument(std::uint32_t program, const File &file);
 
@@ -139,7 +142,7 @@ private:
     static Volume_Limits master_volume_limits(const AudioParameterFloat &parameter);
 
     // A bank or instrument file to load, or nothing if the user was told why not.
-    static std::optional<MemoryBlock> read_file_for_loading(const File &file, const char *error_title);
+    static std::optional<std::vector<std::uint8_t>> read_file_for_loading(const File &file, const char *error_title);
     static void write_file_for_saving(const File &file, std::span<const std::uint8_t> data, const char *error_title);
 
     // Ids in the menu which loads banks: the files of the collection follow
@@ -217,12 +220,15 @@ protected:
     Component::SafePointer<DialogWindow> dlg_about_;
     Component::SafePointer<DialogWindow> dlg_bank_information_;
 
+    // Made in the constructor of this base, before the T around it exists, so
+    // it keeps the base and turns it into the T only when an event comes: a
+    // downcast of an object under construction is undefined behaviour.
     class Mouse_Hover_Listener : public MouseListener {
     public:
-        explicit Mouse_Hover_Listener(T *component);
+        explicit Mouse_Hover_Listener(Generic_Main_Component &owner);
         void mouseEnter(const MouseEvent &event) override;
     private:
-        T *component_ = nullptr;
+        Generic_Main_Component &owner_;
     };
     std::unique_ptr<Mouse_Hover_Listener> mouse_hover_listener_;
 };

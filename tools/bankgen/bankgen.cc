@@ -423,7 +423,7 @@ std::vector<Pack_Entry> read_banks(Inputs &inputs, const Options &options)
             entry.data = std::move(data);
         }
         else if (item.format == "GYB" || item.format == "GEMS") {
-            const std::span<const std::uint8_t> bytes(reinterpret_cast<const std::uint8_t *>(data.data()), data.size());
+            const std::vector<std::uint8_t> bytes(data.begin(), data.end());
             Imported_Bank bank;
             std::string error;
             const bool imported = (item.format == "GYB") ? import_gyb(bytes, bank, error) : import_gems(bytes, bank, error);
@@ -512,7 +512,8 @@ std::string pack(const std::vector<Pack_Entry> &entries)
             throw Error("the pack cannot be compressed");
         stream.flush();
     }
-    dictionary.append(static_cast<const char *>(compressed.getData()), compressed.getDataSize());
+    const juce::MemoryBlock block = compressed.getMemoryBlock();
+    dictionary.append(block.begin(), block.getSize());
     return dictionary;
 }
 

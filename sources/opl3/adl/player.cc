@@ -142,6 +142,11 @@ void Player::play_midi(const std::uint8_t *msg, unsigned len)
 
 void Player::generate(float *left, float *right, unsigned nframes, unsigned stride)
 {
+    // The library takes every sample format as a pointer to bytes and, for
+    // this one, casts it back to float * to store each sample. So the buffers
+    // go in as the floats they are, seen as bytes, which is allowed; a buffer
+    // of bytes to copy out of afterwards would instead have the library store
+    // floats in storage of another type, and without their alignment.
     const ADLMIDI_AudioFormat format {ADLMIDI_SampleType_F32, sizeof(float), static_cast<unsigned>(stride * sizeof(float))};
     adl_generateFormat(player_.get(), static_cast<int>(2 * nframes),
                        reinterpret_cast<ADL_UInt8 *>(left), reinterpret_cast<ADL_UInt8 *>(right), &format);

@@ -69,7 +69,7 @@ Generic_Main_Component<T>::Generic_Main_Component(
 {
     Desktop::getInstance().addFocusChangeListener(this);
     setWantsKeyboardFocus(true);
-    mouse_hover_listener_ = std::make_unique<Mouse_Hover_Listener>(self());
+    mouse_hover_listener_ = std::make_unique<Mouse_Hover_Listener>(*this);
     addMouseListener(mouse_hover_listener_.get(), true);
     midi_kb_state_.addListener(this);
     message_flush_timer_ = Functional_Timer::create([this] { flush_messages_to_processor(); });
@@ -281,10 +281,11 @@ void Generic_Main_Component<T>::receive_bank_slots(const Messages::Fx::NotifyBan
     }
 
     // extract the names
-    std::map<Bank_Id, std::array<char, 32>> bank_name_map;
+    using Name = std::array<char, sizeof Messages::Fx::NotifyBankSlots::Entry::name>;
+    std::map<Bank_Id, Name> bank_name_map;
     for (const auto &entry : entries) {
         if (entry.name[0] != '\0')
-            std::memcpy(bank_name_map[entry.bank].data(), entry.name, 32);
+            std::ranges::copy(entry.name, bank_name_map[entry.bank].begin());
     }
 
     // enable or disable instruments according to slots
@@ -299,12 +300,12 @@ void Generic_Main_Component<T>::receive_bank_slots(const Messages::Fx::NotifyBan
                 update = true;
             }
         }
-        static constexpr char name_empty[32] = {};
+        static constexpr Name name_empty {};
         const auto it = bank_name_map.find(entry.bank);
-        const char *name_src = (it != bank_name_map.end()) ? it->second.data() : name_empty;
-        char *name_dst = percussive ? e_bank.percussion_name : e_bank.melodic_name;
-        if (std::memcmp(name_dst, name_src, 32) != 0) {
-            std::memcpy(name_dst, name_src, 32);
+        const Name &name_src = (it != bank_name_map.end()) ? it->second : name_empty;
+        const std::span<char, std::tuple_size_v<Name>> name_dst(percussive ? e_bank.percussion_name : e_bank.melodic_name);
+        if (!std::ranges::equal(name_dst, name_src)) {
+            std::ranges::copy(name_src, name_dst.begin());
             update = true;
         }
     }
@@ -831,8 +832,8 @@ void Generic_Main_Component<T>::finish_load_bank(int selection)
         const auto index = static_cast<std::size_t>(selection - load_collection_first_id);
         if (index >= pak.entry_count())
             return;
-        const std::string data = pak.extract(index);
-        load_bank_mem(reinterpret_cast<const std::uint8_t *>(data.data()), data.size(), String(pak.name(index)), 0);
+        std::vector<std::uint8_t> data = pak.extract(index);
+        load_bank_mem(data, String(pak.name(index)), 0);
     }
 }
 
@@ -969,9 +970,8 @@ void Generic_Main_Component<T>::load_bank(const File &file, int format)
 {
     trace("Load from " WOPx_BANK_FORMAT " file: %s", file.getFullPathName().toRawUTF8());
 
-    if (const std::optional<MemoryBlock> data = read_file_for_loading(file, "Error loading bank"))
-        load_bank_mem(static_cast<const std::uint8_t *>(data->getData()), data->getSize(),
-                      file.getFileNameWithoutExtension(), format);
+    if (std::optional<std::vector<std::uint8_t>> data = read_file_for_loading(file, "Error loading bank"))
+        load_bank_mem(*data, file.getFileNameWithoutExtension(), format);
 }
 
 template <class T>
@@ -979,13 +979,12 @@ void Generic_Main_Component<T>::load_single_instrument(std::uint32_t program, co
 {
     trace("Load from " WOPx_INST_FORMAT " file: %s", file.getFullPathName().toRawUTF8());
 
-    if (const std::optional<MemoryBlock> data = read_file_for_loading(file, "Error loading instrument"))
-        load_single_instrument_mem(program, static_cast<const std::uint8_t *>(data->getData()), data->getSize(),
-                                   file.getFileNameWithoutExtension(), format);
+    if (std::optional<std::vector<std::uint8_t>> data = read_file_for_loading(file, "Error loading instrument"))
+        load_single_instrument_mem(program, *data, file.getFileNameWithoutExtension(), format);
 }
 
 template <class T>
-void Generic_Main_Component<T>::load_bank_mem(const std::uint8_t *mem, std::size_t length, const String &bank_name, int format)
+void Generic_Main_Component<T>::load_bank_mem(std::span<std::uint8_t> data, const String &bank_name, int format)
 {
     std::vector<Midi_Bank> banks;
     Instrument_Global_Parameters igp;
@@ -994,7 +993,7 @@ void Generic_Main_Component<T>::load_bank_mem(const std::uint8_t *mem, std::size
 
     switch (format) {
     default: {
-        const WOPx::BankFile_Ptr wopl(WOPx::LoadBankFromMem(const_cast<void *>(static_cast<const void *>(mem)), length, nullptr));
+        const WOPx::BankFile_Ptr wopl(WOPx::LoadBankFromMem(data.data(), data.size(), nullptr));
         if (!wopl) {
             AlertWindow::showMessageBoxAsync(
                 AlertWindow::WarningIcon, error_title, "The input file is not in " WOPx_BANK_FORMAT " format.");
@@ -1043,6 +1042,7 @@ void Generic_Main_Component<T>::load_bank_mem(const std::uint8_t *mem, std::size
         Messages::User::RenameBank msg;
         msg.bank = bank.id;
         msg.notify_back = false;
+        static_assert(sizeof msg.name == sizeof bank.name);
         std::memcpy(msg.name, bank.name, sizeof msg.name);
         write_to_processor(msg);
     }
@@ -1052,7 +1052,7 @@ void Generic_Main_Component<T>::load_bank_mem(const std::uint8_t *mem, std::size
 }
 
 template <class T>
-void Generic_Main_Component<T>::load_single_instrument_mem(std::uint32_t program, const std::uint8_t *mem, std::size_t length, [[maybe_unused]] const String &bank_name, int format)
+void Generic_Main_Component<T>::load_single_instrument_mem(std::uint32_t program, std::span<std::uint8_t> data, [[maybe_unused]] const String &bank_name, int format)
 {
     Instrument ins;
     const char *error_title = "Error loading instrument";
@@ -1060,7 +1060,7 @@ void Generic_Main_Component<T>::load_single_instrument_mem(std::uint32_t program
     switch (format) {
     default: {
         WOPx::InstrumentFile wopi = {};
-        if (WOPx::LoadInstFromMem(&wopi, const_cast<void *>(static_cast<const void *>(mem)), length) != 0) {
+        if (WOPx::LoadInstFromMem(&wopi, data.data(), data.size()) != 0) {
             AlertWindow::showMessageBoxAsync(
                 AlertWindow::WarningIcon, error_title, "The input file is not in " WOPx_INST_FORMAT " format.");
             return;
@@ -1070,7 +1070,7 @@ void Generic_Main_Component<T>::load_single_instrument_mem(std::uint32_t program
     }
 #if defined(ADLPLUG_OPL3)
     case 1:
-        ins = Instrument::from_sbi(mem, length);
+        ins = Instrument::from_sbi(data.data(), data.size());
         if (ins.blank()) {
             AlertWindow::showMessageBoxAsync(
                 AlertWindow::WarningIcon, error_title, "The input file is not in SBI format.");
@@ -1104,6 +1104,8 @@ void Generic_Main_Component<T>::save_bank(const File &file)
         WOPx::Bank melo {};
         WOPx::Bank drum {};
 
+        static_assert(sizeof e_bank.melodic_name <= sizeof melo.bank_name &&
+                      sizeof e_bank.percussion_name <= sizeof drum.bank_name);
         std::memcpy(melo.bank_name, e_bank.melodic_name, sizeof e_bank.melodic_name);
         std::memcpy(drum.bank_name, e_bank.percussion_name, sizeof e_bank.percussion_name);
 
@@ -1375,7 +1377,7 @@ auto Generic_Main_Component<T>::master_volume_limits(const AudioParameterFloat &
 }
 
 template <class T>
-std::optional<MemoryBlock> Generic_Main_Component<T>::read_file_for_loading(const File &file, const char *error_title)
+std::optional<std::vector<std::uint8_t>> Generic_Main_Component<T>::read_file_for_loading(const File &file, const char *error_title)
 {
     constexpr int64 max_length = 8 * 1024 * 1024;
 
@@ -1395,8 +1397,18 @@ std::optional<MemoryBlock> Generic_Main_Component<T>::read_file_for_loading(cons
         return std::nullopt;
     }
 
-    MemoryBlock data;
-    if (stream.readIntoMemoryBlock(data) != static_cast<std::size_t>(length)) {
+    // A read may return fewer bytes than asked for, so it goes on until the
+    // file is in or the stream gives nothing more.
+    std::vector<std::uint8_t> data(static_cast<std::size_t>(length));
+    std::size_t done = 0;
+    while (done < data.size()) {
+        const std::span<std::uint8_t> rest = std::span(data).subspan(done);
+        const int got = stream.read(rest.data(), static_cast<int>(rest.size()));
+        if (got <= 0)
+            break;
+        done += static_cast<std::size_t>(got);
+    }
+    if (done != data.size()) {
         AlertWindow::showMessageBoxAsync(
             AlertWindow::WarningIcon, error_title, "The input operation has failed.");
         return std::nullopt;
@@ -1454,7 +1466,7 @@ void Generic_Main_Component<T>::flush_messages_to_processor()
         if (!msg)
             break;
         if (!pending.body.empty())
-            std::memcpy(msg.data, pending.body.data(), pending.body.size());
+            std::memcpy(msg.body.data(), pending.body.data(), std::min(msg.body.size(), pending.body.size()));
         Messages::finish_write(*queue, msg);
         pending_messages_.pop_front();
     }
@@ -1488,15 +1500,16 @@ Bank_Id Generic_Main_Component<T>::bank_of_psid(std::uint32_t psid, bool percuss
 }
 
 template <class T>
-Generic_Main_Component<T>::Mouse_Hover_Listener::Mouse_Hover_Listener(T *component)
-    : component_(component)
+Generic_Main_Component<T>::Mouse_Hover_Listener::Mouse_Hover_Listener(Generic_Main_Component &owner)
+    : owner_(owner)
 {
 }
 
 template <class T>
 void Generic_Main_Component<T>::Mouse_Hover_Listener::mouseEnter(const MouseEvent &event)
 {
-    T *c = component_;
+    // By the time events come, the component is whole, and self() is a T.
+    T *c = owner_.self();
     c->display_info_for_component(event.eventComponent);
     c->expire_info_in();
 }

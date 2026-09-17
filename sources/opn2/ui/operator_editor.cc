@@ -639,39 +639,40 @@ bool Operator_Editor::display_info_for_component(Component *c)
     const char *prefixes[4] = {"Op1 ", "Op3 ", "Op2 ", "Op4 "};
     String prefix = prefixes[operator_id_];
 
-    Knob *kn = static_cast<Knob *>(c);
+    // The value that a knob shows, as the parameter has it.
+    const auto value_of = [](const Knob &knob) { return static_cast<int>(std::lround(knob.value())); };
 
     if (c == sl_level.get()) {
         param = prefix + "Level";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*sl_level);
     }
     else if (c == sl_fmul.get()) {
         param = prefix + "Frequency multiplier";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*sl_fmul);
     }
     else if (c == sl_rsl.get()) {
         param = prefix + "Rate scale level";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*sl_rsl);
     }
-    else if (kn == kn_attack.get()) {
+    else if (c == kn_attack.get()) {
         param = prefix + "Attack";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_attack);
     }
-    else if (kn == kn_decay.get()) {
+    else if (c == kn_decay.get()) {
         param = prefix + "Primary Decay";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_decay);
     }
-    else if (kn == kn_decay2.get()) {
+    else if (c == kn_decay2.get()) {
         param = prefix + "Secondary Decay";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_decay2);
     }
-    else if (kn == kn_sustain.get()) {
+    else if (c == kn_sustain.get()) {
         param = prefix + "Sustain";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_sustain);
     }
-    else if (kn == kn_release.get()) {
+    else if (c == kn_release.get()) {
         param = prefix + "Release";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_release);
     }
     else if (c == btn_next_ssgwave.get() || c == btn_prev_ssgwave.get()) {
         param = prefix + "SSG-EG Wave";

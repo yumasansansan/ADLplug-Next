@@ -27,7 +27,7 @@
 #include <format>
 #include <iterator>
 #include <new>
-#include <string>
+#include <vector>
 
 namespace {
 
@@ -36,7 +36,7 @@ WOPLFile_Ptr default_wopl()
     Pak_File_Reader pak;
     [[maybe_unused]] const bool pak_ok = pak.init_with_data(Res::banks_pak.data, Res::banks_pak.size);
     assert(pak_ok);
-    std::string data = pak.extract(0);
+    std::vector<std::uint8_t> data = pak.extract(0);
     assert(!data.empty());
 
     WOPLFile_Ptr file(WOPL_LoadBankFromMem(data.data(), data.size(), nullptr));

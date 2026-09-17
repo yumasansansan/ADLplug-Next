@@ -60,7 +60,7 @@ ADLPLUG_TEST(mt32_defaults)
 {
     Pak_File_Reader pak;
     CHECK(pak.init_with_data(Res::banks_pak.data, Res::banks_pak.size));
-    std::string data = pak.extract(0);
+    std::vector<std::uint8_t> data = pak.extract(0);
     const WOPx::BankFile_Ptr file(WOPx::LoadBankFromMem(data.data(), data.size(), nullptr));
     CHECK(file != nullptr);
     if (file == nullptr)

@@ -106,7 +106,7 @@ ADLPLUG_TEST(embedded_banks)
 #endif
     for (std::size_t i = 0; i < pak.entry_count(); ++i) {
         const std::string &name = pak.name(i);
-        std::string data = pak.extract(i);
+        std::vector<std::uint8_t> data = pak.extract(i);
 
         // The editor finds the text of a bank by the bank's title, which holds
         // 64 bytes (AdlplugAudioProcessor::bank_title_size_max).

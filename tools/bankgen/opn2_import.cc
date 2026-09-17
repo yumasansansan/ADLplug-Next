@@ -198,7 +198,7 @@ bool import_gems(std::span<const std::uint8_t> data, Imported_Bank &bank, std::s
     WOPNFile_Ptr file = blank_file(bank_count, 1);
     if (!file)
         return fail("out of memory");
-    const auto *name = static_cast<const std::uint8_t *>(data.data());
+    const std::uint8_t *name = data.data();
     const std::size_t name_length = static_cast<std::size_t>(
         std::find(name, name + name_size, 0) - name);
     for (std::size_t i = 0; i < bank_count; ++i) {
@@ -223,7 +223,7 @@ bool import_gems(std::span<const std::uint8_t> data, Imported_Bank &bank, std::s
 
         WOPNInstrument &ins = file->banks_melodic[i / 128].ins[i % 128];
         ins = WOPNInstrument {};
-        const auto *patch_name = static_cast<const std::uint8_t *>(p + 2);
+        const std::uint8_t *patch_name = p + 2;
         std::memcpy(ins.inst_name, patch_name,
                     static_cast<std::size_t>(std::find(patch_name, patch_name + 28, 0) - patch_name));
 

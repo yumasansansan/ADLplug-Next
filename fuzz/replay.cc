@@ -61,10 +61,10 @@ int main(int argc, char *argv[])
             std::fprintf(stderr, "%s: cannot be read\n", path.string().c_str());
             return 1;
         }
-        const std::vector<char> bytes{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+        const std::vector<std::uint8_t> bytes{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
         std::printf("%s (%zu bytes)\n", path.string().c_str(), bytes.size());
         std::fflush(stdout);
-        LLVMFuzzerTestOneInput(reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size());
+        LLVMFuzzerTestOneInput(bytes.data(), bytes.size());
     }
 
     std::printf("%zu inputs\n", inputs.size());

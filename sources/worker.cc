@@ -121,7 +121,9 @@ void Worker::run()
                 break;
 
             auto it = measure_requests_.begin();
-            measure(it->first, it->second, Messages::body<Messages::Worker::MeasurementResult>(msg));
+            Messages::Worker::MeasurementResult result;
+            measure(it->first, it->second, result);
+            Messages::set_body(msg, result);
             Messages::finish_write(mq_send, msg);
             measure_requests_.erase(it);
 
@@ -138,9 +140,9 @@ void Worker::handle_message(const Buffered_Message &msg)
 {
     AdlplugAudioProcessor &proc = proc_;
 
-    switch (static_cast<Fx_Message>(msg.header->tag)) {
+    switch (static_cast<Fx_Message>(msg.header.tag)) {
     case Fx_Message::RequestMeasurement: {
-        const auto &body = Messages::body<Messages::Fx::RequestMeasurement>(msg);
+        const auto body = Messages::body<Messages::Fx::RequestMeasurement>(msg);
         const Bank_Id id = body.bank;
         const unsigned program = body.program;
         trace("Measurement requested for %c%u:%u:%u",
@@ -150,7 +152,7 @@ void Worker::handle_message(const Buffered_Message &msg)
         break;
     }
     case Fx_Message::RequestChipSettings: {
-        const auto &body = Messages::body<Messages::Fx::RequestChipSettings>(msg);
+        const auto body = Messages::body<Messages::Fx::RequestChipSettings>(msg);
         trace("Chip settings requested");
         const std::unique_lock<std::mutex> lock = proc.acquire_player_nonrt();
         proc.set_chip_settings_nonrt(body.cs);

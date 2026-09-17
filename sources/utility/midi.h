@@ -31,40 +31,35 @@ struct Midi_Input_Message
 
 class Midi_Input_Source {
 public:
-    using callback_function = Midi_Input_Message(void *);
-
-    explicit Midi_Input_Source(callback_function *cb, void *cbdata = nullptr) noexcept
-        : cb_(cb), cbdata_(cbdata) {}
     // Position within a MidiBuffer. Must outlive the source that reads it.
     struct Buffer_Cursor {
         MidiBufferIterator current;
         MidiBufferIterator end;
     };
     explicit Midi_Input_Source(Buffer_Cursor &cursor) noexcept
-        : cb_(&midi_cb_for_buffer_cursor), cbdata_(&cursor) {}
+        : cursor_(cursor) {}
 
     Midi_Input_Message get_next_event()
         {
             if (have_next_)
                 have_next_ = false;
             else
-                next_ = cb_(cbdata_);
+                next_ = read_event();
             return next_;
         }
 
     Midi_Input_Message peek_next_event()
         {
             if (!have_next_) {
-                next_ = cb_(cbdata_);
+                next_ = read_event();
                 have_next_ = true;
             }
             return next_;
         }
 
 private:
-    callback_function *cb_ = nullptr;
-    void *cbdata_ = nullptr;
+    Buffer_Cursor &cursor_;
     Midi_Input_Message next_;
     bool have_next_ = false;
-    static Midi_Input_Message midi_cb_for_buffer_cursor(void *cbdata);
+    Midi_Input_Message read_event();
 };

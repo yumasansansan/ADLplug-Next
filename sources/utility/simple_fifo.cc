@@ -22,15 +22,17 @@
 
 Simple_Fifo::Simple_Fifo(unsigned capacity)
     : fifo_(static_cast<int>(capacity)),
-      buffer_(std::make_unique<std::uint8_t[]>(std::size_t{capacity} * 2))
+      buffer_(std::make_unique<std::uint8_t[]>(std::size_t{capacity} * 2)),
+      capacity_(capacity)
 {
-    assert(capacity % alignment == 0);
-    assert(reinterpret_cast<std::uintptr_t>(buffer_.get()) % alignment == 0);
 }
 
 std::uint8_t *Simple_Fifo::read(unsigned length, unsigned &offset) noexcept
 {
-    int start1, size1, start2, size2;
+    // A message never holds more than the FIFO, and the sum below cannot wrap.
+    if (offset > capacity_ || length > capacity_ - offset)
+        return nullptr;
+    int start1 = 0, size1 = 0, start2 = 0, size2 = 0;
     fifo_.prepareToRead(static_cast<int>(offset + length), start1, size1, start2, size2);
     if (static_cast<unsigned>(size1 + size2) != offset + length)
         return nullptr;
@@ -39,18 +41,11 @@ std::uint8_t *Simple_Fifo::read(unsigned length, unsigned &offset) noexcept
     return data;
 }
 
-bool Simple_Fifo::read_padding(unsigned &offset) const noexcept
-{
-    const unsigned padded = pad_offset(offset);
-    if (padded > get_num_ready())
-        return false;
-    offset = padded;
-    return true;
-}
-
 std::uint8_t *Simple_Fifo::write(unsigned length, unsigned &offset) noexcept
 {
-    int start1, size1, start2, size2;
+    if (offset > capacity_ || length > capacity_ - offset)
+        return nullptr;
+    int start1 = 0, size1 = 0, start2 = 0, size2 = 0;
     fifo_.prepareToWrite(static_cast<int>(offset + length), start1, size1, start2, size2);
     if (static_cast<unsigned>(size1 + size2) != offset + length)
         return nullptr;
@@ -59,24 +54,15 @@ std::uint8_t *Simple_Fifo::write(unsigned length, unsigned &offset) noexcept
     return data;
 }
 
-bool Simple_Fifo::write_padding(unsigned &offset) const noexcept
-{
-    const unsigned padded = pad_offset(offset);
-    if (padded > get_free_space())
-        return false;
-    offset = padded;
-    return true;
-}
-
 void Simple_Fifo::finish_write(unsigned length) noexcept
 {
-    int start1, size1, start2, size2;
+    int start1 = 0, size1 = 0, start2 = 0, size2 = 0;
     fifo_.prepareToWrite(static_cast<int>(length), start1, size1, start2, size2);
     assert(static_cast<unsigned>(size1 + size2) == length);
 
     // write() handed out contiguous memory from start1, which may run past the
     // end of the first half. Mirror both parts into the other half.
-    const std::size_t capacity = static_cast<std::size_t>(fifo_.getTotalSize());
+    const std::size_t capacity = capacity_;
     const std::size_t start = static_cast<std::size_t>(start1);
     const std::size_t in_first_half = std::min<std::size_t>(length, capacity - start);
     std::uint8_t *buffer = buffer_.get();

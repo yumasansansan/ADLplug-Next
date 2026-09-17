@@ -17,6 +17,7 @@
 
 #include "instrument.h"
 #include <adlmidi.h>
+#include <bit>
 #include <cstring>
 
 #define EACH_INS_FIELD(F)                                               \
@@ -51,6 +52,7 @@ Instrument Instrument::from_wopl(const WOPLInstrument &o) noexcept
         #undef F
     }
 
+    static_assert(sizeof ins.name <= sizeof o.inst_name);
     std::memcpy(ins.name, o.inst_name, sizeof ins.name);
 
     return ins;
@@ -118,7 +120,9 @@ Instrument Instrument::from_sbi(const std::uint8_t *data, std::size_t length) no
         return ins;
 
     const bool unix_format = kind == Kind::Unix2op || kind == Kind::Unix4op;
+    // The length check above leaves the 32 bytes of the name.
     const std::uint8_t *name_field = data;
+    static_assert(sizeof ins.name == 32);
     std::memcpy(ins.name, name_field, unix_format ? 30 : 32);
     data += 32;
     length -= 32;
@@ -149,7 +153,7 @@ Instrument Instrument::from_sbi(const std::uint8_t *data, std::size_t length) no
     switch (kind) {
     case Kind::Dos:
         if (length > 1)
-            ins.note_offset1 = static_cast<std::int8_t>(data[1]);
+            ins.note_offset1 = std::bit_cast<std::int8_t>(data[1]);
         if (length > 2)
             ins.percussion_key_number = data[2];
         break;
@@ -254,6 +258,7 @@ void Midi_Bank::from_wopl(const WOPLFile &wopl, std::vector<Midi_Bank> &banks, I
         bank.id = Bank_Id(src.bank_midi_msb, src.bank_midi_lsb, percussive);
         for (std::size_t p = 0; p < bank.ins.size(); ++p)
             bank.ins[p] = Instrument::from_wopl(src.ins[p]);
+        static_assert(sizeof bank.name <= sizeof src.bank_name);
         std::memcpy(bank.name, src.bank_name, sizeof bank.name);
     }
 

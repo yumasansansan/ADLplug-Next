@@ -631,35 +631,36 @@ bool Operator_Editor::display_info_for_component(Component *c)
     const char *prefixes[4] = {"Op2 ", "Op1 ", "Op4 ", "Op3 "};
     String prefix = prefixes[operator_id_];
 
-    Knob *kn = static_cast<Knob *>(c);
+    // The value that a knob shows, as the parameter has it.
+    const auto value_of = [](const Knob &knob) { return static_cast<int>(std::lround(knob.value())); };
 
     if (c == sl_level.get()) {
         param = prefix + "Level";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*sl_level);
     }
     else if (c == sl_fmul.get()) {
         param = prefix + "Frequency multiplier";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*sl_fmul);
     }
     else if (c == sl_ksl.get()) {
         param = prefix + "Key scale level";
-        val = swap_ksl(static_cast<int>(std::lround(kn->value())));
+        val = swap_ksl(value_of(*sl_ksl));
     }
     else if (c == kn_attack.get()) {
         param = prefix + "Attack";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_attack);
     }
     else if (c == kn_decay.get()) {
         param = prefix + "Decay";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_decay);
     }
     else if (c == kn_sustain.get()) {
         param = prefix + "Sustain";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_sustain);
     }
     else if (c == kn_release.get()) {
         param = prefix + "Release";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_release);
     }
     else if (c == btn_next_wave.get() || c == btn_prev_wave.get()) {
         param = prefix + "Wave";

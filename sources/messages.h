@@ -21,10 +21,13 @@
 #include "utility/simple_fifo.h"
 #include "utility/counting_bitset.h"
 #include "definitions.h"
+#include <algorithm>
 #include <bitset>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <span>
 #include <type_traits>
 #include <utility>
 
@@ -37,27 +40,31 @@ struct Message_Header {
     unsigned size = 0;
 };
 
-// A message laid out in a Simple_Fifo: a header, then `header->size` bytes of
-// body, both padded to alignof(std::max_align_t).
+// A message in a Simple_Fifo, as read or as reserved for writing: a header,
+// then `header.size` bytes of body. The header and the body are copied in and
+// out of the FIFO's bytes, never used where they lie, so neither the type of
+// what is there nor its alignment comes into it.
 struct Buffered_Message {
-    Message_Header *header = nullptr;
-    std::uint8_t *data = nullptr;
-    unsigned offset = 0;
+    Message_Header header;
+    std::span<std::uint8_t> body;
+    // The bytes that the whole message takes in the FIFO.
+    unsigned length = 0;
+    bool valid = false;
     explicit operator bool() const noexcept
-        { return data != nullptr; }
+        { return valid; }
 };
 
 namespace Messages {
-    // Bodies are plain structs placed directly in the FIFO's byte buffer. An
-    // array of unsigned char implicitly creates objects of such types, and
-    // the FIFO keeps every header and body aligned for them.
+    // A body is a struct that is copied as its bytes, with its tag.
     template <class T>
-    concept Body = std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T> &&
-                   alignof(T) <= alignof(std::max_align_t);
+    concept Body = std::is_trivially_copyable_v<T> && std::is_default_constructible_v<T> &&
+                   std::is_enum_v<std::remove_cv_t<decltype(T::tag)>>;
 
     Buffered_Message read(Simple_Fifo &fifo) noexcept;
     void finish_read(Simple_Fifo &fifo, const Buffered_Message &msg) noexcept;
 
+    // Reserves a message with a body of `size` bytes, which are filled in
+    // before finish_write().
     Buffered_Message write(Simple_Fifo &fifo, unsigned tag, unsigned size) noexcept;
     void finish_write(Simple_Fifo &fifo, const Buffered_Message &msg) noexcept;
 
@@ -66,13 +73,24 @@ namespace Messages {
     Buffered_Message write(Simple_Fifo &fifo) noexcept
         { return write(fifo, std::to_underlying(T::tag), sizeof(T)); }
 
-    // The body of a message that carries a T.
+    // A copy of the body of a message that carries a T. No more than the body
+    // is read, whatever its size.
     template <Body T>
-    T &body(const Buffered_Message &msg) noexcept
+    T body(const Buffered_Message &msg) noexcept
     {
-        assert(msg.header->tag == std::to_underlying(T::tag) && msg.header->size == sizeof(T));
-        assert(reinterpret_cast<std::uintptr_t>(msg.data) % alignof(T) == 0);
-        return *static_cast<T *>(static_cast<void *>(msg.data));
+        assert(msg.header.tag == std::to_underlying(T::tag) && msg.body.size() == sizeof(T));
+        T value {};
+        std::memcpy(&value, msg.body.data(), std::min(msg.body.size(), sizeof value));
+        return value;
+    }
+
+    // Copies a T into the body of a message reserved for it. No more than the
+    // body is written, whatever its size.
+    template <Body T>
+    void set_body(const Buffered_Message &msg, const T &value) noexcept
+    {
+        assert(msg.header.tag == std::to_underlying(T::tag) && msg.body.size() == sizeof(T));
+        std::memcpy(msg.body.data(), &value, std::min(msg.body.size(), sizeof value));
     }
 
     // Sends a T filled in by `fill(body)`; false if the FIFO has no room.
@@ -82,7 +100,9 @@ namespace Messages {
         const Buffered_Message msg = write<T>(fifo);
         if (!msg)
             return false;
-        std::forward<Fill>(fill)(body<T>(msg));
+        T value {};
+        std::forward<Fill>(fill)(value);
+        set_body(msg, value);
         finish_write(fifo, msg);
         return true;
     }

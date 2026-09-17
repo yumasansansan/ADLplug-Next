@@ -88,6 +88,8 @@
 #endif
 
 #include <algorithm>
+#include <array>
+#include <bit>
 #include <charconv>
 #include <chrono>
 #include <cmath>
@@ -99,6 +101,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -152,11 +155,10 @@ void print_line(const std::string &text)
 
 constexpr std::uint64_t fnv1a64_basis = 14695981039346656037ull;
 
-void fnv1a64_add(std::uint64_t &hash, const void *data, std::size_t size)
+void fnv1a64_add(std::uint64_t &hash, std::span<const char> bytes)
 {
-    const auto *bytes = static_cast<const unsigned char *>(data);
-    for (std::size_t i = 0; i < size; ++i) {
-        hash ^= bytes[i];
+    for (const char byte : bytes) {
+        hash ^= static_cast<unsigned char>(byte);
         hash *= 1099511628211ull;
     }
 }
@@ -166,7 +168,7 @@ std::uint64_t state_hash(juce::AudioPluginInstance &plugin)
     juce::MemoryBlock state;
     plugin.getStateInformation(state);
     std::uint64_t hash = fnv1a64_basis;
-    fnv1a64_add(hash, state.getData(), state.getSize());
+    fnv1a64_add(hash, {state.begin(), state.getSize()});
     return hash;
 }
 
@@ -232,7 +234,7 @@ bool set_emulator_in_state(juce::MemoryBlock &state, int emulator)
 
         // copyXmlToBinary() writes a magic number, the length of the text, the
         // text and a terminating zero.
-        const auto *const bytes = static_cast<const char *>(stream.getData());
+        const char *const bytes = stream.begin();
         const std::size_t own_size = 9u + juce::ByteOrder::littleEndianInt(bytes + 4);
         juce::MemoryBlock patched;
         juce::AudioProcessor::copyXmlToBinary(*own, patched);
@@ -613,7 +615,7 @@ int main(int argc, char *argv[])
             juce::MemoryBlock saved;
             plugin->getStateInformation(saved);
             std::ofstream state_out(state_file, std::ios::binary);
-            state_out.write(static_cast<const char *>(saved.getData()), static_cast<std::streamsize>(saved.getSize()));
+            state_out.write(saved.begin(), static_cast<std::streamsize>(saved.getSize()));
             if (!state_out) {
                 print_line("error: cannot write " + state_file);
                 return 1;
@@ -656,10 +658,9 @@ int main(int argc, char *argv[])
             for (int i = 0; i < frames; ++i) {
                 for (int c = 0; c < out_channels; ++c) {
                     const float sample = buffer.getSample(c, i);
-                    char bytes[sizeof(float)];
-                    std::memcpy(bytes, &sample, sizeof(float));
-                    out.write(bytes, sizeof(float));
-                    fnv1a64_add(hash, bytes, sizeof(float));
+                    const auto bytes = std::bit_cast<std::array<char, sizeof(float)>>(sample);
+                    out.write(bytes.data(), bytes.size());
+                    fnv1a64_add(hash, bytes);
                     if (!std::isfinite(sample))
                         ++nonfinite;
                     peak = std::max(peak, std::abs(sample));

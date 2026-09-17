@@ -22,38 +22,46 @@ namespace Messages {
 Buffered_Message read(Simple_Fifo &fifo) noexcept
 {
     Buffered_Message msg;
-    std::uint8_t *header = fifo.read(sizeof(Message_Header), msg.offset);
-    if (!header || !fifo.read_padding(msg.offset))
+    unsigned offset = 0;
+    const std::uint8_t *header = fifo.read(sizeof msg.header, offset);
+    if (!header)
         return {};
-    msg.header = static_cast<Message_Header *>(static_cast<void *>(header));
-    msg.data = fifo.read(msg.header->size, msg.offset);
-    if (!msg.data || !fifo.read_padding(msg.offset))
+    std::memcpy(&msg.header, header, sizeof msg.header);
+    std::uint8_t *body = fifo.read(msg.header.size, offset);
+    if (!body)
         return {};
+    msg.body = {body, msg.header.size};
+    msg.length = offset;
+    msg.valid = true;
     return msg;
 }
 
 void finish_read(Simple_Fifo &fifo, const Buffered_Message &msg) noexcept
 {
-    fifo.finish_read(msg.offset);
+    fifo.finish_read(msg.length);
 }
 
 Buffered_Message write(Simple_Fifo &fifo, unsigned tag, unsigned size) noexcept
 {
     Buffered_Message msg;
-    std::uint8_t *header = fifo.write(sizeof(Message_Header), msg.offset);
-    if (!header || !fifo.write_padding(msg.offset))
+    msg.header = Message_Header{tag, size};
+    unsigned offset = 0;
+    std::uint8_t *header = fifo.write(sizeof msg.header, offset);
+    if (!header)
         return {};
-    msg.header = static_cast<Message_Header *>(static_cast<void *>(header));
-    *msg.header = Message_Header{tag, size};
-    msg.data = fifo.write(size, msg.offset);
-    if (!msg.data || !fifo.write_padding(msg.offset))
+    std::memcpy(header, &msg.header, sizeof msg.header);
+    std::uint8_t *body = fifo.write(size, offset);
+    if (!body)
         return {};
+    msg.body = {body, size};
+    msg.length = offset;
+    msg.valid = true;
     return msg;
 }
 
 void finish_write(Simple_Fifo &fifo, const Buffered_Message &msg) noexcept
 {
-    fifo.finish_write(msg.offset);
+    fifo.finish_write(msg.length);
 }
 
 }  // namespace Messages

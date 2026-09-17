@@ -89,7 +89,7 @@ public:
     void comboBoxChanged (ComboBox* comboBoxThatHasChanged) override;
 
     // Binary resources:
-    static const char* logo_png;
+    static const unsigned char* const logo_png;
     static const int logo_pngSize;
 
 

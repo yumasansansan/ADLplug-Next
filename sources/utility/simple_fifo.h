@@ -26,23 +26,20 @@
 // mirrored into the other half.
 //
 // Offsets given to read() and write() count from the start of the pending
-// message, and the *_padding() calls round them up to `alignment`. Every
-// message is padded that way and the capacity is a multiple of it, so the
-// pointers handed out are aligned for any object.
+// message. The FIFO holds bytes only: what goes through it is copied in and
+// out of them (messages.h), and nothing is used in place as an object.
 class Simple_Fifo
 {
 public:
-    static constexpr unsigned alignment = static_cast<unsigned>(alignof(std::max_align_t));
-
     explicit Simple_Fifo(unsigned capacity);
 
+    // `length` bytes at `offset`, or null if fewer are ready.
     std::uint8_t *read(unsigned length, unsigned &offset) noexcept;
-    bool read_padding(unsigned &offset) const noexcept;
     void finish_read(unsigned length) noexcept
         { fifo_.finishedRead(static_cast<int>(length)); }
 
+    // Room for `length` bytes at `offset`, or null if there is less.
     std::uint8_t *write(unsigned length, unsigned &offset) noexcept;
-    bool write_padding(unsigned &offset) const noexcept;
     void finish_write(unsigned length) noexcept;
 
     unsigned get_free_space() const noexcept
@@ -53,7 +50,5 @@ public:
 private:
     AbstractFifo fifo_;
     std::unique_ptr<std::uint8_t[]> buffer_;
-
-    static constexpr unsigned pad_offset(unsigned offset) noexcept
-        { return (offset + alignment - 1) / alignment * alignment; }
+    unsigned capacity_ = 0;
 };

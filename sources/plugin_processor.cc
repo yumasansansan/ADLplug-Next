@@ -34,6 +34,7 @@
 #include <memory>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -443,6 +444,7 @@ void AdlplugAudioProcessor::process_notifications()
 
     if (unmark_for_notification(Cb_BankTitle)) {
         if (!Messages::send<Messages::Fx::NotifyBankTitle>(queue, [this](auto &body) {
+                static_assert(sizeof body.title <= sizeof bank_title_);
                 std::memcpy(body.title, bank_title_, sizeof body.title);
             }))
             mark_for_notification(Cb_BankTitle);
@@ -540,10 +542,10 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
     if (!ctx.under_lock)
         return false;
 
-    const unsigned tag = msg.header->tag;
+    const unsigned tag = msg.header.tag;
 
     if (tag == std::to_underlying(User_Message::Midi))
-        return handle_midi(msg.data, msg.header->size);
+        return handle_midi(msg.body.data(), msg.header.size);
 
     Player &pl = *player_;
     Bank_Manager &bm = *bank_manager_;
@@ -560,7 +562,7 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
         mark_for_notification(Cb_ChipSettings);
         break;
     case std::to_underlying(User_Message::RequestSelections): {
-        const auto &body = Messages::body<Messages::User::RequestSelections>(msg);
+        const auto body = Messages::body<Messages::User::RequestSelections>(msg);
         for (unsigned p = 0; p < 16; ++p) {
             if (body.channel_mask.test(p))
                 mark_for_notification(Cb_Selection1 + p);
@@ -574,12 +576,12 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
         mark_for_notification(Cb_BankTitle);
         break;
     case std::to_underlying(User_Message::ClearBanks): {
-        const auto &body = Messages::body<Messages::User::ClearBanks>(msg);
+        const auto body = Messages::body<Messages::User::ClearBanks>(msg);
         bm.clear_banks(body.notify_back);
         break;
     }
     case std::to_underlying(User_Message::LoadGlobalParameters): {
-        const auto &body = Messages::body<Messages::User::LoadGlobalParameters>(msg);
+        const auto body = Messages::body<Messages::User::LoadGlobalParameters>(msg);
         if (body.param != get_player_global_parameters(pl)) {
             set_player_global_parameters(pl, body.param);
             if (body.notify_back)
@@ -588,7 +590,7 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
         break;
     }
     case std::to_underlying(User_Message::LoadInstrument): {
-        const auto &body = Messages::body<Messages::User::LoadInstrument>(msg);
+        const auto body = Messages::body<Messages::User::LoadInstrument>(msg);
         const unsigned flags =
             (body.need_measurement ? Bank_Manager::LP_NeedMeasurement : 0u) |
             (body.notify_back ? Bank_Manager::LP_Notify : 0u);
@@ -600,7 +602,7 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
         break;
     }
     case std::to_underlying(User_Message::CreateInstrument): {
-        const auto &body = Messages::body<Messages::User::CreateInstrument>(msg);
+        const auto body = Messages::body<Messages::User::CreateInstrument>(msg);
         const unsigned flags = Bank_Manager::LP_NoReplaceExisting |
             (body.notify_back ? Bank_Manager::LP_Notify : 0u);
         Instrument ins;
@@ -609,27 +611,27 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
         break;
     }
     case std::to_underlying(User_Message::DeleteInstrument): {
-        const auto &body = Messages::body<Messages::User::DeleteInstrument>(msg);
+        const auto body = Messages::body<Messages::User::DeleteInstrument>(msg);
         bm.delete_program(body.bank, body.program, body.notify_back ? Bank_Manager::LP_Notify : 0u);
         break;
     }
     case std::to_underlying(User_Message::DeleteBank): {
-        const auto &body = Messages::body<Messages::User::DeleteBank>(msg);
+        const auto body = Messages::body<Messages::User::DeleteBank>(msg);
         bm.delete_bank(body.bank, body.notify_back ? Bank_Manager::LP_Notify : 0u);
         break;
     }
     case std::to_underlying(User_Message::RenameBank): {
-        const auto &body = Messages::body<Messages::User::RenameBank>(msg);
+        const auto body = Messages::body<Messages::User::RenameBank>(msg);
         bm.rename_bank(body.bank, body.name, body.notify_back);
         break;
     }
     case std::to_underlying(User_Message::RenameProgram): {
-        const auto &body = Messages::body<Messages::User::RenameProgram>(msg);
+        const auto body = Messages::body<Messages::User::RenameProgram>(msg);
         bm.rename_program(body.bank, body.program, body.name, body.notify_back);
         break;
     }
     case std::to_underlying(User_Message::SelectProgram): {
-        const auto &body = Messages::body<Messages::User::SelectProgram>(msg);
+        const auto body = Messages::body<Messages::User::SelectProgram>(msg);
         if (body.part >= selection_.size())
             break;
         Selection &sel = selection_[body.part];
@@ -642,7 +644,7 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
         break;
     }
     case std::to_underlying(User_Message::SetActivePart): {
-        const auto &body = Messages::body<Messages::User::SetActivePart>(msg);
+        const auto body = Messages::body<Messages::User::SetActivePart>(msg);
         if (active_part_ == body.part || body.part >= 16)
             break;
         active_part_ = body.part;
@@ -650,7 +652,9 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
         break;
     }
     case std::to_underlying(User_Message::SetBankTitle): {
-        const auto &body = Messages::body<Messages::User::SetBankTitle>(msg);
+        const auto body = Messages::body<Messages::User::SetBankTitle>(msg);
+        // The title keeps the terminator after its last byte.
+        static_assert(sizeof body.title == bank_title_size_max && sizeof bank_title_ == bank_title_size_max + 1);
         std::memcpy(bank_title_, body.title, bank_title_size_max);
         break;
     }
@@ -665,7 +669,7 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
     }
 #endif
     case std::to_underlying(Worker_Message::MeasurementResult): {
-        const auto &body = Messages::body<Messages::Worker::MeasurementResult>(msg);
+        const auto body = Messages::body<Messages::Worker::MeasurementResult>(msg);
         bm.load_measurement(body.bank, body.program, body.instrument, body.ms_sound_kon, body.ms_sound_koff, true);
         break;
     }
@@ -808,7 +812,7 @@ void AdlplugAudioProcessor::create_player(unsigned sample_rate)
     Pak_File_Reader pak;
     [[maybe_unused]] const bool pak_ok = pak.init_with_data(Res::banks_pak.data, Res::banks_pak.size);
     assert(pak_ok);
-    const std::string default_wopl = pak.extract(0);
+    std::vector<std::uint8_t> default_wopl = pak.extract(0);
     assert(!default_wopl.empty());
 
     auto pl = std::make_unique<Player>();
@@ -817,7 +821,7 @@ void AdlplugAudioProcessor::create_player(unsigned sample_rate)
     pl->set_soft_pan_enabled(true);
     set_player_chip_settings(*pl, parameter_block_->chip_settings());
 
-    auto bm = std::make_unique<Bank_Manager>(*this, *pl, default_wopl.data(), default_wopl.size());
+    auto bm = std::make_unique<Bank_Manager>(*this, *pl, default_wopl);
 
     // The old bank manager refers to the old player, so it goes first.
     bank_manager_ = std::move(bm);
@@ -884,7 +888,7 @@ void AdlplugAudioProcessor::write_state(MemoryBlock &data)
             PropertySet ins_set = ins.to_properties();
             ins_set.setValue("bank", static_cast<int>(info.id.to_integer()));
             ins_set.setValue("program", static_cast<int>(p_i));
-            ins_set.setValue("name", name_from_field({info.program_name(p_i), Bank_Manager::name_size}));
+            ins_set.setValue("name", name_from_field(info.program_name(p_i)));
             root.addChildElement(ins_set.createXml("instrument").release());
         }
     }

@@ -45,7 +45,7 @@ const std::string &Pak_File_Reader::name(std::size_t nth) const
     return entries_.at(nth).name;
 }
 
-std::string Pak_File_Reader::extract(std::size_t nth) const
+std::vector<std::uint8_t> Pak_File_Reader::extract(std::size_t nth) const
 {
     const Entry &entry = entries_.at(nth);
     return read_content(entry.offset, entry.size);
@@ -54,7 +54,8 @@ std::string Pak_File_Reader::extract(std::size_t nth) const
 std::string Pak_File_Reader::info(std::size_t nth) const
 {
     const Entry &entry = entries_.at(nth);
-    return read_content(entry.info_offset, entry.info_size);
+    const std::vector<std::uint8_t> text = read_content(entry.info_offset, entry.info_size);
+    return {text.begin(), text.end()};
 }
 
 std::optional<std::size_t> Pak_File_Reader::find(std::string_view name) const
@@ -66,7 +67,7 @@ std::optional<std::size_t> Pak_File_Reader::find(std::string_view name) const
     return std::nullopt;
 }
 
-std::string Pak_File_Reader::read_content(std::uint32_t offset, std::uint32_t size) const
+std::vector<std::uint8_t> Pak_File_Reader::read_content(std::uint32_t offset, std::uint32_t size) const
 {
     if (size == 0 || size > static_cast<std::uint32_t>(std::numeric_limits<int>::max()))
         return {};
@@ -77,7 +78,7 @@ std::string Pak_File_Reader::read_content(std::uint32_t offset, std::uint32_t si
     if (!zlib_stream.setPosition(offset))
         return {};
 
-    std::string content(size, '\0');
+    std::vector<std::uint8_t> content(size);
     const int length = static_cast<int>(size);
     if (zlib_stream.read(content.data(), length) != length)
         return {};
@@ -119,7 +120,7 @@ bool Pak_File_Reader::read_dictionary()
         if (!name_end)
             return false;
         const auto name_length = static_cast<std::size_t>(name_end - ptr);
-        ent.name.assign(reinterpret_cast<const char *>(ptr), name_length);
+        ent.name.assign(ptr, name_end);
         ptr = name_end + 1;
         left -= name_length + 1;
 

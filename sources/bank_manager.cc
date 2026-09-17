@@ -37,25 +37,24 @@ namespace {
 
 // Stores `name` in a name field, leaving out the characters which do not fit
 // whole. Returns false if the field held it already.
-bool assign_name(char *field, const char *name) noexcept
+bool assign_name(std::span<char, Bank_Manager::name_size> field, const char *name) noexcept
 {
-    constexpr std::size_t size = Bank_Manager::name_size;
-    char stored[size] {};
-    std::memcpy(stored, name, utf8_fitting_length(name, size));
-    if (std::memcmp(field, stored, size) == 0)
+    std::array<char, Bank_Manager::name_size> stored {};
+    std::copy_n(name, utf8_fitting_length(name, stored.size()), stored.begin());
+    if (std::ranges::equal(field, stored))
         return false;
-    std::memcpy(field, stored, size);
+    std::ranges::copy(stored, field.begin());
     return true;
 }
 
 }  // namespace
 
-Bank_Manager::Bank_Manager(AdlplugAudioProcessor &proc, Player &pl, const void *wopl_data, std::size_t wopl_size)
+Bank_Manager::Bank_Manager(AdlplugAudioProcessor &proc, Player &pl, std::span<std::uint8_t> wopl_data)
     : proc_(proc), pl_(pl)
 {
     WOPx::BankFile_Ptr wopl;
-    if (pl.load_bank_data(wopl_data, wopl_size))
-        wopl.reset(WOPx::LoadBankFromMem(const_cast<void *>(wopl_data), wopl_size, nullptr));
+    if (pl.load_bank_data(wopl_data.data(), wopl_data.size()))
+        wopl.reset(WOPx::LoadBankFromMem(wopl_data.data(), wopl_data.size(), nullptr));
 
     initialize_all_banks();
 
@@ -153,6 +152,9 @@ void Bank_Manager::send_measurement_requests()
 
 bool Bank_Manager::load_program(const Bank_Id &id, unsigned program, const Instrument &ins, unsigned flags)
 {
+    if (program >= program_count)
+        return false;
+
     Player &pl = pl_;
 
     std::optional<unsigned> slot = find_slot(id);
@@ -189,7 +191,7 @@ bool Bank_Manager::load_program(const Bank_Id &id, unsigned program, const Instr
         info.to_notify.reset();
         info.to_measure.reset();
         std::memset(info.bank_name, 0, sizeof info.bank_name);
-        std::memset(info.ins_names, 0, sizeof info.ins_names);
+        info.ins_names = {};
     }
 
     Bank_Info &info = bank_infos_[*slot];
@@ -204,8 +206,9 @@ bool Bank_Manager::load_program(const Bank_Id &id, unsigned program, const Instr
     pl.ensure_set_instrument(info.bank, program, ins);
 
     // copy name
+    static_assert(sizeof ins.name == name_size);
     if ((flags & LP_KeepName) == 0)
-        std::memcpy(info.program_name(program), ins.name, name_size);
+        std::ranges::copy(ins.name, info.program_name(program).begin());
 
     // update program counts
     const std::size_t old_count = info.used.count();
@@ -226,6 +229,9 @@ bool Bank_Manager::delete_program(const Bank_Id &id, unsigned program, unsigned 
 {
     trace("Deleting program %c%u:%u:%u",
           id.percussive ? 'P' : 'M', id.msb, id.lsb, program);
+
+    if (program >= program_count)
+        return false;
 
     const std::optional<unsigned> slot = find_slot(id);
     if (!slot)
@@ -266,6 +272,9 @@ bool Bank_Manager::load_measurement(const Bank_Id &id, unsigned program, const I
     trace("Loading measurement for program %c%u:%u:%u: %u ms on, %u ms off",
           id.percussive ? 'P' : 'M', id.msb, id.lsb, program, kon, koff);
 
+    if (program >= program_count)
+        return false;
+
     const std::optional<unsigned> slot = find_slot(id);
     if (!slot) {
         trace("The program for received measurement does not exist");
@@ -304,6 +313,9 @@ void Bank_Manager::rename_bank(const Bank_Id &id, const char *name, bool notify)
 
 void Bank_Manager::rename_program(const Bank_Id &id, unsigned program, const char *name, bool notify)
 {
+    if (program >= program_count)
+        return;
+
     const std::optional<unsigned> slot = find_slot(id);
     if (!slot)
         return;
@@ -315,6 +327,9 @@ void Bank_Manager::rename_program(const Bank_Id &id, unsigned program, const cha
 
 bool Bank_Manager::find_program(const Bank_Id &id, unsigned program, Instrument &ins)
 {
+    if (program >= program_count)
+        return false;
+
     const std::optional<unsigned> slot = find_slot(id);
     if (!slot)
         return false;
@@ -344,7 +359,7 @@ void Bank_Manager::initialize_all_banks()
         info.bank = bank;
 
         std::memset(info.bank_name, 0, sizeof info.bank_name);
-        std::memset(info.ins_names, 0, sizeof info.ins_names);
+        info.ins_names = {};
 
         Instrument ins;
         info.used.reset();
@@ -390,6 +405,7 @@ bool Bank_Manager::emit_slots()
             auto &entry = body.entry[count++];
             entry.bank = info.id;
             entry.used = info.used;
+            static_assert(sizeof entry.name == sizeof info.bank_name);
             std::memcpy(entry.name, info.bank_name, sizeof entry.name);
         }
         body.count = count;
@@ -402,7 +418,8 @@ bool Bank_Manager::emit_notification(const Bank_Info &info, unsigned program)
         body.bank = info.id;
         body.program = static_cast<std::uint8_t>(program);
         pl_.ensure_get_instrument(info.bank, program, body.instrument);
-        std::memcpy(body.instrument.name, info.program_name(program), sizeof body.instrument.name);
+        static_assert(sizeof body.instrument.name == name_size);
+        std::ranges::copy(info.program_name(program), std::begin(body.instrument.name));
     });
 }
 

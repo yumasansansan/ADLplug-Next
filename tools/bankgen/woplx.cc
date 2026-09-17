@@ -203,20 +203,22 @@ bool Reader::read(const std::string &text, Woplx_Bank &out, std::string &error)
     if (level_ != Level::top)
         return fail("bank without its end");
 
-    // Allocated as WOPL_Init() does, but with the counts the file has, zero
-    // included, which WOPL_Init() would raise to one.
-    WOPLFile_Ptr file(static_cast<WOPLFile *>(std::calloc(1, sizeof(WOPLFile))));
-    if (!file)
+    // WOPL_Init() allocates the file for WOPL_Free() to release. It raises a
+    // count of zero to one, so the counts that the file has, zero included,
+    // are set again afterwards. A count is 16 bits, and the banks are copied
+    // into what was allocated for it.
+    if (melodic_.size() > UINT16_MAX || percussion_.size() > UINT16_MAX)
+        return fail("too many banks");
+    const auto melodic_count = static_cast<std::uint16_t>(melodic_.size());
+    const auto percussion_count = static_cast<std::uint16_t>(percussion_.size());
+    WOPLFile_Ptr file(WOPL_Init(melodic_count, percussion_count));
+    if (!file || !file->banks_melodic || !file->banks_percussive)
         return fail("out of memory");
     file->version = 3;
     file->opl_flags = flags_;
     file->volume_model = volume_model_;
-    file->banks_count_melodic = static_cast<std::uint16_t>(melodic_.size());
-    file->banks_count_percussion = static_cast<std::uint16_t>(percussion_.size());
-    file->banks_melodic = static_cast<WOPLBank *>(std::calloc(melodic_.size() + 1, sizeof(WOPLBank)));
-    file->banks_percussive = static_cast<WOPLBank *>(std::calloc(percussion_.size() + 1, sizeof(WOPLBank)));
-    if (!file->banks_melodic || !file->banks_percussive)
-        return fail("out of memory");
+    file->banks_count_melodic = melodic_count;
+    file->banks_count_percussion = percussion_count;
     for (std::size_t i = 0; i < melodic_.size(); ++i)
         file->banks_melodic[i] = melodic_[i];
     for (std::size_t i = 0; i < percussion_.size(); ++i)

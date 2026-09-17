@@ -17,10 +17,14 @@
 // zero-filled, and terminated only when shorter than the field.
 
 // The length of the text in the first `max` bytes of a UTF-8 string, less a
-// character which the limit would cut. Reads no further than `max` bytes.
+// character which the limit would cut. Reads no further than `max` bytes, and
+// no further than the terminator of a shorter string: nothing is computed past
+// that, not even a pointer, as text + max would be.
 inline std::size_t utf8_fitting_length(const char *text, std::size_t max) noexcept
 {
-    const auto length = static_cast<std::size_t>(std::find(text, text + max, '\0') - text);
+    std::size_t length = 0;
+    while (length < max && text[length] != '\0')
+        ++length;
     if (length < max)
         return length;
 

@@ -1663,15 +1663,16 @@ bool Main_Component::display_info_for_component(Component *c)
     String param;
     int val = 0;
 
-    Knob *kn = static_cast<Knob *>(c);
+    // The value that a knob shows, as the parameter has it.
+    const auto value_of = [](const Knob &knob) { return static_cast<int>(std::lround(knob.value())); };
 
     if (c == kn_fb12.get()) {
         param = "Feedback 1-2";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_fb12);
     }
     else if (c == kn_fb34.get()) {
         param = "Feedback 3-4";
-        val = static_cast<int>(std::lround(kn->value()));
+        val = value_of(*kn_fb34);
     }
 
     if (param.isEmpty()) {
@@ -1831,8 +1832,10 @@ static const unsigned char resource_Main_Component_logo_png[] = { 137,80,78,71,1
 70,103,98,188,0,194,23,106,35,195,33,147,106,24,244,26,224,93,82,63,95,99,11,41,8,32,8,74,131,49,129,209,39,84,173,215,57,38,123,79,159,62,29,61,105,126,60,241,175,24,254,87,129,212,149,78,33,140,5,166,
 233,40,151,52,60,252,64,64,96,96,136,0,130,128,192,240,233,66,246,162,106,189,158,128,232,57,117,234,84,208,158,193,197,197,255,7,45,51,80,138,69,148,252,106,0,0,0,0,73,69,78,68,174,66,96,130,0,0};
 
-const char* Main_Component::logo_png = reinterpret_cast<const char*>(resource_Main_Component_logo_png);
+const unsigned char* const Main_Component::logo_png = resource_Main_Component_logo_png;
 const int Main_Component::logo_pngSize = 7636;
+// The PNG file is the array less the zeros after it.
+static_assert(7636 <= sizeof resource_Main_Component_logo_png);
 
 
 //[EndFile] You can add extra defines here...
