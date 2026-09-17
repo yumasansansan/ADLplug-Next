@@ -80,7 +80,7 @@ option(ADLplug_GREYZONE_BANKS "Include the instrument banks of the grey zone, fo
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
 set(ADLplug_ARCH "baseline" CACHE STRING "Instruction set of x86-64 builds (baseline, avx2)")
-set(ADLplug_SANITIZERS "" CACHE STRING "Sanitizers to build with, comma-separated (address, undefined, thread)")
+set(ADLplug_SANITIZERS "" CACHE STRING "Sanitizers to build with, comma-separated (address, undefined, vptr, thread)")
 
 # Applied per-target rather than globally: these variables are inherited by
 # add_subdirectory() dependencies, and libADLMIDI/libOPNMIDI build their own
@@ -203,12 +203,17 @@ endif()
 # Sanitizers
 #
 # ADLplug_SANITIZERS names the sanitizers of a build, comma-separated (address,
-# undefined, thread), and gives them to every target: ADLplug-Next's own code,
-# JUCE, libADLMIDI and libOPNMIDI. The emulator cores are part of what the
+# undefined, vptr, thread), and gives them to every target: ADLplug-Next's own
+# code, JUCE, libADLMIDI and libOPNMIDI. The emulator cores are part of what the
 # plugins ship, so a mistake of memory or an undefined operation in them is the
 # plugin's (plan D47). Undefined behaviour stops the program
 # (-fno-sanitize-recover=all) instead of being reported and passed over, and the
 # frame pointer stays, so that the reports name the callers.
+#
+# vptr is the check that an object really is of the class it is used as, when a
+# downcast or a call of a member function takes it to be one; undefined leaves
+# it out (plan D83). Clang has no such check for the MSVC ABI and refuses the
+# option there, so a Windows build leaves vptr out and says so.
 #
 # Sanitizers are not for Release builds, whose optimisations, link-time
 # optimisation and profile would stand in the way: the *-sanitize presets
@@ -238,18 +243,26 @@ if(ADLplug_SANITIZERS)
   endif()
   string(REPLACE "," ";" ADLplug_SANITIZER_LIST "${ADLplug_SANITIZERS}")
   foreach(sanitizer IN LISTS ADLplug_SANITIZER_LIST)
-    if(NOT sanitizer MATCHES "^(address|undefined|thread)$")
+    if(NOT sanitizer MATCHES "^(address|undefined|vptr|thread)$")
       message(FATAL_ERROR
-        "ADLplug_SANITIZERS names '${sanitizer}', which is not one of address, undefined, thread.")
+        "ADLplug_SANITIZERS names '${sanitizer}', which is not one of address, undefined, vptr, thread.")
     endif()
   endforeach()
   if("address" IN_LIST ADLplug_SANITIZER_LIST AND "thread" IN_LIST ADLplug_SANITIZER_LIST)
     message(FATAL_ERROR
       "ADLplug_SANITIZERS names both address and thread, which cannot be built together.")
   endif()
-  message(STATUS "Sanitizers: ${ADLplug_SANITIZERS}")
-  add_compile_options("-fsanitize=${ADLplug_SANITIZERS}" -fno-sanitize-recover=all -fno-omit-frame-pointer)
-  add_link_options("-fsanitize=${ADLplug_SANITIZERS}")
+  if("vptr" IN_LIST ADLplug_SANITIZER_LIST AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+    list(REMOVE_ITEM ADLplug_SANITIZER_LIST "vptr")
+    message(STATUS "Sanitizers: vptr is left out, since Clang has no vptr check for the MSVC ABI")
+    if(NOT ADLplug_SANITIZER_LIST)
+      message(FATAL_ERROR "ADLplug_SANITIZERS names no sanitizer that this build can have besides vptr.")
+    endif()
+  endif()
+  list(JOIN ADLplug_SANITIZER_LIST "," ADLplug_SANITIZER_OPTION)
+  message(STATUS "Sanitizers: ${ADLplug_SANITIZER_OPTION}")
+  add_compile_options("-fsanitize=${ADLplug_SANITIZER_OPTION}" -fno-sanitize-recover=all -fno-omit-frame-pointer)
+  add_link_options("-fsanitize=${ADLplug_SANITIZER_OPTION}")
 
   set(ADLplug_SANITIZER_TEST_ENVIRONMENT "UBSAN_OPTIONS=print_stacktrace=1")
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

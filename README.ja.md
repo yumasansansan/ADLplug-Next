@@ -168,7 +168,7 @@ cmake --build --preset adl-release     # 上と同様です．
 | -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | グレーゾーンのバンクを含める（後述） |
 | -DADLplug_ARCH=baseline/avx2    | baseline                               | x86-64 の命令セット（baseline はすべての x86-64 CPU 向け，avx2 は AVX2 に対応した CPU 向け） |
 | -DADLplug_PGO=ON/OFF            | ON                                     | Release ビルドで，プロファイルに基づく最適化（PGO）を行う（後述） |
-| -DADLplug_SANITIZERS=<list>     | 空                                     | サニタイザ付きでビルドする（address・undefined をカンマ区切りで指定，後述） |
+| -DADLplug_SANITIZERS=<list>     | 空                                     | サニタイザ付きでビルドする（address・undefined・vptr をカンマ区切りで指定，後述） |
 | -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | ビルドの種類（Debug・Release など）にかかわらず，アサーション（内部の整合性のチェック）を有効にする |
 | -DADLplug_WERROR=ON/OFF         | OFF（プリセットでは ON に設定されています）  | ADLplug-Next 自身のコードの警告をエラーとして扱う |
 | -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | 開発者向けのツール（VST3 プラグインを読み込んで，音を書き出すツール）をビルドする |
@@ -179,7 +179,7 @@ cmake --build --preset adl-release     # 上と同様です．
 
 `ADLplug_PGO` を有効にすると，Release ビルドはコンパイルの前に学習（プロファイルの取得）を行います．ビルドディレクトリの `pgo/instrumented` に，オフラインレンダラと，プロファイル（どの処理がよく使われるかを計測したデータ）を取るためのコードを埋め込んだ VST3 プラグインをビルドし，ビルドに含まれるすべてのエミュレータコアでレンダリングして，そのプロファイルを使ってプラグインをコンパイルします．プロファイルを作り直すのは，プラグインが変わったときだけになります．`llvm-profdata` と LLVM の compiler-rt のプロファイル用ランタイム（apt.llvm.org では `libclang-rt-<version>-dev` パッケージに含まれます）に加えて，ビルドしたプラグインを実行できるマシンが必要です．AVX2 のない CPU で AVX2 版をビルドするときや，ビルドを速く済ませたいときは，無効にしてください．
 
-`ADLplug_SANITIZERS` を指定すると，ADLplug-Next 自身のコード，JUCE，ライブラリのすべてを，指定したサニタイザ付きでビルドします．未定義の操作が見つかった時点で止まります．`adl-sanitize`・`opn-sanitize` のプリセットが，address と undefined のサニタイザと RelWithDebInfo を指定します（例: `cmake --preset adl-sanitize`）．誤りを見つけるためのビルドなので，演奏には向きません．動作は数倍遅くなります．
+`ADLplug_SANITIZERS` を指定すると，ADLplug-Next 自身のコード，JUCE，ライブラリのすべてを，指定したサニタイザ付きでビルドします．未定義の操作が見つかった時点で止まります．`adl-sanitize`・`opn-sanitize` のプリセットが，address・undefined・vptr のサニタイザと RelWithDebInfo を指定します（例: `cmake --preset adl-sanitize`）．vptr は，オブジェクトが，コードの想定しているクラスのものであるかを確かめる検査で，undefined には含まれません．Windows の Clang にはないため，Windows ではこれを除いてビルドします．誤りを見つけるためのビルドなので，演奏には向きません．動作は数倍遅くなります．
 
 エミュレータコアは，デフォルトですべてビルドされます．コアを除くには，[FM 音源コアの特徴](#fm-音源コアの特徴) の表の「ビルドオプション」の列にあるオプションを OFF にします（例: `-DUSE_OPAL_EMULATOR=OFF`）．`USE_NUKED_EMULATOR` のように，1 つで複数のコアをまとめて除くオプションや，libADLMIDI と libOPNMIDI の両方にある名前のオプションもあります．両方にある名前でも，影響するのはビルドするプラグインの側（ADLplug-Next なら libADLMIDI）だけです．`USE_DOSBOX_EMULATOR`（ADLplug-Next）と `USE_MAME_EMULATOR`（OPNplug-Next）は，プラグインが音色の計測に使うため，OFF にすることはできません（configure の時点でエラーになります）．
 

@@ -33,10 +33,12 @@ if(ADLplug_CHIP STREQUAL "OPL3")
   list(APPEND ADLplug_UNIT_TEST_SOURCES "unit/opl3_tests.cc")
 endif()
 
-# The plugin's own sources under test, compiled again here against juce_core
-# alone.
+# The plugin's own sources under test, compiled again here against JUCE's core
+# and graphics modules. The messages (messages.h) need the graphics module,
+# for the icons of the chip settings.
 set(ADLplug_UNIT_TESTED_SOURCES
   "${PROJECT_SOURCE_DIR}/sources/resources.c"
+  "${PROJECT_SOURCE_DIR}/sources/messages.cc"
   "${PROJECT_SOURCE_DIR}/sources/utility/pak.cc"
   "${PROJECT_SOURCE_DIR}/sources/utility/simple_fifo.cc"
   "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/instrument.cc"
@@ -83,6 +85,7 @@ else()
 endif()
 target_link_libraries(ADLplug_unit_tests PRIVATE
   juce::juce_core
+  juce::juce_graphics
   juce::juce_recommended_config_flags)
 adlplug_own_sources(${ADLplug_UNIT_TEST_SOURCES} ${ADLplug_UNIT_TESTED_SOURCES})
 # resources.c embeds the pack of banks generated for the plugin.

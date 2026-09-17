@@ -262,7 +262,7 @@ An option chooses whether ADLplug-Next or OPNplug-Next is built:
 | -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | Include the banks of the grey zone (see below)                                                |
 | -DADLplug_ARCH=baseline/avx2    | baseline                               | x86-64 instruction set: baseline (every x86-64 CPU) or avx2 (CPUs with AVX2)                  |
 | -DADLplug_PGO=ON/OFF            | ON                                     | Profile-guided optimisation of Release builds (see below)                                     |
-| -DADLplug_SANITIZERS=<list>     | empty                                  | Build with sanitizers: address, undefined (comma-separated; see below)                        |
+| -DADLplug_SANITIZERS=<list>     | empty                                  | Build with sanitizers: address, undefined, vptr (comma-separated; see below)                  |
 | -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | Enable assertions (internal consistency checks) in any build type (Debug, Release and others) |
 | -DADLplug_WERROR=ON/OFF         | OFF (the presets set ON)               | Treat warnings in ADLplug-Next's own code as errors                                           |
 | -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | Build developer tools (a tool that loads the VST3 plugin and writes out its sound)            |
@@ -284,9 +284,11 @@ CPU without AVX2, or to build faster, turn it off.
 `ADLplug_SANITIZERS` builds every target, ADLplug-Next's own code and JUCE and
 the libraries alike, with the sanitizers it names, and stops at the first
 undefined operation. The `adl-sanitize` and `opn-sanitize` presets name the
-address and undefined sanitizers, with a RelWithDebInfo build:
-`cmake --preset adl-sanitize`. Such a build is for finding mistakes, not for
-playing: it runs several times slower.
+address, undefined and vptr sanitizers, with a RelWithDebInfo build:
+`cmake --preset adl-sanitize`. vptr checks that an object really is of the
+class that the code takes it to be, which undefined does not check; Clang does
+not have it on Windows, so a Windows build leaves it out. Such a build is for
+finding mistakes, not for playing: it runs several times slower.
 
 Every emulator core is built by default. To leave cores out, turn off options
 in the Build option column of the tables under

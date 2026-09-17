@@ -66,7 +66,7 @@
       "hidden": true,
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "ADLplug_SANITIZERS": "address,undefined"
+        "ADLplug_SANITIZERS": "address,undefined,vptr"
       }
     },
 
@@ -87,7 +87,7 @@
     },
     {
       "name": "adl-sanitize",
-      "displayName": "ADLplug (OPL3) — RelWithDebInfo with the address and undefined sanitizers",
+      "displayName": "ADLplug (OPL3) — RelWithDebInfo with the address, undefined and vptr sanitizers",
       "inherits": ["base", "adl", "sanitize"]
     },
     {
@@ -107,7 +107,7 @@
     },
     {
       "name": "opn-sanitize",
-      "displayName": "OPNplug (OPN2) — RelWithDebInfo with the address and undefined sanitizers",
+      "displayName": "OPNplug (OPN2) — RelWithDebInfo with the address, undefined and vptr sanitizers",
       "inherits": ["base", "opn", "sanitize"]
     }
   ],
