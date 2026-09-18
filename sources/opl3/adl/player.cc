@@ -92,6 +92,8 @@ void Player::play_midi(const std::uint8_t *msg, unsigned len)
         return;
 
     const std::uint8_t status = msg[0];
+    // Only the channel messages: a System Exclusive message goes to
+    // play_sysex(), and the rest of the system messages are not the player's.
     if ((status & 0xf0) == 0xf0)
         return;
 
@@ -138,6 +140,14 @@ void Player::play_midi(const std::uint8_t *msg, unsigned len)
     default:
         break;
     }
+}
+
+bool Player::play_sysex(const std::uint8_t *msg, unsigned len)
+{
+    // The library wants the message whole, from its 0xf0 to its 0xf7.
+    if (len < 2 || msg[0] != 0xf0 || msg[len - 1] != 0xf7)
+        return false;
+    return adl_rt_systemExclusive(player_.get(), msg, len) > 0;
 }
 
 void Player::generate(float *left, float *right, unsigned nframes, unsigned stride)

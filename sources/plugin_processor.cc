@@ -464,9 +464,26 @@ void AdlplugAudioProcessor::process_notifications()
 
 bool AdlplugAudioProcessor::handle_midi(const std::uint8_t *data, unsigned len)
 {
+    const unsigned status = (len > 0) ? data[0] : 0;
+
+    if (status == 0xf0) {
+        // A System Exclusive message the host sends. When the library acts on
+        // it, it may have reset the channels (GM, GS or XG), which stops every
+        // note; which of the messages it was is not reported, so the notes the
+        // editor shows start again from zero and the next note puts them right.
+        // The instrument of each part is the plugin's own and no reset touches
+        // it.
+        if (player_->play_sysex(data, len)) {
+            for (unsigned part = 0; part < 16; ++part) {
+                midi_channel_note_count_[part].store(0, std::memory_order_relaxed);
+                midi_channel_note_active_[part].reset_all(std::memory_order_relaxed);
+            }
+        }
+        return true;
+    }
+
     player_->play_midi(data, len);
 
-    const unsigned status = (len > 0) ? data[0] : 0;
     const unsigned channel = status & 0x0f;
 
     if ((status & 0xf0) != 0xf0 && !midi_channel_mask_[channel])

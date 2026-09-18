@@ -26,6 +26,7 @@ SPDX-License-Identifier: BSL-1.0 AND GPL-3.0-or-later
 - [x] パラメータの動的な変更とオートメーションへの対応
 - [x] MIDI 規格の厳密な実装
 - [x] General MIDI 互換のマルチチャンネル動作
+- [x] システムエクスクルーシブ（特定の機種向けの MIDI メッセージ）への対応（GM・GS・XG へのリセットと，マスターボリュームの設定）
 - [x] MIDI ファイル全体を，そのまま合成できる機能
 
 ADLplug-Next: DyTect（GitHub アカウント: [yumasansansan](https://github.com/yumasansansan)）  

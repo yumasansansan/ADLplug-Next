@@ -27,6 +27,7 @@ set(ADLplug_UNIT_TEST_SOURCES
   "unit/main.cc"
   "unit/bank_tests.cc"
   "unit/fifo_tests.cc"
+  "unit/player_tests.cc"
   "unit/text_tests.cc"
   "unit/utility_tests.cc")
 if(ADLplug_CHIP STREQUAL "OPL3")
@@ -42,11 +43,10 @@ set(ADLplug_UNIT_TESTED_SOURCES
   "${PROJECT_SOURCE_DIR}/sources/utility/pak.cc"
   "${PROJECT_SOURCE_DIR}/sources/utility/simple_fifo.cc"
   "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/instrument.cc"
-  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/instrument_properties.cc")
-if(ADLplug_CHIP STREQUAL "OPL3")
-  # The player, which sets the MT-32 defaults inside libADLMIDI.
-  list(APPEND ADLplug_UNIT_TESTED_SOURCES "${PROJECT_SOURCE_DIR}/sources/opl3/adl/player.cc")
-endif()
+  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/instrument_properties.cc"
+  # The player: it hands the System Exclusive messages to the library and, for
+  # OPL3, sets the MT-32 defaults inside it.
+  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/player.cc")
 
 # Under the sanitizers, the tests get their environment from the top
 # (adlplug_sanitizer_test_environment in CMakeLists.txt), and a test shows that

@@ -32,6 +32,7 @@ The emulations and the drivers are provided by [libADLMIDI](https://github.com/W
 - [x] support for dynamic parameterization and automation
 - [x] rigorous implementation of the MIDI standard
 - [x] multi-channel operation with General MIDI compatibility
+- [x] response to the System Exclusive messages (the MIDI messages meant for a particular kind of device) that reset the synthesizer to GM, GS or XG and that set the master volume
 - [x] ability to synthesize entire MIDI files out of the box
 
 ADLplug-Next: DyTect ([yumasansansan](https://github.com/yumasansansan) on GitHub)  
