@@ -1,0 +1,66 @@
+SPDX-FileCopyrightText: 2010-2014 Joel Yliluoma <bisqwit@iki.fi>
+SPDX-FileCopyrightText: 2015-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-3.0-or-later
+
+The numbers that the API is given are looked at before they are used
+
+Two calls take a number from outside and use it as it comes. A number that
+nobody means to pass is then undefined behaviour instead of an answer, and
+UndefinedBehaviorSanitizer stops the program at it:
+
+  src/adlmidi_opl3.cpp:149:39: runtime error: shift exponent 95 is too large
+  for 32-bit type 'unsigned int'
+
+* adl_isEmulatorAvailable() answers whether an emulator is in the build by
+  shifting a bit into the word of the emulators that were built. Being asked
+  about any number at all is what the function is for, so it says no to a
+  number that no bit of that word could stand for, rather than shifting past
+  the end of it. adl_switchEmulator() asks it first, so an emulator out of
+  range is turned away there as it was.
+
+* adl_setVolumeRangeModel() passed the number on as an ADLMIDI_VolumeModels,
+  and reading a value that the enumeration does not have is undefined as well.
+  libOPNMIDI, whose enumeration is shorter, shows it plainly:
+
+    src/opnmidi_opn2.cpp:511:12: runtime error: load of value 15, which is not
+    a valid value for type 'OPNMIDI_VolumeModels'
+
+  A number that is not one of the models is taken for
+  ADLMIDI_VolumeModel_AUTO, the library's own choice when nothing is chosen.
+
+Both came from a fuzz target of ADLplug-Next that gives the real-time API what
+a host and a saved project can ask of it: an emulator number and a volume model
+both come out of a project, which the plugin does not write itself.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/adlmidi.cpp b/src/adlmidi.cpp
+index e341f91..d7509c1 100644
+--- a/src/adlmidi.cpp
++++ b/src/adlmidi.cpp
+@@ -722,6 +722,9 @@ ADLMIDI_EXPORT void adl_setVolumeRangeModel(struct ADL_MIDIPlayer *device, int v
+     if(!device)
+         return;
+ 
++    if(volumeModel < 0 || volumeModel >= ADLMIDI_VolumeModel_Count)
++        volumeModel = ADLMIDI_VolumeModel_AUTO;
++
+     MidiPlayer *play = GET_MIDI_PLAYER(device);
+     assert(play);
+     Synth &synth = *play->m_synth;
+diff --git a/src/adlmidi_opl3.cpp b/src/adlmidi_opl3.cpp
+index d5ed16f..ac75832 100644
+--- a/src/adlmidi_opl3.cpp
++++ b/src/adlmidi_opl3.cpp
+@@ -146,6 +146,8 @@ static const unsigned adl_emulatorSupport = 0
+ //! Check emulator availability
+ bool adl_isEmulatorAvailable(int emulator)
+ {
++    if(emulator < 0 || (unsigned)emulator >= sizeof(adl_emulatorSupport) * 8)
++        return false;
+     return (adl_emulatorSupport & (1u << (unsigned)emulator)) != 0;
+ }
+ 

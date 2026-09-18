@@ -356,10 +356,14 @@ ctest --preset adl-debug
   - in Release builds, every emulator core plays
   - in a build that leaves cores out, asking for one of them plays another
     core in its place
-- The fuzz tests (`fuzz/`) give the code that loads bank and instrument files
-  the banks and instruments that come with libADLMIDI, libOPNMIDI and OPN2
-  Bank Editor, and the inputs that once made it fail, and check that a file
-  loaded and saved again loads back the same.
+- The fuzz tests (`fuzz/`) give the code that takes input from outside the
+  plugin the inputs that once made it fail, and more of its own:
+  - bank and instrument files, among them the banks and instruments that come
+    with libADLMIDI, libOPNMIDI and OPN2 Bank Editor; a file loaded and saved
+    again loads back the same;
+  - the MIDI that a host sends, with the chip settings a project can hold: a
+    note plays on every emulator core, and every sample that comes out is a
+    finite number.
 - When [pluginval](https://github.com/Tracktion/pluginval) or
   [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint) (plugin
   validators) is on the `PATH` at configure time, it validates the VST3 or
@@ -381,8 +385,17 @@ build/adl-sanitize/fuzz/ADLplug_fuzz_bank_file -dict=fuzz/dict/wopl.dict corpus 
 It runs until it finds an input that fails, or until it is stopped
 (`-max_total_time=<seconds>` sets a limit), and writes a failing input to a
 file named `crash-<hash>`. Such an input goes in
-`fuzz/regressions/opl3/bank_file` (`opn2` for OPNplug-Next) together with the
+`fuzz/regressions/opl3/<target>` (`opn2` for OPNplug-Next) together with the
 fix, so that the tests replay it from then on.
+
+The other target is `ADLplug_fuzz_midi_synth`, which plays MIDI. Its seed
+inputs are written by CMake, one for each emulator core the build has, so they
+come from the build directory:
+
+```
+cmake --build --preset adl-sanitize --target ADLplug_fuzz_midi_synth
+build/adl-sanitize/fuzz/ADLplug_fuzz_midi_synth -dict=fuzz/dict/midi.dict corpus build/adl-sanitize/fuzz/seeds/midi_synth
+```
 
 The editor tests open windows, so on Linux they need an X11 display with a
 window manager (the software that manages windows); a desktop session runs

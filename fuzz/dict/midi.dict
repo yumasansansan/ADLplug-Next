@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# libFuzzer's dictionary for the midi_synth target (-dict=): the records that
+# the input is made of, the status bytes of MIDI, and the System Exclusive
+# messages that the libraries act on, without their 0xf0 and 0xf7, which the
+# record puts on. fuzz/midi_synth.cc describes the records.
+
+# Records
+record_midi_1="\x00"
+record_midi_2="\x01"
+record_midi_3="\x02"
+record_generate_short="\x40"
+record_generate_long="\x5f"
+record_note="\x60"
+record_sysex="\x86"
+record_reset="\xc0"
+record_panic="\xc1"
+record_settings="\xc2"
+
+# The status bytes of the channel messages
+note_off="\x80"
+note_on="\x90"
+note_aftertouch="\xa0"
+controller="\xb0"
+program="\xc0"
+channel_aftertouch="\xd0"
+pitch_bend="\xe0"
+
+# The controllers that change how a note sounds or stops
+cc_bank_msb="\x00"
+cc_modulation="\x01"
+cc_volume="\x07"
+cc_pan="\x0a"
+cc_expression="\x0b"
+cc_bank_lsb="\x20"
+cc_sustain="\x40"
+cc_soft="\x43"
+cc_brightness="\x4a"
+cc_rpn_lsb="\x64"
+cc_rpn_msb="\x65"
+cc_data_msb="\x06"
+cc_all_sound_off="\x78"
+cc_reset_controllers="\x79"
+cc_all_notes_off="\x7b"
+
+# System Exclusive, without the 0xf0 and the 0xf7
+sysex_gm_on="\x7e\x7f\x09\x01"
+sysex_gm_off="\x7e\x7f\x09\x02"
+sysex_master_volume="\x7f\x7f\x04\x01\x00\x7f"
+sysex_gs_reset="\x41\x10\x42\x12\x40\x00\x7f\x00\x41"
+sysex_gs_percussion="\x41\x10\x42\x12\x40\x11\x15\x01\x00"
+sysex_xg_on="\x43\x10\x4c\x00\x00\x7e\x00"

@@ -118,7 +118,11 @@ PropertySet Instrument_Global_Parameters::to_properties() const
 Instrument_Global_Parameters Instrument_Global_Parameters::from_properties(const PropertySet &set)
 {
     Instrument_Global_Parameters gp;
-    gp.volume_model = std::max(0, set.getIntValue("volume_model"));
+    // A project can hold any number here. The plugin counts the volume models
+    // the way libOPNMIDI does, without its automatic choice, so there is one
+    // fewer of them; a number outside that is not a model, and the library
+    // would read it as an enumeration that has no such value.
+    gp.volume_model = std::clamp(set.getIntValue("volume_model"), 0, OPNMIDI_VolumeModel_Count - 2);
     gp.lfo_enable = set.getBoolValue("lfo_enable");
     gp.lfo_frequency = std::max(0, set.getIntValue("lfo_frequency"));
     return gp;

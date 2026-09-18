@@ -52,9 +52,11 @@ else()
 endif()
 
 # adlplug_fuzz_target(<name> OWN_SOURCES <file>... OTHER_SOURCES <file>...
+#                     [LIBRARIES <target>...] [DEFINITIONS <name>=<value>...]
 #                     SEEDS <directory>... [DICTIONARY <file>])
 function(adlplug_fuzz_target name)
-  cmake_parse_arguments(PARSE_ARGV 1 arg "" "DICTIONARY" "OWN_SOURCES;OTHER_SOURCES;SEEDS")
+  cmake_parse_arguments(PARSE_ARGV 1 arg "" "DICTIONARY"
+    "OWN_SOURCES;OTHER_SOURCES;LIBRARIES;DEFINITIONS;SEEDS")
 
   set(inputs ${arg_SEEDS})
   set(regressions "${CMAKE_CURRENT_SOURCE_DIR}/regressions/${ADLplug_FUZZ_CHIP}/${name}")
@@ -90,8 +92,12 @@ function(adlplug_fuzz_target name)
     adlplug_set_language_standard(${target})
     target_compile_definitions(${target} PRIVATE
       "ADLPLUG_${ADLplug_CHIP}"
+      ${arg_DEFINITIONS}
       # The library's code fills its fixed-width name fields with strncpy.
       $<$<PLATFORM_ID:Windows>:_CRT_SECURE_NO_WARNINGS>)
+    if(arg_LIBRARIES)
+      target_link_libraries(${target} PRIVATE ${arg_LIBRARIES})
+    endif()
     target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/sources")
     target_include_directories(${target} SYSTEM PRIVATE
       "${ADLplug_FUZZ_LIBRARY}/src" "${ADLplug_FUZZ_LIBRARY}/include")
@@ -110,3 +116,47 @@ adlplug_fuzz_target(bank_file
   OTHER_SOURCES "${ADLplug_FUZZ_FILE_SOURCE}"
   SEEDS ${ADLplug_FUZZ_BANK_SEEDS}
   DICTIONARY "${ADLplug_FUZZ_FILE_DICTIONARY}")
+
+# F3: the MIDI that a host sends, and the synthesis it drives. This one plays,
+# so it links the library instead of compiling the sources it tests: the
+# emulator cores, the real-time API and the MIDI driver are most of it. The
+# libFuzzer build gives the library coverage instrumentation below, so that the
+# fuzzer can see inside it.
+if(ADLplug_CHIP STREQUAL "OPL3")
+  set(ADLplug_FUZZ_PLAY_LIBRARY ADLMIDI_static)
+  set(ADLplug_FUZZ_PLAY_BANK "${ADLplug_FUZZ_LIBRARY}/fm_banks/wopl_files/GM-By-J.A.Nguyen-and-Wohlstand.wopl")
+else()
+  set(ADLplug_FUZZ_PLAY_LIBRARY OPNMIDI_static)
+  set(ADLplug_FUZZ_PLAY_BANK "${ADLplug_FUZZ_LIBRARY}/fm_banks/xg.wopn")
+endif()
+
+# A seed for each emulator core of the build: it plays a note on that core and
+# generates a moment of audio. The replay test then plays every core on every
+# system, which is where the sanitizers see the cores that the render tests
+# leave to Release builds (plan D84). Every byte of a seed is below 128, so
+# that CMake can write it; fuzz/midi_synth.cc says what they mean.
+set(ADLplug_FUZZ_PLAY_SEEDS "${CMAKE_CURRENT_BINARY_DIR}/seeds/midi_synth")
+file(MAKE_DIRECTORY "${ADLplug_FUZZ_PLAY_SEEDS}")
+foreach(core IN LISTS ADLplug_CORES)
+  string(REPLACE "|" ";" core_fields "${core}")
+  list(GET core_fields 0 core_index)
+  math(EXPR core_byte "${core_index} + 1")
+  # The emulator, middle C at velocity 100 on the first channel, 544 frames.
+  string(ASCII ${core_byte} 96 60 100 80 seed)
+  file(WRITE "${ADLplug_FUZZ_PLAY_SEEDS}/core-${core_index}" "${seed}")
+endforeach()
+
+adlplug_fuzz_target(midi_synth
+  OWN_SOURCES "${PROJECT_SOURCE_DIR}/sources/${ADLplug_FUZZ_CHIP}/adl/player.cc"
+  LIBRARIES ${ADLplug_FUZZ_PLAY_LIBRARY}
+  DEFINITIONS "ADLPLUG_FUZZ_BANK=\"${ADLplug_FUZZ_PLAY_BANK}\""
+  SEEDS "${ADLplug_FUZZ_PLAY_SEEDS}"
+  DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/midi.dict")
+
+if(ADLplug_BUILD_FUZZERS)
+  # Coverage for the library, which is where a target that plays spends its
+  # time; without it libFuzzer sees only the harness. The plugin of the same
+  # build directory links the same library and is instrumented too, which costs
+  # it speed it does not need here.
+  target_compile_options(${ADLplug_FUZZ_PLAY_LIBRARY} PRIVATE -fsanitize=fuzzer-no-link)
+endif()

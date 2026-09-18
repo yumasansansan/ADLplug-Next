@@ -1,0 +1,65 @@
+SPDX-FileCopyrightText: 2010-2014 Joel Yliluoma <bisqwit@iki.fi>
+SPDX-FileCopyrightText: 2017-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-3.0-or-later
+
+The numbers that the API is given are looked at before they are used
+
+Two calls take a number from outside and use it as it comes. A number that
+nobody means to pass is then undefined behaviour instead of an answer, and
+UndefinedBehaviorSanitizer stops the program at it:
+
+  src/opnmidi_opn2.cpp:511:12: runtime error: load of value 15, which is not a
+  valid value for type 'OPNMIDI_VolumeModels'
+
+* opn2_setVolumeRangeModel() passed the number on as an OPNMIDI_VolumeModels,
+  and the enumeration has six values. A number that is not one of the models is
+  taken for OPNMIDI_VolumeModel_AUTO now, the library's own choice when nothing
+  is chosen.
+
+* opn2_isEmulatorAvailable() answers whether an emulator is in the build by
+  shifting a bit into the word of the emulators that were built. Being asked
+  about any number at all is what the function is for, so it says no to a
+  number that no bit of that word could stand for, rather than shifting past
+  the end of it; libADLMIDI reports that one:
+
+    src/adlmidi_opl3.cpp:149:39: runtime error: shift exponent 95 is too large
+    for 32-bit type 'unsigned int'
+
+  opn2_switchEmulator() asks it first, so an emulator out of range is turned
+  away there as it was.
+
+Both came from a fuzz target of ADLplug-Next that gives the real-time API what
+a host and a saved project can ask of it: an emulator number and a volume model
+both come out of a project, which the plugin does not write itself.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/opnmidi.cpp b/src/opnmidi.cpp
+index f0eac35..8162099 100644
+--- a/src/opnmidi.cpp
++++ b/src/opnmidi.cpp
+@@ -492,6 +492,8 @@ OPNMIDI_EXPORT void opn2_setVolumeRangeModel(struct OPN2_MIDIPlayer *device, int
+ {
+     if(!device)
+         return;
++    if(volumeModel < 0 || volumeModel >= OPNMIDI_VolumeModel_Count)
++        volumeModel = OPNMIDI_VolumeModel_AUTO;
+     MidiPlayer *play = GET_MIDI_PLAYER(device);
+     assert(play);
+     Synth &synth = *play->m_synth;
+diff --git a/src/opnmidi_opn2.cpp b/src/opnmidi_opn2.cpp
+index d056651..36ae09f 100644
+--- a/src/opnmidi_opn2.cpp
++++ b/src/opnmidi_opn2.cpp
+@@ -133,6 +133,8 @@ static const unsigned opn2_emulatorSupport = 0
+ //! Check emulator availability
+ bool opn2_isEmulatorAvailable(int emulator)
+ {
++    if(emulator < 0 || (unsigned)emulator >= sizeof(opn2_emulatorSupport) * 8)
++        return false;
+     return (opn2_emulatorSupport & (1u << (unsigned)emulator)) != 0;
+ }
+ 

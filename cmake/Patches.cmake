@@ -75,6 +75,8 @@ adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0004-nuked-opl2-the-crushed-sample-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0005-nuked-cqm-the-modulation-and-the-output-without-shifting-a-negative.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0006-the-api-looks-at-the-numbers-it-is-given.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-psg-a-noise-table-that-does-not-overflow.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
@@ -91,3 +93,5 @@ adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0007-fmgen-the-self-feedback-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0008-ymfm-the-round-trip-without-shifting-a-negative.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0009-the-api-looks-at-the-numbers-it-is-given.patch")

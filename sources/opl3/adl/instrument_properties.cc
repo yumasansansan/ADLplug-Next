@@ -130,7 +130,11 @@ PropertySet Instrument_Global_Parameters::to_properties() const
 Instrument_Global_Parameters Instrument_Global_Parameters::from_properties(const PropertySet &set)
 {
     Instrument_Global_Parameters gp;
-    gp.volume_model = std::max(0, set.getIntValue("volume_model"));
+    // A project can hold any number here. The plugin counts the volume models
+    // the way libADLMIDI does, without its automatic choice, so there is one
+    // fewer of them; a number outside that is not a model, and the library
+    // would read it as an enumeration that has no such value.
+    gp.volume_model = std::clamp(set.getIntValue("volume_model"), 0, ADLMIDI_VolumeModel_Count - 2);
     gp.deep_tremolo = set.getBoolValue("deep_tremolo");
     gp.deep_vibrato = set.getBoolValue("deep_vibrato");
     gp.mt32_defaults = set.getBoolValue("mt32_defaults");

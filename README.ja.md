@@ -213,7 +213,9 @@ ctest --preset adl-debug
   - VST3 プラグインが，アップストリームの ADLplug と同じパラメータ ID を使っていること
   - Release ビルドで，すべてのエミュレータコアが音を出すこと
   - 一部のコアを除いたビルドで，除いたコアを指定すると，代わりのコアが鳴ること
-- fuzz のテスト（`fuzz/`）: バンクと楽器のファイルを読み込む処理に，libADLMIDI・libOPNMIDI・OPN2 Bank Editor に付属するバンクと楽器，および過去に不具合を起こした入力を与えて，読み込んで保存し直したファイルが同じ内容で読み込めることを確認します．
+- fuzz のテスト（`fuzz/`）: プラグインの外から来る入力を扱う処理に，過去に不具合を起こした入力と，それ以外の入力を与えます．
+  - バンクと楽器のファイル: libADLMIDI・libOPNMIDI・OPN2 Bank Editor に付属するバンクと楽器も与えて，読み込んで保存し直したファイルが同じ内容で読み込めることを確認します．
+  - ホストから来る MIDI: プロジェクトが持つチップの設定と合わせて与え，すべてのエミュレータコアで音が鳴り，出てくる標本がすべて有限の値であることを確認します．
 - configure のときに [pluginval](https://github.com/Tracktion/pluginval) や [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint)（プラグインの検証ツール）が `PATH` にあれば，それらを使って VST3・LV2 プラグインも検証します．
 
 同じ fuzz の対象は，[libFuzzer](https://llvm.org/docs/LibFuzzer.html)（入力を自動で作り出し，それまでどの入力も通らなかったコードに届いたものを残していく fuzz のツール）付きでもビルドできます．Linux で，サニタイザと組み合わせて使います（Windows 版の LLVM の libFuzzer は，プラグインとリンクできません）．ADLplug-Next の場合の例です．
@@ -225,7 +227,14 @@ mkdir -p corpus
 build/adl-sanitize/fuzz/ADLplug_fuzz_bank_file -dict=fuzz/dict/wopl.dict corpus thirdparty/libADLMIDI/fm_banks/wopl_files
 ```
 
-不具合を起こす入力が見つかるか，止められるまで動き続けます（`-max_total_time=<秒数>` で時間を区切れます）．見つかった入力は `crash-<ハッシュ>` という名前のファイルに書き出されます．その入力は，修正と一緒に `fuzz/regressions/opl3/bank_file`（OPNplug-Next では `opn2`）に加えてください．以後，テストでその入力が再生されます．
+不具合を起こす入力が見つかるか，止められるまで動き続けます（`-max_total_time=<秒数>` で時間を区切れます）．見つかった入力は `crash-<ハッシュ>` という名前のファイルに書き出されます．その入力は，修正と一緒に `fuzz/regressions/opl3/<対象名>`（OPNplug-Next では `opn2`）に加えてください．以後，テストでその入力が再生されます．
+
+もう 1 つの対象 `ADLplug_fuzz_midi_synth` は MIDI を鳴らします．その種の入力は CMake がビルドしたコアごとに 1 つずつ書き出すので，ビルドディレクトリから渡します．
+
+```
+cmake --build --preset adl-sanitize --target ADLplug_fuzz_midi_synth
+build/adl-sanitize/fuzz/ADLplug_fuzz_midi_synth -dict=fuzz/dict/midi.dict corpus build/adl-sanitize/fuzz/seeds/midi_synth
+```
 
 エディタのテストはウィンドウを開くため，Linux では，ウィンドウマネージャ（ウィンドウを管理するソフト）のある X11 の画面が必要です（通常のデスクトップ環境なら，Xwayland 上で動きます）．ウィンドウマネージャがないと，lv2lint はエディタで起きる X のエラーで止まります．
 
