@@ -1,0 +1,45 @@
+SPDX-FileCopyrightText: 1998, 2003 cisc <cisc@retropc.net>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LicenseRef-fmgen
+
+fmgen: the self feedback without shifting a negative number
+
+Operator::CalcFB() and CalcFBL() scale the self feedback up before shifting it
+down by the feedback amount. The value is signed, and the left shift of a
+negative number is undefined behaviour, which UndefinedBehaviorSanitizer stops
+the program at:
+
+  src/chips/np2/fmgen_fmgen.cpp:839:16: runtime error: left shift of negative
+  value -39
+
+Here a multiplication would not do: the scale is 2^17, which the sum of two
+operator outputs can carry past the end of an int, and a signed overflow is
+undefined as well. Shifting in an unsigned type and converting back gives the
+bits the code already worked with, and every step of it is defined.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/np2/fmgen_fmgen.cpp b/src/chips/np2/fmgen_fmgen.cpp
+index d5b30d3..c91f6ff 100644
+--- a/src/chips/np2/fmgen_fmgen.cpp
++++ b/src/chips/np2/fmgen_fmgen.cpp
+@@ -836,7 +836,7 @@ inline FM::ISample FM::Operator::CalcFB(uint fb)
+ 	int pgin = PGCalc() >> (20+FM_PGBITS-FM_OPSINBITS);
+ 	if (fb < 31)
+ 	{
+-		pgin += ((in << (1 + IS2EC_SHIFT)) >> fb) >> (20+FM_PGBITS-FM_OPSINBITS);
++		pgin += ((ISample)((uint32)in << (1 + IS2EC_SHIFT)) >> fb) >> (20+FM_PGBITS-FM_OPSINBITS);
+ 	}
+ 	out_ = LogToLin(eg_out_ + SINE(pgin));
+ 	dbgopout_ = out2_;
+@@ -854,7 +854,7 @@ inline FM::ISample FM::Operator::CalcFBL(uint fb)
+ 	int pgin = PGCalcL() >> (20+FM_PGBITS-FM_OPSINBITS);
+ 	if (fb < 31)
+ 	{
+-		pgin += ((in << (1 + IS2EC_SHIFT)) >> fb) >> (20+FM_PGBITS-FM_OPSINBITS);
++		pgin += ((ISample)((uint32)in << (1 + IS2EC_SHIFT)) >> fb) >> (20+FM_PGBITS-FM_OPSINBITS);
+ 	}
+ 
+ 	out_ = LogToLin(eg_out_ + SINE(pgin) + ams_[chip_->GetAML()]);

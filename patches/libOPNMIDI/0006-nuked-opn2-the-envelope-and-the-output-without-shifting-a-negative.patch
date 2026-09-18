@@ -1,0 +1,58 @@
+SPDX-FileCopyrightText: 2017-2018 Alexey Khokholov (Nuke.YKT)
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+Nuked OPN2: the envelope and the output without shifting a negative number
+
+Two places shift a negative number left, which is undefined behaviour;
+UndefinedBehaviorSanitizer stops the program at the first of them as soon as a
+note is played:
+
+  src/chips/nuked/ym3438.c:684:31: runtime error: left shift of negative value
+  -1024
+
+* The attack step of the envelope scales the complement of the level, which is
+  negative for every level below 1024, by the envelope increment. The
+  increment is at most 4, so the product is far inside an int.
+
+* The FM output is sign-extended from bit 13 by shifting it left and back
+  right. The value that reaches it is within about 16384, so the product is
+  well inside a Bit32s and the shift back gives the same number as before.
+
+Multiplications say the same thing and are defined.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/nuked/ym3438.c b/src/chips/nuked/ym3438.c
+index b2f75a5..bfc2401 100644
+--- a/src/chips/nuked/ym3438.c
++++ b/src/chips/nuked/ym3438.c
+@@ -667,7 +667,7 @@ void OPN2_EnvelopeADSR(ym3438_t *chip)
+         }
+         else if (chip->eg_state[slot] == eg_num_attack && level != 0 && chip->eg_inc && nkon)
+         {
+-            inc = (~level << chip->eg_inc) >> 5;
++            inc = ((~level) * (1 << chip->eg_inc)) >> 5;
+         }
+     }
+     else
+@@ -681,7 +681,7 @@ void OPN2_EnvelopeADSR(ym3438_t *chip)
+             }
+             else if(chip->eg_inc && !chip->eg_ratemax && nkon)
+             {
+-                inc = (~level << chip->eg_inc) >> 5;
++                inc = ((~level) * (1 << chip->eg_inc)) >> 5;
+             }
+             break;
+         case eg_num_decay:
+@@ -1084,7 +1084,7 @@ void OPN2_FMGenerate(ym3438_t *chip)
+     {
+         output = output ^ (chip->mode_test_21[4] << 13);
+     }
+-    output <<= 2;
++    output *= 4;
+     output >>= 2;
+     chip->fm_out[slot] = output;
+ }

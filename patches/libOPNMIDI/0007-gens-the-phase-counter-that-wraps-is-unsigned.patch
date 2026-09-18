@@ -1,0 +1,40 @@
+SPDX-FileCopyrightText: 1999-2002 Stéphane Dallongeville
+SPDX-FileCopyrightText: 2003-2004 Stéphane Akhoun
+SPDX-FileCopyrightText: 2008-2015 David Korth
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-2.0-or-later
+
+GENS: the frequency counter that wraps is unsigned
+
+Fcnt is the phase of a slot: the frequency step Finc is added to it for every
+sample, and it is meant to run off the end and carry on from the other side.
+It is an int, and the overflow of a signed int is undefined behaviour, so
+UndefinedBehaviorSanitizer stops the program the first time a slot's phase
+comes round, about a second into a note:
+
+  src/chips/gens/Ym2612.cpp:1411:3: runtime error: signed integer overflow:
+  2147217408 + 1065088 cannot be represented in type 'int'
+
+An unsigned int says what the counter is: wrapping is what it does, and it is
+defined. The field is only ever set to zero, added to (in UPDATE_PHASE and
+both halves of UPDATE_PHASE_LFO, twelve places in all) and read into the int
+that GET_CURRENT_PHASE() keeps, where the phase is shifted right and masked;
+the mask leaves the same bits as before, so the sound does not change.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/gens/Ym2612_p.hpp b/src/chips/gens/Ym2612_p.hpp
+index 2b5dd65..bcb738e 100644
+--- a/src/chips/gens/Ym2612_p.hpp
++++ b/src/chips/gens/Ym2612_p.hpp
+@@ -67,7 +67,7 @@ class Ym2612Private
+ 			unsigned int *DR; // Decay Rate (table pointeur) = Taux pour la régression (DR[KSR])
+ 			unsigned int *SR; // Sustin Rate (table pointeur) = Taux pour le maintien (SR[KSR])
+ 			unsigned int *RR; // Release Rate (table pointeur) = Taux pour le relâchement (RR[KSR])
+-			int Fcnt;	// Frequency Count = compteur-fréquence pour déterminer l'amplitude actuelle (SIN[Finc >> 16])
++			unsigned int Fcnt;	// Frequency Count = compteur-fréquence pour déterminer l'amplitude actuelle (SIN[Finc >> 16])
+ 			int Finc;	// frequency step = pas d'incrémentation du compteur-fréquence
+ 						// plus le pas est grand, plus la fréquence est aïgu (ou haute)
+ 			int Ecurp;	// Envelope current phase = cette variable permet de savoir dans quelle phase

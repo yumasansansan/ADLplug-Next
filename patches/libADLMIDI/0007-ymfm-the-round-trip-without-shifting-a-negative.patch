@@ -1,0 +1,35 @@
+SPDX-FileCopyrightText: 2021 Aaron Giles
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: BSD-3-Clause
+
+ymfm: the round trip without shifting a negative number
+
+roundtrip_fp() zeroes the bits that the floating-point encoding of the chip
+loses, by shifting the value right and back left again. The value is signed,
+and the left shift of a negative number is undefined behaviour, which
+UndefinedBehaviorSanitizer stops the program at:
+
+  src/chips/ymfm/ymfm.h:258:29: runtime error: left shift of negative value
+  -315
+
+A multiplication says the same thing and is defined. The lines above clamp the
+value to -32768 to 32767 and the exponent is at most 6, so the product is well
+inside an int32_t, and the int16_t return takes it as before.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/ymfm/ymfm.h b/src/chips/ymfm/ymfm.h
+index 2cc2ac1..d931469 100644
+--- a/src/chips/ymfm/ymfm.h
++++ b/src/chips/ymfm/ymfm.h
+@@ -255,7 +255,7 @@ inline int16_t roundtrip_fp(int32_t value)
+ 
+ 	// apply the shift back and forth to zero out bits that are lost
+ 	exponent -= 1;
+-	return (value >> exponent) << exponent;
++	return (value >> exponent) * (1 << exponent);
+ }
+ 
+ 

@@ -1,0 +1,35 @@
+SPDX-FileCopyrightText: 2026 Nuke.YKT
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+Nuked OPL2 Lite: the crushed sample without shifting a negative number
+
+OPL2_OutputCrush() drops the low bits of the sample, as the chip's output
+stage does, by shifting it right and back left again. The sample is signed, and
+the left shift of a negative number is undefined behaviour, which
+UndefinedBehaviorSanitizer stops the program at:
+
+  src/chips/nuked/nukedopl2.c:863:12: runtime error: left shift of negative
+  value -126
+
+A multiplication says the same thing and is defined. The lines above clamp the
+sample to -32768 to 32767 and the shift is at most 6, so the product is well
+inside an int32_t.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/nuked/nukedopl2.c b/src/chips/nuked/nukedopl2.c
+index 940c7c6..4d8892d 100644
+--- a/src/chips/nuked/nukedopl2.c
++++ b/src/chips/nuked/nukedopl2.c
+@@ -860,7 +860,7 @@ static int16_t OPL2_OutputCrush(int32_t sample)
+         shift = 0;
+ 
+     sample >>= shift;
+-    sample <<= shift;
++    sample *= 1 << shift;
+ 
+     return (int16_t)sample;
+ }

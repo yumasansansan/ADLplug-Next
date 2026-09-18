@@ -73,6 +73,16 @@ adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0003-ym3812-lle-the-sample-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0004-wopl-a-version-of-0-is-not-a-version.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0005-esfmu-the-rhythm-volume-without-shifting-a-negative.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0006-mame-opl2-modulation-and-feedback-without-shifting-a-negative.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0007-ymfm-the-round-trip-without-shifting-a-negative.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0008-nuked-opl2-the-crushed-sample-without-shifting-a-negative.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0009-nuked-cqm-the-modulation-and-the-output-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-psg-a-noise-table-that-does-not-overflow.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
@@ -83,3 +93,11 @@ adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0004-mame-feedback-and-dac-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0005-wopn-a-version-of-0-is-not-a-version.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0006-nuked-opn2-the-envelope-and-the-output-without-shifting-a-negative.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0007-gens-the-phase-counter-that-wraps-is-unsigned.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0008-fmgen-the-self-feedback-without-shifting-a-negative.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0009-ymfm-the-round-trip-without-shifting-a-negative.patch")

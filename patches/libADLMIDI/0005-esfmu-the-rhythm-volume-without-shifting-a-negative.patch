@@ -1,0 +1,37 @@
+SPDX-FileCopyrightText: 2023 Kagamiin~
+SPDX-FileCopyrightText: 2013-2023 Nuke.YKT
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+ESFMu: the doubled volume without shifting a negative number
+
+ESFM_slot_generate_emu() doubles the output of a rhythm slot by shifting it
+left by a flag. The output is a signed 13-bit sample, and the left shift of a
+negative number is undefined behaviour whatever the shift, so
+UndefinedBehaviorSanitizer stops the program as soon as an operator's output
+goes below zero:
+
+  src/chips/esfmu/esfm.c:1729:64: runtime error: left shift of negative value
+  -23
+
+A multiplication says the same thing and is defined. The flag is 0 or 1 and the
+sample is 13 bits, so the product is far inside an int and int14 takes it as
+before.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/esfmu/esfm.c b/src/chips/esfmu/esfm.c
+index ce83a9d..5051622 100644
+--- a/src/chips/esfmu/esfm.c
++++ b/src/chips/esfmu/esfm.c
+@@ -1726,7 +1726,7 @@ ESFM_slot_generate_emu(esfm_slot *slot)
+ 
+ 	phase += *slot->in.mod_input & slot->in.emu_mod_enable;
+ 	slot->in.output = ESFM_envelope_wavegen(waveform, phase, slot->in.eg_output);
+-	output_value = (slot->in.output & slot->in.emu_output_enable) << rhythm_slot_double_volume;
++	output_value = (slot->in.output & slot->in.emu_output_enable) * (1 << rhythm_slot_double_volume);
+ 	if (chip->emu_newmode)
+ 	{
+ 		slot->channel->output[0] += output_value & slot->channel->slots[0].out_enable[0];

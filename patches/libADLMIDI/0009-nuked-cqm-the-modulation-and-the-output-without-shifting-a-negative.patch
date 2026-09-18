@@ -1,0 +1,68 @@
+SPDX-FileCopyrightText: 2026 Nuke.YKT
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+Nuked CQM: the modulation and the output without shifting a negative number
+
+Three places scale a signed sample with a left shift, which is undefined
+behaviour when the sample is negative. UndefinedBehaviorSanitizer stops the
+program at the first of them, a few milliseconds into a note:
+
+  src/chips/nuked_cqm/cqm.c:277:57: runtime error: left shift of negative value
+  -510
+
+* The modulation of the next operator is the previous output, scaled by 4.
+
+* doshifter() scales its argument when the shift is more than 12. The
+  modulation, which is what reports, arrives there with a shift of 13 or 15, so
+  a factor of 2 or 8; its other callers pass the frequency number, which is not
+  negative. The C89 form of doshifter() is a macro and the C99 form a function;
+  both change.
+
+* The output of the chip is the wave sample, scaled by 32 before doshifter()
+  scales it back down.
+
+Multiplications say the same thing and are defined. What is scaled here is a
+chip sample or a frequency number, hundreds of thousands at the very most, so
+every product is far inside an int.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/chips/nuked_cqm/cqm.c b/src/chips/nuked_cqm/cqm.c
+index 475032d..9dbfe9a 100644
+--- a/src/chips/nuked_cqm/cqm.c
++++ b/src/chips/nuked_cqm/cqm.c
+@@ -145,11 +145,11 @@ enum {
+ static inline int doshifter(int x, int shift)
+ {
+     if (shift > 12)
+-        return x << (shift - 12);
++        return x * (1 << (shift - 12));
+     return x >> (12 - shift);
+ }
+ #else
+-#   define doshifter(x, shift) (shift > 12 ? (x << (shift - 12)) : (x >> (12 - shift)))
++#   define doshifter(x, shift) (shift > 12 ? (x * (1 << (shift - 12))) : (x >> (12 - shift)))
+ #endif
+ 
+ void CQM_Generate(cqm_t* chip, int16_t* sample)
+@@ -274,7 +274,7 @@ void CQM_Generate(cqm_t* chip, int16_t* sample)
+             modptr[1] = 0;
+         }
+         else if (op != 0)
+-            modptr[chip->oddeven ^ 1] = chip->wave_prev << 2;
++            modptr[chip->oddeven ^ 1] = chip->wave_prev * 4;
+ 
+         {
+             int wf;
+@@ -797,7 +797,7 @@ void CQM_Generate(cqm_t* chip, int16_t* sample)
+ 
+             if (chip->dooutput && !(chip->is4op2 && !con))
+             {
+-                int sumwave = doshifter(chip->wavesample << 5, chip->waveshift);
++                int sumwave = doshifter(chip->wavesample * 32, chip->waveshift);
+ 
+                 if (chip->wavepan & 1)
+                     accum[0] += sumwave;
