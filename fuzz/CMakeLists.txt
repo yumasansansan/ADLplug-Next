@@ -53,14 +53,24 @@ endif()
 
 # adlplug_fuzz_target(<name> [JUCE] OWN_SOURCES <file>... OTHER_SOURCES <file>...
 #                     [LIBRARIES <target>...] [DEFINITIONS <name>=<value>...]
-#                     SEEDS <directory>... [DICTIONARY <file>])
+#                     SEEDS <directory>... [DICTIONARY <file>]
+#                     [ARGUMENTS <argument>...] [LONG_RUNS_ONLY])
 #
 # JUCE makes the programs with juce_add_console_app() instead of
 # add_executable(), for a target whose sources need JuceHeader.h and the JUCE
 # modules: the plugin's processor, for one.
+#
+# ARGUMENTS go into the manifest before the inputs, for a target that asks
+# something of libFuzzer that the others do not.
+#
+# LONG_RUNS_ONLY marks a target whose every input is heavy enough that the
+# fuzzing of a push would get through too few of them to be worth the minute.
+# CMake writes an empty <target>.long beside the manifest, and ci/fuzz.sh leaves
+# such a target out unless it is told to take the long ones as well. The replay
+# test runs on every system either way.
 function(adlplug_fuzz_target name)
-  cmake_parse_arguments(PARSE_ARGV 1 arg "JUCE" "DICTIONARY"
-    "OWN_SOURCES;OTHER_SOURCES;LIBRARIES;DEFINITIONS;SEEDS")
+  cmake_parse_arguments(PARSE_ARGV 1 arg "JUCE;LONG_RUNS_ONLY" "DICTIONARY"
+    "OWN_SOURCES;OTHER_SOURCES;LIBRARIES;DEFINITIONS;SEEDS;ARGUMENTS")
 
   set(inputs ${arg_SEEDS})
   set(regressions "${CMAKE_CURRENT_SOURCE_DIR}/regressions/${ADLplug_FUZZ_CHIP}/${name}")
@@ -114,9 +124,12 @@ function(adlplug_fuzz_target name)
       if(arg_DICTIONARY)
         list(APPEND arguments "-dict=${arg_DICTIONARY}")
       endif()
-      list(APPEND arguments ${inputs})
+      list(APPEND arguments ${arg_ARGUMENTS} ${inputs})
       list(JOIN arguments "\n" arguments)
       file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${target}.args" "${arguments}\n")
+      if(arg_LONG_RUNS_ONLY)
+        file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${target}.long" "")
+      endif()
     endif()
     adlplug_set_language_standard(${target})
     target_compile_definitions(${target} PRIVATE
@@ -326,6 +339,23 @@ adlplug_fuzz_target(host JUCE
   DEFINITIONS ${ADLplug_FUZZ_PROCESSOR_DEFINITIONS}
   SEEDS "${ADLplug_FUZZ_HOST_SEEDS}"
   DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/host.dict")
+
+# How long an instrument sounds: the measurement the worker makes for every
+# instrument the plugin is given. One input plays a hundred seconds of audio on
+# a chip of its own, so the target says LONG_RUNS_ONLY and the fuzzing of a push
+# passes it by; -timeout says what an input that will not end looks like, since
+# one of them takes a second or two and no more, and -max_len keeps the fuzzer
+# inside the instrument, since the bytes past it are read by nobody. The seed is
+# an instrument that sounds, and it is in the repository rather than written
+# here: an instrument is mostly zeros, and CMake writes text.
+# fuzz/dict/measurement.dict has the register bytes worth trying.
+adlplug_fuzz_target(measurement LONG_RUNS_ONLY
+  OWN_SOURCES "${PROJECT_SOURCE_DIR}/sources/${ADLplug_FUZZ_CHIP}/adl/instrument.cc"
+              "${PROJECT_SOURCE_DIR}/sources/${ADLplug_FUZZ_CHIP}/adl/measurer/measurer.cpp"
+  LIBRARIES ${ADLplug_FUZZ_PLAY_LIBRARY}
+  SEEDS "${CMAKE_CURRENT_SOURCE_DIR}/seeds/${ADLplug_FUZZ_CHIP}/measurement"
+  DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/measurement.dict"
+  ARGUMENTS "-timeout=60" "-max_len=64")
 
 # resources.c embeds the pack of banks that the build makes for the plugin, and
 # a source property belongs to the directory that compiles the file.

@@ -8,8 +8,9 @@
 #
 # The long fuzzing. Once a day, and whenever it is started by hand, every fuzz
 # target of both plugins runs for fifteen minutes with libFuzzer and the
-# address and undefined sanitizers, on Ubuntu (ci/fuzz.sh). The short runs of a
-# minute are part of CI (.github/workflows/ci.yml).
+# address and undefined sanitizers, on Ubuntu (ci/fuzz.sh --with-long). That
+# includes the targets whose every input is heavy, which the short runs of a
+# minute in CI leave out (.github/workflows/ci.yml).
 #
 # A run carries on from the corpus that the last decided run (one that passed
 # or failed) grew and kept as an artifact; when that is gone, it starts again
@@ -92,7 +93,7 @@ jobs:
             || echo "Run $last kept no inputs that failed."
 
       - name: Fuzz for fifteen minutes each
-        run: bash ci/fuzz.sh "${{ matrix.preset }}" 900 fuzz-run/corpora fuzz-run/crashes fuzz-run/earlier
+        run: bash ci/fuzz.sh --with-long "${{ matrix.preset }}" 900 fuzz-run/corpora fuzz-run/crashes fuzz-run/earlier
 
       - name: Keep the corpus
         if: ${{ !cancelled() }}

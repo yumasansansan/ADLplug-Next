@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# libFuzzer's dictionary for the target that measures how long an instrument
+# sounds (-dict=): the register values that make a chip do something out of the
+# ordinary, and the fields of an instrument that are not registers at all. The
+# input is the library's own structure, so a word here is a byte or two in a
+# place the fuzzer has to find; fuzz/measurement.cc says where each one sits.
+
+# What an operator's envelope can be told: no attack and no release is a note
+# that never ends, and the fastest of each is one that is over at once
+envelope_no_attack_no_decay="\x00"
+envelope_fastest_attack="\xf0"
+envelope_slowest_attack="\x10"
+envelope_full_release="\x0f"
+envelope_no_release="\xf0"
+envelope_sustain_and_release="\x4f"
+envelope_everything="\xff"
+
+# The first register of an operator: tremolo, vibrato, sustaining, scaling and
+# the multiplier of the frequency
+operator_sustaining="\x20"
+operator_tremolo_and_vibrato="\xc0"
+operator_multiplier_highest="\x0f"
+operator_all_of_it="\xff"
+
+# The level register: the scaling of the level by the key, and the level itself
+level_loudest="\x00"
+level_quietest="\x3f"
+level_scaled_hardest="\xc0"
+
+# The waveform, and the feedback and the connection of a voice
+waveform_highest="\x07"
+voice_both_sides_feedback_high="\x3e"
+voice_neither_side="\x00"
+algorithm_every_operator_a_carrier="\x07"
+algorithm_highest_feedback="\x38"
+
+# What is not a register: the version, the note offsets, the velocity offset,
+# the key a percussion instrument plays, and the flags
+version_latest="\x04\x00\x00\x00"
+version_zero="\x00\x00\x00\x00"
+version_highest="\xff\xff\xff\x7f"
+note_offset_far_up="\x7f\x7f"
+note_offset_far_down="\x80\x80"
+note_offset_lowest="\x00\x80"
+percussion_key_highest="\xff"
+percussion_key_over_the_hundred_and_twenty_eight="\x80"
+flags_four_operator="\x01"
+flags_pseudo_four_operator="\x02"
+flags_blank="\x04"
+flags_rhythm_mode="\x38"
+flags_all="\xff"
+
+# The delays that the measurement is there to work out
+delay_none="\x00\x00"
+delay_longest="\xff\xff"

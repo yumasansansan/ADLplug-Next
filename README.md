@@ -371,7 +371,10 @@ ctest --preset adl-debug
     the automation it writes to the parameters, and the blocks of audio it asks
     for: every sample that comes out is a finite number, and the plugin's count
     of the notes sounding on a channel is the number of notes it holds to be
-    sounding.
+    sounding;
+  - the instruments whose length the plugin measures, which is how a host is
+    told when a note has finished: a measurement gives back numbers that are
+    finite, and claims no more time than it played and listened for.
 - When [pluginval](https://github.com/Tracktion/pluginval) or
   [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint) (plugin
   validators) is on the `PATH` at configure time, it validates the VST3 or
@@ -397,10 +400,12 @@ file named `crash-<hash>`. Such an input goes in
 fix, so that the tests replay it from then on.
 
 The other targets are `ADLplug_fuzz_midi_synth`, which plays MIDI,
-`ADLplug_fuzz_state`, which reads the state that a host kept in a project, and
-`ADLplug_fuzz_host`, which plays the plugin the way a host does. CMake writes
-their seed inputs — for the MIDI target, one for each emulator core the build
-has — so they come from the build directory:
+`ADLplug_fuzz_state`, which reads the state that a host kept in a project,
+`ADLplug_fuzz_host`, which plays the plugin the way a host does, and
+`ADLplug_fuzz_measurement`, which measures how long an instrument sounds. CMake
+writes the seed inputs of the first three — for the MIDI target, one for each
+emulator core the build has — so those come from the build directory, while the
+seed of the last is in `fuzz/seeds/`:
 
 ```
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_midi_synth
@@ -409,7 +414,14 @@ cmake --build --preset adl-sanitize --target ADLplug_fuzz_state
 build/adl-sanitize/fuzz/ADLplug_fuzz_state -dict=fuzz/dict/state.dict corpus build/adl-sanitize/fuzz/seeds/state
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_host
 build/adl-sanitize/fuzz/ADLplug_fuzz_host -dict=fuzz/dict/host.dict corpus build/adl-sanitize/fuzz/seeds/host
+cmake --build --preset adl-sanitize --target ADLplug_fuzz_measurement
+build/adl-sanitize/fuzz/ADLplug_fuzz_measurement -dict=fuzz/dict/measurement.dict corpus fuzz/seeds/opl3/measurement
 ```
+
+Measuring one instrument plays a hundred seconds of audio, so that target is
+left out of the minute of fuzzing that every push gets, and runs in the daily
+fuzzing instead; the tests replay its inputs everywhere, as they do for the
+others.
 
 The editor tests open windows, so on Linux they need an X11 display with a
 window manager (the software that manages windows); a desktop session runs

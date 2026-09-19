@@ -15,8 +15,9 @@
 # undefined and vptr sanitizers and run the tests, leaving out the programs
 # that load the plugins from outside. On Ubuntu they also build the fuzz
 # targets with libFuzzer and run each for a minute (ci/fuzz.sh); an input that
-# fails is kept as an artifact. The long fuzzing runs once a day in
-# .github/workflows/fuzz.yml.
+# fails is kept as an artifact. A target whose every input is heavy is not among
+# them -- a minute would get through too few -- and the long fuzzing takes those
+# instead, once a day, in .github/workflows/fuzz.yml.
 #
 # The reuse job checks with reuse lint, from Ubuntu's reuse package, that every
 # file names its copyright holders and license (see REUSE.toml and LICENSES/).

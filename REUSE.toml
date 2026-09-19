@@ -33,6 +33,16 @@ precedence = "override"
 SPDX-FileCopyrightText = "2026 Yuma Kakei <yumasansansan@gmail.com>"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# The inputs a fuzz target starts from, for the target whose input CMake cannot
+# write: an instrument is mostly zeros, and CMake writes text. They hold the
+# registers of one instrument that sounds, written by hand from the layout of
+# the library's own structure (fuzz/measurement.cc says where each byte sits).
+[[annotations]]
+path = "fuzz/seeds/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Yuma Kakei <yumasansansan@gmail.com>"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # The picture in the READMEs: a capture by Yuma Kakei of the two plugins as they
 # are now. The interface it shows comes in part from ADLplug, whose graphics are
 # under the Boost Software License, and in part from ADLplug-Next, whose changes

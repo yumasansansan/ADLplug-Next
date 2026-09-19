@@ -61,7 +61,13 @@ int main(int argc, char *argv[])
             std::fprintf(stderr, "%s: cannot be read\n", path.string().c_str());
             return 1;
         }
-        const std::vector<std::uint8_t> bytes{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+        std::vector<std::uint8_t> bytes{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+        // libFuzzer hands a target a pointer even when the input has no bytes,
+        // and a target may pass it on to something that wants one, memcpy for
+        // instance; the data() of an empty vector is a null pointer. Ask for a
+        // byte, so that there is something to point at.
+        if (bytes.empty())
+            bytes.reserve(1);
         std::printf("%s (%zu bytes)\n", path.string().c_str(), bytes.size());
         std::fflush(stdout);
         LLVMFuzzerTestOneInput(bytes.data(), bytes.size());

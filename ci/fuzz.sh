@@ -7,14 +7,19 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-#   ci/fuzz.sh <preset> <seconds> <corpora> <crashes> [<earlier crashes>]
+#   ci/fuzz.sh [--with-long] <preset> <seconds> <corpora> <crashes>
+#              [<earlier crashes>]
 #
 # Runs every fuzz target that a build of <preset> with ADLplug_BUILD_FUZZERS
-# made, each for <seconds> with libFuzzer. A target runs with the arguments
-# that CMake listed beside it (build/<preset>/fuzz/*.args: its dictionary, seed
-# inputs and regression inputs), on a corpus of its own in <corpora>/<target>/,
-# which it grows and which may carry over from an earlier run. An input that
-# fails is written to <crashes>/<target>/.
+# made, each for <seconds> with libFuzzer. A target whose every input is heavy
+# (CMake wrote <target>.long beside its manifest) is left out unless
+# --with-long is given: a minute of it would get through too few inputs to be
+# worth the time, so the fuzzing of a push passes it by and the daily fuzzing
+# takes it. A target runs with the arguments that CMake listed beside it
+# (build/<preset>/fuzz/*.args: its dictionary, seed inputs and regression
+# inputs), on a corpus of its own in <corpora>/<target>/, which it grows and
+# which may carry over from an earlier run. An input that fails is written to
+# <crashes>/<target>/.
 #
 # Given <earlier crashes>, each target first runs once on the inputs under
 # <earlier crashes>/<target>/ that failed in an earlier run. One that still
@@ -23,6 +28,12 @@
 # same one, so it is replayed until it is fixed. The script fails when any
 # target fails.
 set -euo pipefail
+
+with_long=0
+if [ "${1:-}" = "--with-long" ]; then
+  with_long=1
+  shift
+fi
 
 preset=$1
 seconds=$2
@@ -41,6 +52,10 @@ status=0
 for manifest in "${manifests[@]}"; do
   fuzzer=${manifest%.args}
   target=$(basename "$fuzzer")
+  if [ -e "$fuzzer.long" ] && [ "$with_long" -eq 0 ]; then
+    echo "== $target: left to the long runs"
+    continue
+  fi
   mapfile -t arguments < "$manifest"
   mkdir -p "$corpora/$target" "$crashes/$target"
 
