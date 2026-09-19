@@ -1,0 +1,31 @@
+SPDX-FileCopyrightText: 2013-2020 Nuke.YKT
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+Nuked OPL3: the fast path silences a slot as the other path does
+
+OPL3_EnvelopeCalcExp() holds the level at 0x1fff before it shifts the exponent table by level >> 8, so that the shift is 31 at the most and a slot that is attenuated past the end of the table comes out silent. The fast waveform generator, which is what OPL_FAST_WAVEGEN gives and what libADLMIDI builds by default, works the level out for itself and does not hold it:
+
+  src/chips/nuked/nukedopl3.c:913:38: runtime error: shift exponent 32 is too large for 32-bit type 'int'
+
+A shift that far is undefined, and on the machines people run this on it is the shift by nothing at all: the slot comes out at full level where it should be silent, so the fault is audible as well as undefined -- a burst instead of a silence. The clamp here is the one from OPL3_EnvelopeCalcExp(), in the same words, so the two paths answer alike again. Every level up to 0x1fff is untouched.
+
+A fuzz target of ADLplug-Next found it, one that plays MIDI through the real-time API with the chip settings a saved project can hold: thirty-five four-operator channels and a drum note of 32, on the emulator the settings ask for. The daily run and the manual run of 2026-09-19 both stopped there.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/chips/nuked/nukedopl3.c b/src/chips/nuked/nukedopl3.c
+index 905df02..1129b13 100644
+--- a/src/chips/nuked/nukedopl3.c
++++ b/src/chips/nuked/nukedopl3.c
+@@ -910,6 +910,10 @@ static void OPL3_SlotGenerate(opl3_slot *slot)
+     {
+         level += ((phase ^ neg) & 0x3ff) << 3;
+     }
++    if (level > 0x1fff)
++    {
++        level = 0x1fff;
++    }
+     slot->out = exprom[level & 0xff] >> (level >> 8) ^ neg;
+ }
+ #else

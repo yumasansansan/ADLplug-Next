@@ -84,6 +84,8 @@ adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0006-the-api-looks-at-the-numbers-it-is-given.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0007-models-the-frequency-models-stay-inside-their-tables.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0008-nuked-opl3-the-fast-path-silences-a-slot-as-the-other-does.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-psg-a-noise-table-that-does-not-overflow.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
@@ -102,3 +104,5 @@ adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0008-ymfm-the-round-trip-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0009-the-api-looks-at-the-numbers-it-is-given.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0010-gens-the-phase-a-channel-update-works-with-wraps-as-well.patch")

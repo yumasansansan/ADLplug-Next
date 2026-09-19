@@ -1,0 +1,57 @@
+SPDX-FileCopyrightText: 1999-2002 Stéphane Dallongeville
+SPDX-FileCopyrightText: 2003-2004 Stéphane Akhoun
+SPDX-FileCopyrightText: 2008-2015 David Korth
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-2.0-or-later
+
+GENS: the phase a channel update works with wraps as well
+
+The patch that made Fcnt unsigned left the int that GET_CURRENT_PHASE() copies it into, on the grounds that the phase is only shifted and masked there. That is true of the phase as it arrives, but not of what the channel update does with it: modulation adds one operator's output to the next one's phase, and that addition overflows the same way the counter did.
+
+  src/chips/gens/Ym2612.cpp:1424:5: runtime error: signed integer overflow: -2146769536 + -2312044 cannot be represented in type 'int'
+
+The four in0..in3 of T_Update_Chan(), T_Update_Chan_LFO(), T_Update_Chan_Int() and T_Update_Chan_LFO_Int() are that phase, and they are unsigned now, as Fcnt is. Every use of them is the same as before: they are set from Fcnt, added to in DO_FEEDBACK() and in the algorithm macros, and read as (in >> SIN_LBITS) & SIN_MASK, which takes bits 14 to 25 -- the bits an arithmetic shift and a logical shift agree on, since the mask is twelve bits wide. Copying Fcnt into an int was also a conversion that the standard leaves to the implementation once the counter had gone past INT_MAX, and that goes away too.
+
+A fuzz target of ADLplug-Next found it, one that plays MIDI through the real-time API with the chip settings a saved project can hold: the emulator GENS, two chips, the LFO on, and a note of 104 at velocity 11, which the daily run came upon in a quarter of an hour.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/chips/gens/Ym2612.cpp b/src/chips/gens/Ym2612.cpp
+--- a/src/chips/gens/Ym2612.cpp
++++ b/src/chips/gens/Ym2612.cpp
+@@ -1195,7 +1195,7 @@
+ //		"Algo %d len = %d", algo, length);
+ 
+ 	for (int i = 0; i < length; i++) {
+-		int in0, in1, in2, in3;		// current phase calculation
++		unsigned int in0, in1, in2, in3;	// current phase calculation
+ 		int en0, en1, en2, en3;		// current envelope calculation
+ 
+ 		GET_CURRENT_PHASE();
+@@ -1263,7 +1263,7 @@
+ //		"Algo %d LFO len = %d", algo, length);
+ 
+ 	for (int i = 0; i < length; i++) {
+-		int in0, in1, in2, in3;		// current phase calculation
++		unsigned int in0, in1, in2, in3;	// current phase calculation
+ 		int en0, en1, en2, en3;		// current envelope calculation
+ 
+ 		GET_CURRENT_PHASE();
+@@ -1335,7 +1335,7 @@
+ 	int_cnt = state.Inter_Cnt;
+ 
+ 	for (int i = 0; i < length; i++) {
+-		int in0, in1, in2, in3;		// current phase calculation
++		unsigned int in0, in1, in2, in3;	// current phase calculation
+ 		int en0, en1, en2, en3;		// current envelope calculation
+ 
+ 		GET_CURRENT_PHASE();
+@@ -1404,7 +1404,7 @@
+ //		"Algo %d LFO Int len = %d", algo, length);
+ 
+ 	for (int i = 0; i < length; i++) {
+-		int in0, in1, in2, in3;		// current phase calculation
++		unsigned int in0, in1, in2, in3;	// current phase calculation
+ 		int en0, en1, en2, en3;		// current envelope calculation
+ 
+ 		GET_CURRENT_PHASE();
