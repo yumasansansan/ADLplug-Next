@@ -51,11 +51,15 @@ else()
     "${PROJECT_SOURCE_DIR}/thirdparty/OPN2BankEditor/Bank_Examples")
 endif()
 
-# adlplug_fuzz_target(<name> OWN_SOURCES <file>... OTHER_SOURCES <file>...
+# adlplug_fuzz_target(<name> [JUCE] OWN_SOURCES <file>... OTHER_SOURCES <file>...
 #                     [LIBRARIES <target>...] [DEFINITIONS <name>=<value>...]
 #                     SEEDS <directory>... [DICTIONARY <file>])
+#
+# JUCE makes the programs with juce_add_console_app() instead of
+# add_executable(), for a target whose sources need JuceHeader.h and the JUCE
+# modules: the plugin's processor, for one.
 function(adlplug_fuzz_target name)
-  cmake_parse_arguments(PARSE_ARGV 1 arg "" "DICTIONARY"
+  cmake_parse_arguments(PARSE_ARGV 1 arg "JUCE" "DICTIONARY"
     "OWN_SOURCES;OTHER_SOURCES;LIBRARIES;DEFINITIONS;SEEDS")
 
   set(inputs ${arg_SEEDS})
@@ -75,10 +79,35 @@ function(adlplug_fuzz_target name)
   foreach(configuration IN LISTS configurations)
     if(configuration STREQUAL "replay")
       set(target "ADLplug_fuzz_${name}_replay")
-      add_executable(${target} replay.cc "${name}.cc" ${arg_OWN_SOURCES} ${arg_OTHER_SOURCES})
+      set(sources replay.cc "${name}.cc" ${arg_OWN_SOURCES} ${arg_OTHER_SOURCES})
     else()
       set(target "ADLplug_fuzz_${name}")
-      add_executable(${target} "${name}.cc" ${arg_OWN_SOURCES} ${arg_OTHER_SOURCES})
+      set(sources "${name}.cc" ${arg_OWN_SOURCES} ${arg_OTHER_SOURCES})
+    endif()
+
+    if(arg_JUCE)
+      # A JUCE program, for the sources that want JuceHeader.h and the modules.
+      # The libFuzzer build has no main() of its own, which juce_add_console_app
+      # does not mind: it only makes the target and gives it JUCE's settings.
+      juce_add_console_app(${target})
+      juce_generate_juce_header(${target})
+      target_sources(${target} PRIVATE ${sources})
+      get_target_property(generated ${target} JUCE_GENERATED_SOURCES_DIRECTORY)
+      target_include_directories(${target} SYSTEM PRIVATE "${generated}")
+      # JUCE would put the program under <target>_artefacts/<configuration>/;
+      # every fuzz program belongs beside the .args files that name it, which is
+      # where ci/fuzz.sh looks for it.
+      set_target_properties(${target} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+      foreach(configuration_name IN ITEMS DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+        set_target_properties(${target} PROPERTIES
+          "RUNTIME_OUTPUT_DIRECTORY_${configuration_name}" "${CMAKE_CURRENT_BINARY_DIR}")
+      endforeach()
+    else()
+      add_executable(${target} ${sources})
+    endif()
+
+    if(configuration STREQUAL "libfuzzer")
       target_compile_options(${target} PRIVATE -fsanitize=fuzzer)
       target_link_options(${target} PRIVATE -fsanitize=fuzzer)
       set(arguments "")
@@ -160,3 +189,126 @@ if(ADLplug_BUILD_FUZZERS)
   # it speed it does not need here.
   target_compile_options(${ADLplug_FUZZ_PLAY_LIBRARY} PRIVATE -fsanitize=fuzzer-no-link)
 endif()
+
+# F1: the state that a host kept in a project. The processor is what reads it,
+# so this target builds the plugin's own sources, the interface left out:
+# plugin_processor.cc knows nothing of the editor (hasEditor() and
+# createEditor() are in plugin_editor.cc, and this target says instead that
+# there is none), so neither the interface nor the modules it alone needs come
+# in. With JUCE 9's headless audio processors module, that leaves a program
+# without juce_gui_basics, which builds where the plugin cannot: a Linux without
+# the X11 development packages, for one.
+set(ADLplug_FUZZ_STATE_SOURCES
+  "${PROJECT_SOURCE_DIR}/sources/plugin_processor.cc"
+  "${PROJECT_SOURCE_DIR}/sources/plugin_state.cc"
+  "${PROJECT_SOURCE_DIR}/sources/bank_manager.cc"
+  "${PROJECT_SOURCE_DIR}/sources/worker.cc"
+  "${PROJECT_SOURCE_DIR}/sources/messages.cc"
+  "${PROJECT_SOURCE_DIR}/sources/utility/midi.cc"
+  "${PROJECT_SOURCE_DIR}/sources/utility/simple_fifo.cc"
+  "${PROJECT_SOURCE_DIR}/sources/utility/pak.cc"
+  # The icons of the chip settings, which the messages carry (messages.h).
+  "${PROJECT_SOURCE_DIR}/sources/ui/utility/image.cc"
+  "${PROJECT_SOURCE_DIR}/sources/resources.c"
+  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_FUZZ_CHIP}/parameter_block.cc"
+  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_FUZZ_CHIP}/adl/chip_settings.cc"
+  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_FUZZ_CHIP}/adl/instrument.cc"
+  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_FUZZ_CHIP}/adl/instrument_properties.cc"
+  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_FUZZ_CHIP}/adl/player.cc"
+  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_FUZZ_CHIP}/adl/measurer/measurer.cpp")
+
+# A seed: the smallest state that carries one of everything the plugin looks
+# for, so that a made-up input starts from a shape that means something. CMake
+# writes it, since it is text; fuzz/dict/state.dict has the names.
+set(ADLplug_FUZZ_STATE_SEEDS "${CMAKE_CURRENT_BINARY_DIR}/seeds/state")
+file(MAKE_DIRECTORY "${ADLplug_FUZZ_STATE_SEEDS}")
+if(ADLplug_CHIP STREQUAL "OPL3")
+  set(ADLplug_FUZZ_STATE_GLOBAL
+      "    <VALUE name=\"volume_model\" val=\"1\"/>\n"
+      "    <VALUE name=\"deep_tremolo\" val=\"1\"/>\n"
+      "    <VALUE name=\"deep_vibrato\" val=\"0\"/>\n"
+      "    <VALUE name=\"mt32_defaults\" val=\"0\"/>\n")
+  set(ADLplug_FUZZ_STATE_CHIP
+      "    <VALUE name=\"emulator\" val=\"2\"/>\n"
+      "    <VALUE name=\"chip_count\" val=\"2\"/>\n"
+      "    <VALUE name=\"4op_count\" val=\"6\"/>\n")
+else()
+  set(ADLplug_FUZZ_STATE_GLOBAL
+      "    <VALUE name=\"volume_model\" val=\"1\"/>\n"
+      "    <VALUE name=\"lfo_enable\" val=\"1\"/>\n"
+      "    <VALUE name=\"lfo_frequency\" val=\"3\"/>\n")
+  set(ADLplug_FUZZ_STATE_CHIP
+      "    <VALUE name=\"emulator\" val=\"0\"/>\n"
+      "    <VALUE name=\"chip_count\" val=\"2\"/>\n"
+      "    <VALUE name=\"chip_type\" val=\"0\"/>\n")
+endif()
+string(CONCAT ADLplug_FUZZ_STATE_SEED
+  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  "<ADLMIDI-state>\n"
+  "  <bank>\n"
+  "    <VALUE name=\"bank\" val=\"0\"/>\n"
+  "    <VALUE name=\"name\" val=\"Seed\"/>\n"
+  "  </bank>\n"
+  "  <instrument>\n"
+  "    <VALUE name=\"bank\" val=\"0\"/>\n"
+  "    <VALUE name=\"program\" val=\"0\"/>\n"
+  "    <VALUE name=\"name\" val=\"Seed\"/>\n"
+  "    <VALUE name=\"blank\" val=\"0\"/>\n"
+  "    <VALUE name=\"c1attack\" val=\"15\"/>\n"
+  "    <VALUE name=\"c1level\" val=\"7\"/>\n"
+  "    <VALUE name=\"m1attack\" val=\"15\"/>\n"
+  "    <VALUE name=\"m1level\" val=\"0\"/>\n"
+  "    <VALUE name=\"delay_on_ms\" val=\"100\"/>\n"
+  "    <VALUE name=\"delay_off_ms\" val=\"100\"/>\n"
+  "  </instrument>\n"
+  "  <selection>\n"
+  "    <VALUE name=\"part\" val=\"0\"/>\n"
+  "    <VALUE name=\"bank\" val=\"0\"/>\n"
+  "    <VALUE name=\"program\" val=\"0\"/>\n"
+  "  </selection>\n"
+  "  <chip>\n"
+  ${ADLplug_FUZZ_STATE_CHIP}
+  "  </chip>\n"
+  "  <global>\n"
+  ${ADLplug_FUZZ_STATE_GLOBAL}
+  "  </global>\n"
+  "  <common>\n"
+  "    <VALUE name=\"bank_title\" val=\"Seed\"/>\n"
+  "    <VALUE name=\"part\" val=\"0\"/>\n"
+  "    <VALUE name=\"master_volume\" val=\"1\"/>\n"
+  "  </common>\n"
+  "</ADLMIDI-state>\n")
+file(WRITE "${ADLplug_FUZZ_STATE_SEEDS}/small" "${ADLplug_FUZZ_STATE_SEED}")
+
+adlplug_fuzz_target(state JUCE
+  OWN_SOURCES ${ADLplug_FUZZ_STATE_SOURCES}
+  LIBRARIES ${ADLplug_FUZZ_PLAY_LIBRARY}
+    # The headless audio processors module of JUCE 9 is the same processor
+    # without the interface, and it needs neither juce_gui_basics nor the X11
+    # packages that module wants on Linux. The graphics module comes in for the
+    # icons that the messages carry.
+    juce::juce_audio_processors_headless
+    juce::juce_graphics
+    juce::juce_recommended_config_flags
+  DEFINITIONS
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    # What the plugin's own target gives plugin_processor.cc: the names and the
+    # codes that the VST3 compatibility and getName() are written with.
+    "JucePlugin_Name=\"${ADLplug_NAME}\""
+    "JucePlugin_PluginCode=0x${ADLplug_PLUGIN_CODE_HEX}"
+    "ADLPLUG_VERSION_DISPLAY=\"${ADLplug_VERSION_DISPLAY}\""
+    "ADLPLUG_UPSTREAM_NAME=\"${ADLplug_UPSTREAM_NAME}\""
+    "ADLPLUG_UPSTREAM_MANUFACTURER=\"${ADLplug_UPSTREAM_MANUFACTURER}\""
+    "ADLPLUG_UPSTREAM_VST2_CLASS=\"${ADLplug_UPSTREAM_VST2_CLASS}\""
+  SEEDS "${ADLplug_FUZZ_STATE_SEEDS}"
+  DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/state.dict")
+
+# resources.c embeds the pack of banks that the build makes for the plugin, and
+# a source property belongs to the directory that compiles the file.
+adlplug_embed_banks("${PROJECT_SOURCE_DIR}/sources/resources.c")
+foreach(target IN ITEMS ADLplug_fuzz_state_replay ADLplug_fuzz_state)
+  if(TARGET ${target})
+    add_dependencies(${target} ADLplug_banks)
+  endif()
+endforeach()

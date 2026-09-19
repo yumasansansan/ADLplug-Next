@@ -25,7 +25,6 @@
 #include "messages.h"
 #include "definitions.h"
 #include "plugin_processor.h"
-#include "plugin_editor.h"
 #include "worker.h"
 #include "resources.h"
 #include <algorithm>
@@ -768,16 +767,9 @@ void AdlplugAudioProcessor::processBlockBypassed(AudioBuffer<float> &buffer, Mid
     AudioProcessor::processBlockBypassed(buffer, midi_messages);
 }
 
-//==============================================================================
-bool AdlplugAudioProcessor::hasEditor() const
-{
-    return true;
-}
-
-AudioProcessorEditor *AdlplugAudioProcessor::createEditor()
-{
-    return new AdlplugAudioProcessorEditor(*this, *parameter_block_);
-}
+// hasEditor() and createEditor() are in plugin_editor.cc, where the editor is:
+// this file is then the processor alone, and a test or a fuzz target can build
+// it without the interface and the JUCE modules the interface needs.
 
 //==============================================================================
 void AdlplugAudioProcessor::getStateInformation(MemoryBlock &data)
@@ -885,8 +877,18 @@ void AdlplugAudioProcessor::write_state(MemoryBlock &data)
 
     XmlElement root("ADLMIDI-state");
 
+    // A slot whose programs are all blank is not a bank the plugin shows or
+    // keeps: the editor's list of banks leaves it out, and the next bank to be
+    // loaded takes the slot (Bank_Manager::emit_slots, find_empty_slot).
+    // Writing it here would put a bank into the state that reading the state
+    // cannot bring back, since a bank comes back with the instruments in it;
+    // the project would then change by being opened and saved, which
+    // fuzz/state.cc found.
+    const auto is_a_bank = [](const Bank_Manager::Bank_Info &info)
+        { return static_cast<bool>(info) && info.used.any(); };
+
     for (const Bank_Manager::Bank_Info &info : bm.bank_infos()) {
-        if (!info)
+        if (!is_a_bank(info))
             continue;
         PropertySet bank_set;
         bank_set.setValue("bank", static_cast<int>(info.id.to_integer()));
@@ -895,7 +897,7 @@ void AdlplugAudioProcessor::write_state(MemoryBlock &data)
     }
 
     for (const Bank_Manager::Bank_Info &info : bm.bank_infos()) {
-        if (!info)
+        if (!is_a_bank(info))
             continue;
         Instrument ins;
         for (unsigned p_i = 0; p_i < 128; ++p_i) {

@@ -24,8 +24,9 @@ SPDX-License-Identifier = "GPL-3.0-or-later"
 # Inputs that once made a fuzz target fail, kept so that the fault stays fixed
 # (fuzz/CMakeLists.txt). A fuzzer made them, or they were written from what it
 # found; besides zeros, they hold only the words that open a WOPL or WOPN file,
-# and, for the MIDI target, a handful of bytes that name an emulator, a volume
-# model and a note (fuzz/midi_synth.cc says what they mean).
+# for the MIDI target a handful of bytes that name an emulator, a volume model
+# and a note (fuzz/midi_synth.cc says what they mean), and for the state target
+# the tags of a state, written by hand.
 [[annotations]]
 path = "fuzz/regressions/**"
 precedence = "override"

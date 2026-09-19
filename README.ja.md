@@ -216,6 +216,7 @@ ctest --preset adl-debug
 - fuzz のテスト（`fuzz/`）: プラグインの外から来る入力を扱う処理に，過去に不具合を起こした入力と，それ以外の入力を与えます．
   - バンクと楽器のファイル: libADLMIDI・libOPNMIDI・OPN2 Bank Editor に付属するバンクと楽器も与えて，読み込んで保存し直したファイルが同じ内容で読み込めることを確認します．
   - ホストから来る MIDI: プロジェクトが持つチップの設定と合わせて与え，すべてのエミュレータコアで音が鳴り，出てくる標本がすべて有限の値であることを確認します．
+  - プロジェクトにホストが保存した状態: どんな状態を与えても，そのあとプラグインが書き出すのは自分の状態で，それを開いて保存し直しても変わらないことを確認します．
 - configure のときに [pluginval](https://github.com/Tracktion/pluginval) や [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint)（プラグインの検証ツール）が `PATH` にあれば，それらを使って VST3・LV2 プラグインも検証します．
 
 同じ fuzz の対象は，[libFuzzer](https://llvm.org/docs/LibFuzzer.html)（入力を自動で作り出し，それまでどの入力も通らなかったコードに届いたものを残していく fuzz のツール）付きでもビルドできます．Linux で，サニタイザと組み合わせて使います（Windows 版の LLVM の libFuzzer は，プラグインとリンクできません）．ADLplug-Next の場合の例です．
@@ -229,11 +230,13 @@ build/adl-sanitize/fuzz/ADLplug_fuzz_bank_file -dict=fuzz/dict/wopl.dict corpus 
 
 不具合を起こす入力が見つかるか，止められるまで動き続けます（`-max_total_time=<秒数>` で時間を区切れます）．見つかった入力は `crash-<ハッシュ>` という名前のファイルに書き出されます．その入力は，修正と一緒に `fuzz/regressions/opl3/<対象名>`（OPNplug-Next では `opn2`）に加えてください．以後，テストでその入力が再生されます．
 
-もう 1 つの対象 `ADLplug_fuzz_midi_synth` は MIDI を鳴らします．その種の入力は CMake がビルドしたコアごとに 1 つずつ書き出すので，ビルドディレクトリから渡します．
+残る 2 つの対象は，MIDI を鳴らす `ADLplug_fuzz_midi_synth` と，プロジェクトにホストが保存した状態を読む `ADLplug_fuzz_state` です．どちらも種の入力は CMake が書き出すので（MIDI の方は，ビルドしたコアごとに 1 つずつ），ビルドディレクトリから渡します．
 
 ```
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_midi_synth
 build/adl-sanitize/fuzz/ADLplug_fuzz_midi_synth -dict=fuzz/dict/midi.dict corpus build/adl-sanitize/fuzz/seeds/midi_synth
+cmake --build --preset adl-sanitize --target ADLplug_fuzz_state
+build/adl-sanitize/fuzz/ADLplug_fuzz_state -dict=fuzz/dict/state.dict corpus build/adl-sanitize/fuzz/seeds/state
 ```
 
 エディタのテストはウィンドウを開くため，Linux では，ウィンドウマネージャ（ウィンドウを管理するソフト）のある X11 の画面が必要です（通常のデスクトップ環境なら，Xwayland 上で動きます）．ウィンドウマネージャがないと，lv2lint はエディタで起きる X のエラーで止まります．

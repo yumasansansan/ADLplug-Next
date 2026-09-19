@@ -231,3 +231,9 @@ private:
     //==========================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AdlplugAudioProcessor)
 };
+
+// What a plugin wrapper asks for, and plugin_processor.cc gives it. JUCE
+// declares it in juce_audio_plugin_client, which only a plugin build has; a
+// test or a fuzz target that builds the processor by itself needs the
+// declaration from somewhere, and here it is.
+AudioProcessor *JUCE_CALLTYPE createPluginFilter();

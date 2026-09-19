@@ -1,0 +1,92 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# libFuzzer's dictionary for the state target (-dict=): the shape of the XML
+# that a project holds, and the names that the plugin looks for in it
+# (AdlplugAudioProcessor::read_state, Instrument::from_properties,
+# Chip_Settings::from_properties). The words of the XML itself come first, so
+# that a made-up input can become a state at all.
+
+# The XML of a state
+root="<ADLMIDI-state>"
+root_end="</ADLMIDI-state>"
+value="<VALUE name=\"\" val=\"\"/>"
+bank="<bank>"
+bank_end="</bank>"
+instrument="<instrument>"
+instrument_end="</instrument>"
+selection="<selection>"
+selection_end="</selection>"
+chip="<chip>"
+chip_end="</chip>"
+global="<global>"
+global_end="</global>"
+common="<common>"
+common_end="</common>"
+declaration="<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+
+# What a bank, a selection and the common part are named by
+key_bank="bank"
+key_program="program"
+key_part="part"
+key_name="name"
+key_bank_title="bank_title"
+key_master_volume="master_volume"
+
+# The chip settings
+key_emulator="emulator"
+key_chip_count="chip_count"
+key_4op_count="4op_count"
+key_chip_type="chip_type"
+
+# The global parameters
+key_volume_model="volume_model"
+key_deep_tremolo="deep_tremolo"
+key_deep_vibrato="deep_vibrato"
+key_mt32_defaults="mt32_defaults"
+key_lfo_enable="lfo_enable"
+key_lfo_frequency="lfo_frequency"
+
+# An instrument
+key_four_op="four_op"
+key_pseudo_four_op="pseudo_four_op"
+key_blank="blank"
+key_con12="con12"
+key_con34="con34"
+key_fb12="fb12"
+key_fb34="fb34"
+key_note_offset1="note_offset1"
+key_note_offset2="note_offset2"
+key_note_offset="note_offset"
+key_midi_velocity_offset="midi_velocity_offset"
+key_second_voice_detune="second_voice_detune"
+key_percussion_key_number="percussion_key_number"
+key_rhythm_mode="rhythm_mode"
+key_fixed_note="fixed_note"
+key_delay_on_ms="delay_on_ms"
+key_delay_off_ms="delay_off_ms"
+key_fbalg="fbalg"
+key_lfosens="lfosens"
+
+# The operators of an instrument: a prefix and a field
+op_c1="c1"
+op_m1="m1"
+op_c2="c2"
+op_m2="m2"
+field_attack="attack"
+field_decay="decay"
+field_sustain="sustain"
+field_release="release"
+field_level="level"
+field_ksl="ksl"
+field_fmul="fmul"
+field_trem="trem"
+field_vib="vib"
+field_sus="sus"
+field_env="env"
+field_wave="wave"

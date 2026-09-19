@@ -120,3 +120,19 @@ void AdlplugAudioProcessorEditor::process_notifications()
         Messages::finish_read(*queue, msg);
     }
 }
+
+//==============================================================================
+// The processor's side of the editor. It lives here so that plugin_processor.cc
+// does not have to know the editor at all: a test or a fuzz target can then
+// build the processor without the interface, and without the JUCE modules that
+// the interface needs.
+
+bool AdlplugAudioProcessor::hasEditor() const
+{
+    return true;
+}
+
+AudioProcessorEditor *AdlplugAudioProcessor::createEditor()
+{
+    return new AdlplugAudioProcessorEditor(*this, *parameter_block_);
+}

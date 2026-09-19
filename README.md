@@ -363,7 +363,10 @@ ctest --preset adl-debug
     again loads back the same;
   - the MIDI that a host sends, with the chip settings a project can hold: a
     note plays on every emulator core, and every sample that comes out is a
-    finite number.
+    finite number;
+  - the state that a host kept in a project: whatever the state held, what the
+    plugin writes afterwards is a state of its own, and opening and saving
+    that leaves it as it was.
 - When [pluginval](https://github.com/Tracktion/pluginval) or
   [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint) (plugin
   validators) is on the `PATH` at configure time, it validates the VST3 or
@@ -388,13 +391,16 @@ file named `crash-<hash>`. Such an input goes in
 `fuzz/regressions/opl3/<target>` (`opn2` for OPNplug-Next) together with the
 fix, so that the tests replay it from then on.
 
-The other target is `ADLplug_fuzz_midi_synth`, which plays MIDI. Its seed
-inputs are written by CMake, one for each emulator core the build has, so they
-come from the build directory:
+The other targets are `ADLplug_fuzz_midi_synth`, which plays MIDI, and
+`ADLplug_fuzz_state`, which reads the state that a host kept in a project.
+CMake writes the seed inputs of both — for the MIDI target, one for each
+emulator core the build has — so they come from the build directory:
 
 ```
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_midi_synth
 build/adl-sanitize/fuzz/ADLplug_fuzz_midi_synth -dict=fuzz/dict/midi.dict corpus build/adl-sanitize/fuzz/seeds/midi_synth
+cmake --build --preset adl-sanitize --target ADLplug_fuzz_state
+build/adl-sanitize/fuzz/ADLplug_fuzz_state -dict=fuzz/dict/state.dict corpus build/adl-sanitize/fuzz/seeds/state
 ```
 
 The editor tests open windows, so on Linux they need an X11 display with a
