@@ -1,0 +1,176 @@
+SPDX-FileCopyrightText: 2025-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-3.0-or-later
+
+The frequency models stay inside their tables when a tone is not a note
+
+A tone is a note plus the bend and whatever an instrument and a channel add to
+it, so it reaches well below 0 and well above 127. Seven of the eight frequency
+models take it as it comes:
+
+* oplModel_dmxFreq(), oplModel_apogeeFreq(), oplModel_9xFreq() and
+  oplModel_OConnellFreq() convert the tone to an unsigned type, which is
+  undefined for a tone below zero:
+
+    src/models/model_apogee.c:75:13: runtime error: -128 is outside the range of
+    representable values of type 'unsigned long'
+
+  oplModel_genericFreq() already holds the tone at zero first, and these do it
+  the same way. In oplModel_9xFreq() that was also the whole of a second report,
+  since the note it made out of the tone went on to shift by more than the width
+  of a word.
+
+* oplModel_ailFreq() adds an octave offset that counts how far below the table
+  the note was, and shifts the result into the block field, which is undefined
+  when the sum is negative:
+
+    src/models/model_ail.c:156:27: runtime error: left shift of negative
+    value -1
+
+  oplModel_hmiFreq() holds the octave at zero for this, with the comment "Don't
+  wrap everything to top!"; this does the same, in the same place.
+
+* oplModel_msAdLibFreq() adds a half-tone offset that a downward bend makes
+  negative, and then reads the frequency table at that note and shifts its
+  octave:
+
+    src/models/model_msadlib.c:111:12: runtime error: index -1 out of bounds for
+    type 'uint16_t[12]'
+
+  The lowest note is as far down as it goes.
+
+* s_hmi_bend_calc() holds an index at the size of the table it reads, which is
+  one past its last entry:
+
+    src/models/model_hmi_sos.c:102:19: runtime error: index 103 out of bounds
+    for type 'uint_fast32_t[103]'
+    AddressSanitizer: global-buffer-overflow
+
+  The note that the bend looks one step above is 114, the highest the caller
+  allows, so an ordinary high note is enough to read past the end. The last
+  entry of a table is its size less one.
+
+The first of these came out of a fuzz target of ADLplug-Next that plays MIDI
+through the real-time API, with the emulator and the volume model that a saved
+project can hold; the daily run found it in a quarter of an hour. The rest came
+from calling each model over the range of tones that a note, a bend and an
+instrument's offsets can make, from -128 to 256, under the address and undefined
+sanitizers.
+
+OPL3::noteOn() holds a tone below zero at zero -- "Lower than 0 is impossible!"
+-- so the four conversions want a caller that does not. The models are a library
+of their own, and opl_models.h offers every one of these functions, with the tone
+as a double, to whoever includes it.
+
+Over the notes themselves -- 0 to 127, every sixteenth of a tone, 2048 points
+for each of the eight models -- the answer changes at 210 of the 16384, and at
+every one of them the old answer came out of the fault. oplModel_ailFreq() at
+the tones below 12, where the octave went negative: a tone of 0 answered
+0xfeb2, the sign of the octave standing in the frequency, and now answers
+0x02b2. oplModel_msAdLibFreq() at 84 tones of the lowest octave, the ones
+whose bend takes the note below zero and the read off the front of the table.
+s_hmi_bend_calc() at the tones of 114 and 126, where it read past the end. The
+other 16174 answers are the same byte for byte.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/models/model_ail.c b/src/models/model_ail.c
+index abb5513..014acf1 100644
+--- a/src/models/model_ail.c
++++ b/src/models/model_ail.c
+@@ -147,6 +147,9 @@ uint16_t oplModel_ailFreq(double tone, uint32_t *mul_offset)
+ 
+     octave += octaveOffset;
+ 
++    if(octave < 0)
++        octave = 0; /* Don't wrap everything to top! */
++
+     while(octave > 7)
+     {
+         ++(*mul_offset);
+diff --git a/src/models/model_apogee.c b/src/models/model_apogee.c
+index 94d4122..cf9c895 100644
+--- a/src/models/model_apogee.c
++++ b/src/models/model_apogee.c
+@@ -72,6 +72,9 @@ uint16_t oplModel_apogeeFreq(double tone, uint32_t *mul_offset)
+ 
+     *mul_offset = 0;
+ 
++    if(tone < 0.0)
++        tone = 0.0;
++
+     noteI = (uint_fast32_t)(tone >= 12 ? tone - 12 : tone);
+     bendDec = tone - (int)tone;
+ 
+diff --git a/src/models/model_dmx.c b/src/models/model_dmx.c
+index 0eeee04..6bb50b9 100644
+--- a/src/models/model_dmx.c
++++ b/src/models/model_dmx.c
+@@ -147,6 +147,9 @@ uint16_t oplModel_dmxFreq(double tone, uint32_t *mul_offset)
+ 
+     *mul_offset = 0;
+ 
++    if(tone < 0.0)
++        tone = 0.0;
++
+     if(tone >= 12)
+         tone -= 12;
+ 
+diff --git a/src/models/model_hmi_sos.c b/src/models/model_hmi_sos.c
+index 9eac2f2..893720e 100644
+--- a/src/models/model_hmi_sos.c
++++ b/src/models/model_hmi_sos.c
+@@ -55,7 +55,7 @@ static uint_fast32_t s_hmi_bendtable[12] =
+         0 : \
+         ( \
+             (formula) >= (int32_t)maxVal ? \
+-            (int32_t)maxVal : \
++            (int32_t)maxVal - 1 : \
+             (formula) \
+         )\
+     )
+diff --git a/src/models/model_msadlib.c b/src/models/model_msadlib.c
+index 5e35d78..9f6ed19 100644
+--- a/src/models/model_msadlib.c
++++ b/src/models/model_msadlib.c
+@@ -108,6 +108,10 @@ uint16_t oplModel_msAdLibFreq(double tone, uint32_t *mul_offset)
+     }
+ 
+     note += halfToneoffset;
++
++    if(note < 0)
++        note = 0; /* Don't go below the lowest note! */
++
+     freq = s_msAdLibFreqTable[delta][note % 12];
+     octave = note / 12;
+ 
+diff --git a/src/models/model_oconnell.c b/src/models/model_oconnell.c
+index 640bce5..7cbff4e 100644
+--- a/src/models/model_oconnell.c
++++ b/src/models/model_oconnell.c
+@@ -64,6 +64,9 @@ uint16_t oplModel_OConnellFreq(double tone, uint32_t *mul_offset)
+ 
+     *mul_offset = 0;
+ 
++    if(tone < 0.0)
++        tone = 0.0;
++
+     note = (uint_fast32_t)tone;
+     bendDec = tone - (int)tone;
+ 
+diff --git a/src/models/model_win9x.c b/src/models/model_win9x.c
+index 2ec5f9d..1b86d5d 100644
+--- a/src/models/model_win9x.c
++++ b/src/models/model_win9x.c
+@@ -64,6 +64,9 @@ uint16_t oplModel_9xFreq(double tone, uint32_t *mul_offset)
+ 
+     *mul_offset = 0;
+ 
++    if(tone < 0.0)
++        tone = 0.0;
++
+     note = (uint_fast32_t)(tone >= 12 ? tone - 12 : tone);
+     bendDec = tone - (int)tone; /* 0.0 ± 1.0 - one halftone */
+ 
