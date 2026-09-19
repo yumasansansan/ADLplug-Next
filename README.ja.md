@@ -151,7 +151,7 @@ cmake --build --preset adl-release     # 上と同様です．
 
 `CMakePresets.json` に書かれているプリセット（あらかじめ用意されたビルドの設定）は，Windows，Linux，macOS のどれでも動作します．Clang，LLD（`CMAKE_LINKER_TYPE=LLD`）といった LLVM のツールチェーンと，Ninja が指定されています．バージョンは固定されていませんが，LLVM 23 を推奨します．なお，以下のオプションを `cmake` に渡すと，コンパイルの設定をカスタマイズできます．
 
-また，構成時に `patches/` にあるパッチがサブモジュールに適用されます．同梱しているライブラリに見つかった不具合を，ADLplug-Next が直したものです．それぞれ元のプロジェクトにも提出しており，取り込まれたものは削除します．なお，パッチを適用するとサブモジュールに変更が入るため，`git status` に表示されます．
+また，構成時に `patches/` にあるパッチがサブモジュールに適用されます．同梱しているライブラリと JUCE に見つかった不具合を，ADLplug-Next が直したものです．それぞれ元のプロジェクトにも提出しており，取り込まれたものは削除します．なお，パッチを適用するとサブモジュールに変更が入るため，`git status` に表示されます．
 
 オプションで，ADLplug-Next をビルドするか，OPNplug-Next をビルドするかを切り替えることができます．
 - OPL3 版（ADLplug-Next）をビルドするには，オプション `ADLplug_CHIP` を `OPL3` に設定します．
@@ -379,6 +379,8 @@ GPLv3 の第 13 条は，GPLv3 の著作物と AGPLv3 の著作物を組み合�
 | `thirdparty/OPN2BankEditor` | GNU GPL v3+（サンプルのバンクだけを取り込んでいます） |
 | `sources/opl3/adl/measurer` | GNU GPL v3+ |
 | `sources/opn2/adl/measurer` | GNU GPL v3+ |
+| `patches/libADLMIDI`，`patches/libOPNMIDI` | GNU GPL v3 以降 |
+| `patches/JUCE` | 変更する側のコードと同じ GNU AGPL v3 |
 | `sources/opl3/ui/components/opl3_waves.cc` | GNU LGPL v2.1+ |
 | `resources/opn2/LICENSE-DMXOPN2.txt` | MIT（DMXOPN2 バンクのライセンス） |
 | ビルドで生成される音色バンク | それぞれの利用条件（[音色バンク](#音色バンク) を参照） |

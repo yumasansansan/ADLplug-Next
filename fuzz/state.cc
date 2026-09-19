@@ -36,7 +36,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <memory>
 
 namespace {
@@ -44,30 +43,6 @@ namespace {
 // A project can be any size, and there is nothing to learn from a state far
 // larger than one the plugin writes.
 constexpr std::size_t size_max = 256 * 1024;
-
-// JUCE's XML writer walks off a null pointer when it writes, in the one-line
-// form that copyXmlToBinary() uses, an element that comes after text and has
-// children of its own: that element is written as though it were indented, and
-// the characters that would end its lines -- which the one-line form does not
-// have -- are handed to strlen() all the same. The state the plugin writes
-// holds no text (a PropertySet writes attributes), so the text goes out of the
-// input before it is wrapped, and nothing the plugin reads is lost with it.
-void remove_text_elements(juce::XmlElement &element)
-{
-    element.deleteAllTextElements();
-    for (juce::XmlElement *child : element.getChildIterator())
-        remove_text_elements(*child);
-}
-
-// A state of no bytes is the ordinary answer here: it is what the plugin writes
-// for a project whose plugin was never touched. JUCE's own comparison of two
-// blocks reaches memcmp() even then, and a block of no bytes has no address to
-// give it; the sanitizer refuses a null argument although nothing is read.
-bool same_bytes(const juce::MemoryBlock &a, const juce::MemoryBlock &b)
-{
-    return a.getSize() == b.getSize() &&
-        (a.isEmpty() || std::memcmp(a.getData(), b.getData(), a.getSize()) == 0);
-}
 
 }  // namespace
 
@@ -96,7 +71,6 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
 
     const juce::String text = juce::String::createStringFromData(data, static_cast<int>(size));
     if (const std::unique_ptr<juce::XmlElement> xml = juce::parseXML(text)) {
-        remove_text_elements(*xml);
         juce::MemoryBlock wrapped;
         juce::AudioProcessor::copyXmlToBinary(*xml, wrapped);
         processor.setStateInformation(wrapped.getData(), static_cast<int>(wrapped.getSize()));
@@ -111,7 +85,7 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
 
     juce::MemoryBlock again;
     processor.getStateInformation(again);
-    FUZZ_CHECK(same_bytes(written, again));
+    FUZZ_CHECK(written == again);
 
     return 0;
 }

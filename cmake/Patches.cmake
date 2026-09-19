@@ -8,9 +8,10 @@
 #
 # The patches of patches/, applied to the submodules when CMake configures, so
 # that every build has them. They are for the faults that ADLplug-Next finds in
-# the libraries it ships, the sanitizers' among them (plan D47): the fault is
-# fixed rather than left alone, and the patch is offered upstream. A patch goes
-# away once it is upstream and the submodule has moved on.
+# the libraries and the framework it ships, the sanitizers' among them (plan
+# D47): the fault is fixed rather than left alone, and the patch is offered
+# upstream. A patch goes away once it is upstream and the submodule has moved
+# on.
 #
 # Configuring twice is not an error: a patch that is already in place is left
 # alone. Editing one makes CMake configure again.
@@ -65,6 +66,10 @@ function(adlplug_patch directory patch)
   message(STATUS "Patch: ${patch}")
 endfunction()
 
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0001-xml-the-one-line-form-has-no-line-endings-to-write.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0002-memory-block-two-blocks-of-no-bytes-are-equal.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0001-esfmu-the-rhythm-volume-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libADLMIDI"

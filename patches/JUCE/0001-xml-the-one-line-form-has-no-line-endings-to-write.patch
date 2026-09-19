@@ -1,0 +1,57 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+The one-line form of the XML writer has no line endings to write
+
+XmlElement::writeTo() turns the line endings off by passing a null
+newLineChars, and says so by starting the indentation level at -1. That is the
+form XmlElement::TextFormat::singleLine() asks for, and the form
+AudioProcessor::copyXmlToBinary() writes the state of every plug-in in.
+
+writeElementAsText() then breaks the pair: a child that comes after a text node
+is written at indentation level 0, whatever level its parent had, and at level 0
+the guards let the null newLineChars reach
+operator<< (OutputStream&, const char*), which hands it to strlen():
+
+  modules/juce_core/streams/juce_OutputStream.cpp:379:33: runtime error: null
+  pointer passed as argument 1, which is declared to never be null
+
+The smallest document that shows it is <a>t<b><c/></b></a>: text, and then an
+element that has an element of its own inside it. UndefinedBehaviorSanitizer
+stops there; a build without it reads address zero, or, since the compiler may
+take the parameter's nonnull for granted, writes nothing at all.
+
+The child now keeps the level of a parent that has no line endings, so the
+guards mean what they say again. Where there are line endings, nothing changes.
+
+A fuzz target of ADLplug-Next found it, one that gives the plug-in's
+setStateInformation() the text of a project's state: it wraps the text the way
+a host keeps it, with copyXmlToBinary(), and a state that holds text between
+its elements is enough.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/modules/juce_core/xml/juce_XmlElement.cpp b/modules/juce_core/xml/juce_XmlElement.cpp
+index 9cebaf0f15..aa664dff28 100644
+--- a/modules/juce_core/xml/juce_XmlElement.cpp
++++ b/modules/juce_core/xml/juce_XmlElement.cpp
+@@ -314,9 +314,13 @@ void XmlElement::writeElementAsText (OutputStream& outputStream,
+                     if (indentationLevel >= 0 && ! lastWasTextNode)
+                         outputStream << newLineChars;
+ 
+-                    child->writeElementAsText (outputStream,
+-                                               lastWasTextNode ? 0 : (indentationLevel + (indentationLevel >= 0 ? 2 : 0)), lineWrapLength,
+-                                               newLineChars);
++                    // An indentation level below zero says that there are no line endings
++                    // to write, and newLineChars is then null, so a child must not be
++                    // given a level of its own that would ask for one.
++                    const auto childIndentation = indentationLevel < 0 ? -1
++                                                : (lastWasTextNode ? 0 : indentationLevel + 2);
++
++                    child->writeElementAsText (outputStream, childIndentation, lineWrapLength, newLineChars);
+                     lastWasTextNode = false;
+                 }
+             }

@@ -1,0 +1,43 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+Two blocks of no bytes are equal without memcmp being given a null pointer
+
+MemoryBlock::matches(), which is how two blocks are compared, calls memcmp()
+whenever the two sizes are equal -- including when both are zero. A block of no
+bytes holds no address, so memcmp() is given a null pointer, which its
+declaration forbids however many bytes it is asked to compare:
+
+  modules/juce_core/memory/juce_MemoryBlock.cpp:122:24: runtime error: null
+  pointer passed as argument 1, which is declared to never be null
+
+Comparing an empty block with an empty block is ordinary: a plug-in whose
+getStateInformation() has nothing to say leaves the block it is given empty,
+and comparing two such states is how a host, or a test, sees that nothing
+changed. Nothing is read either way, so the answer stays as it was; only the
+call goes away.
+
+A fuzz target of ADLplug-Next found it, one that reads and writes the plug-in's
+state and compares what comes out.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/modules/juce_core/memory/juce_MemoryBlock.cpp b/modules/juce_core/memory/juce_MemoryBlock.cpp
+index 6ae8a4fec2..8f13af2999 100644
+--- a/modules/juce_core/memory/juce_MemoryBlock.cpp
++++ b/modules/juce_core/memory/juce_MemoryBlock.cpp
+@@ -118,8 +118,10 @@ bool MemoryBlock::operator!= (const MemoryBlock& other) const noexcept
+ 
+ bool MemoryBlock::matches (const void* dataToCompare, size_t dataSize) const noexcept
+ {
++    // A block of no bytes has no address to hand memcmp, which may not be given
++    // a null pointer even when there is nothing at all to compare.
+     return size == dataSize
+-            && memcmp (data, dataToCompare, size) == 0;
++            && (size == 0 || memcmp (data, dataToCompare, size) == 0);
+ }
+ 
+ //==============================================================================
