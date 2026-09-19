@@ -46,10 +46,16 @@ inline std::string_view name_view(std::span<const char> field) noexcept
     return {field.data(), static_cast<std::size_t>(end - field.begin())};
 }
 
+// The text of a field, which need not be UTF-8: a bank file names its banks and
+// its instruments in bytes of its own, and a field keeps what it is given.
+// String::fromUTF8 asserts on such bytes and reads past what they mean, so the
+// text is made the way JUCE reads text whose encoding is not known -- UTF-8 when
+// the bytes are UTF-8, Windows-1252 when they are not -- which is text that can
+// be shown, and that the state of a project can keep and bring back.
 inline String name_from_field(std::span<const char> field)
 {
     const std::string_view text = name_view(field);
-    return String::fromUTF8(text.data(), static_cast<int>(text.size()));
+    return String::createStringFromData(text.data(), static_cast<int>(text.size()));
 }
 
 // Stores a name in a field, leaving out the characters which do not fit whole.

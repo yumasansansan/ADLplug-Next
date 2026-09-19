@@ -206,3 +206,17 @@ ADLPLUG_TEST(bank_id_integer)
     // Bits outside the three fields are ignored.
     CHECK(Bank_Id::from_integer(0xffffffffu) == Bank_Id(127, 127, true));
 }
+
+ADLPLUG_TEST(bank_id_is_a_bank)
+{
+    // The library numbers a bank with two seven-bit halves and refuses anything
+    // else, so those are the numbers the plugin can hold. A bank file names its
+    // own numbers, and a byte of one can be higher than that.
+    CHECK(static_cast<bool>(Bank_Id(0, 0, false)));
+    CHECK(static_cast<bool>(Bank_Id(127, 127, true)));
+    CHECK(!Bank_Id(128, 0, false));
+    CHECK(!Bank_Id(0, 128, false));
+    CHECK(!Bank_Id(255, 255, true));
+    // The number an empty slot keeps is no bank.
+    CHECK(!Bank_Id());
+}

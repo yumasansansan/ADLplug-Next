@@ -31,6 +31,7 @@
 #include <cassert>
 #include <cstring>
 #include <memory>
+#include <span>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -648,7 +649,11 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
     }
     case std::to_underlying(User_Message::SelectProgram): {
         const auto body = Messages::body<Messages::User::SelectProgram>(msg);
-        if (body.part >= selection_.size())
+        // A program the plugin has no place for is no selection: a selection goes
+        // into the state of a project, and reading a state takes only a program
+        // that is one, so a selection that was never a program would be a project
+        // that changes by being opened and saved.
+        if (body.part >= selection_.size() || body.program >= Bank_Manager::program_count)
             break;
         Selection &sel = selection_[body.part];
         if (sel.bank != body.bank || sel.program != body.program) {
@@ -927,7 +932,7 @@ void AdlplugAudioProcessor::write_state(MemoryBlock &data)
     root.addChildElement(get_player_global_parameters(pl).to_properties().createXml("global").release());
 
     PropertySet common_set;
-    common_set.setValue("bank_title", String(CharPointer_UTF8(bank_title_)));
+    common_set.setValue("bank_title", name_from_field(std::span(bank_title_, bank_title_size_max)));
     common_set.setValue("part", static_cast<int>(active_part_));
     common_set.setValue("master_volume", static_cast<double>(pb.p_mastervol->get()));
     root.addChildElement(common_set.createXml("common").release());

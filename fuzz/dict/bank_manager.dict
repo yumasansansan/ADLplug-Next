@@ -1,0 +1,79 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# libFuzzer's dictionary for the target that sends the editor's messages
+# (-dict=): the records whose first bit is set, which CMake cannot write into
+# the seed, and the bank numbers worth asking for. fuzz/bank_manager.cc says
+# what each record is and which bytes follow it.
+
+# The records the seed cannot hold: selecting a program, the active part, the
+# title of the bank, clearing every bank, a measurement coming back, the global
+# parameters, preparing the plugin again, and the best number of
+# four-operator channels
+record_select_a_program="\x80"
+record_select_on_the_last_part="\x8f"
+record_set_the_active_part="\x90"
+record_set_the_title="\xa0"
+record_set_a_long_title="\xaf"
+record_clear_the_banks="\xb0"
+record_clear_the_banks_and_tell="\xb1"
+record_a_measurement="\xc0"
+record_a_measurement_of_what_is_there="\xc3"
+record_the_global_parameters="\xd0"
+record_prepare_again="\xe0"
+record_the_four_operator_count="\xf0"
+
+# The records the seed does hold, for a mutation that wants one whole: a block
+# of audio, asking for the layout of the banks and for everything, and loading
+# an instrument
+record_a_block="\x02"
+record_the_longest_block="\x0f"
+record_ask_for_the_banks="\x10"
+record_ask_for_everything="\x11"
+record_ask_for_the_selections="\x13"
+record_load_an_instrument="\x25"
+record_make_an_instrument="\x31"
+record_delete_an_instrument="\x41"
+record_delete_a_bank="\x51"
+record_rename_a_bank="\x65"
+record_rename_a_program="\x75"
+
+# The banks the plugin starts with, as the bytes that name one: the melodic bank
+# of the General MIDI pack and its percussive one
+bank_the_first_melodic="\x00\x00"
+bank_the_first_percussive="\x00\x00\x00"
+
+# The numbers that are not banks: the plugin has to refuse them, since a slot
+# that is not a bank is one the editor never shows and a project never keeps
+bank_just_past_the_last="\x7f\x00"
+bank_the_highest="\xff\xff"
+bank_the_empty_slot="\xff\xff\x00"
+
+# A whole record with the bank and the program it works on: the first program of
+# the first melodic bank, which is what a fresh plugin selects. Loading one
+# carries a byte of what else the message says -- the part, whether the plugin
+# tells the editor, and whether the worker measures what it was given
+load_into_the_first_program="\x25\x00\x00\x00\x11"
+load_and_have_it_measured="\x25\x00\x00\x00\x13"
+make_in_the_first_program="\x31\x00\x00\x00"
+delete_the_first_program="\x41\x00\x00\x00"
+delete_the_first_bank="\x51\x00\x00"
+select_the_first_program="\x80\x00\x00\x00"
+
+# The programs at the ends: the first, the last, and the first number that is no
+# program at all
+program_the_first="\x00"
+program_the_last="\x7f"
+program_past_the_last="\x80"
+
+# What a name may be made of: a bank file's name field is bytes, not text, and
+# the plugin has to make something of them either way
+name_latin1="\xe9tude"
+name_stray_continuations="\x80\x81\x82\x83"
+name_a_cut_character="\xf0\x9f\x8e"
+name_the_highest_bytes="\xff\xff\xff\xff"

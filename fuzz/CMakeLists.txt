@@ -357,6 +357,31 @@ adlplug_fuzz_target(measurement LONG_RUNS_ONLY
   DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/measurement.dict"
   ARGUMENTS "-timeout=60" "-max_len=64")
 
+# The messages the editor sends the plugin about its banks, one after another,
+# and the bookkeeping they leave behind. The processor is the same one the
+# state target builds, so the sources, the libraries and the definitions are
+# the same lists. The seed makes a bank, puts two programs in it, names both
+# and deletes one, asking for the layout of the banks in between; every byte
+# of it is between 1 and 127, which is what CMake can write, so the records
+# whose first bit is set are not in it -- fuzz/dict/bank_manager.dict has
+# those, along with the numbers that are not banks. -timeout says what an
+# input that will not end looks like: the parameters of a selected program ask
+# the worker for a measurement, and a measurement can take a second or two.
+set(ADLplug_FUZZ_BANKS_SEEDS "${CMAKE_CURRENT_BINARY_DIR}/seeds/bank_manager")
+file(MAKE_DIRECTORY "${ADLplug_FUZZ_BANKS_SEEDS}")
+string(ASCII 37 1 1 5 17 2 17 5 101 1 1 66 97 110 107 32 111 110 101 49 1 1 7 3
+  117 1 1 7 80 114 111 103 32 111 110 101 65 1 1 5 1 16 4
+  ADLplug_FUZZ_BANKS_SEED)
+file(WRITE "${ADLplug_FUZZ_BANKS_SEEDS}/a-bank-of-two-programs" "${ADLplug_FUZZ_BANKS_SEED}")
+
+adlplug_fuzz_target(bank_manager JUCE
+  OWN_SOURCES ${ADLplug_FUZZ_PROCESSOR_SOURCES}
+  LIBRARIES ${ADLplug_FUZZ_PROCESSOR_LIBRARIES}
+  DEFINITIONS ${ADLplug_FUZZ_PROCESSOR_DEFINITIONS}
+  SEEDS "${ADLplug_FUZZ_BANKS_SEEDS}"
+  DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/bank_manager.dict"
+  ARGUMENTS "-timeout=60")
+
 # resources.c embeds the pack of banks that the build makes for the plugin, and
 # a source property belongs to the directory that compiles the file.
 adlplug_embed_banks("${PROJECT_SOURCE_DIR}/sources/resources.c")

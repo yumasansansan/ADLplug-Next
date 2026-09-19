@@ -105,6 +105,13 @@ public:
 
     Parameter_Block &parameter_block() const { return *parameter_block_; }
 
+    // The bookkeeping of the banks: which slots hold which banks, which of their
+    // programs are in use, and what they are called. The editor sees it only
+    // through the notifications the processor sends, and the tests compare the
+    // two. It is made with the player, so only a prepared processor has one (a
+    // host saving or restoring a state makes one as well).
+    Bank_Manager &bank_manager() const { return *bank_manager_; }
+
     void mark_for_notification(unsigned changebit)
         { to_notify_.set(changebit); }
     bool unmark_for_notification(unsigned changebit)

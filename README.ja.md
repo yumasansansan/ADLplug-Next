@@ -219,6 +219,7 @@ ctest --preset adl-debug
   - プロジェクトにホストが保存した状態: どんな状態を与えても，そのあとプラグインが書き出すのは自分の状態で，それを開いて保存し直しても変わらないことを確認します．
   - プラグインが読み込まれている間にホストがすること: バッファに入れる MIDI，パラメータに書くオートメーション，要求してくるブロックを与え，出てくる標本がすべて有限の値であること，そしてプラグインが数えているチャンネルごとの発音数が，そのチャンネルで鳴っているとプラグインが思っている音の数と一致することを確認します．
   - プラグインが長さを測る楽器: ホストに音の終わりを伝えるための測定で，返ってくる数がすべて有限で，鳴らして聴いた時間より長い時間を申告しないことを確認します．
+  - エディタがバンクについて送るメッセージ（楽器の読み込み・作成・削除，バンクの削除，どちらの名前の変更，プログラムの選択）: プログラムを持つ枠がプラグインの見せられるバンクであること，同じバンクが 2 つの枠にないこと，プログラムが使用中とされるのは中の楽器が空でないときだけであること，プラグインがエディタに伝える内容がプラグインの持っている内容と一致すること，そしてプラグインを準備し直しても保存される状態が変わらないことを確認します．
 - configure のときに [pluginval](https://github.com/Tracktion/pluginval) や [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint)（プラグインの検証ツール）が `PATH` にあれば，それらを使って VST3・LV2 プラグインも検証します．
 
 同じ fuzz の対象は，[libFuzzer](https://llvm.org/docs/LibFuzzer.html)（入力を自動で作り出し，それまでどの入力も通らなかったコードに届いたものを残していく fuzz のツール）付きでもビルドできます．Linux で，サニタイザと組み合わせて使います（Windows 版の LLVM の libFuzzer は，プラグインとリンクできません）．ADLplug-Next の場合の例です．
@@ -232,7 +233,7 @@ build/adl-sanitize/fuzz/ADLplug_fuzz_bank_file -dict=fuzz/dict/wopl.dict corpus 
 
 不具合を起こす入力が見つかるか，止められるまで動き続けます（`-max_total_time=<秒数>` で時間を区切れます）．見つかった入力は `crash-<ハッシュ>` という名前のファイルに書き出されます．その入力は，修正と一緒に `fuzz/regressions/opl3/<対象名>`（OPNplug-Next では `opn2`）に加えてください．以後，テストでその入力が再生されます．
 
-残る 4 つの対象は，MIDI を鳴らす `ADLplug_fuzz_midi_synth`，プロジェクトにホストが保存した状態を読む `ADLplug_fuzz_state`，ホストと同じようにプラグインを動かす `ADLplug_fuzz_host`，そして楽器の長さを測る `ADLplug_fuzz_measurement` です．前の 3 つは種の入力を CMake が書き出すので（MIDI の方は，ビルドしたコアごとに 1 つずつ）ビルドディレクトリから渡し，最後の 1 つは `fuzz/seeds/` にあります．
+残る 5 つの対象は，MIDI を鳴らす `ADLplug_fuzz_midi_synth`，プロジェクトにホストが保存した状態を読む `ADLplug_fuzz_state`，ホストと同じようにプラグインを動かす `ADLplug_fuzz_host`，エディタがバンクについて送るメッセージを送る `ADLplug_fuzz_bank_manager`，そして楽器の長さを測る `ADLplug_fuzz_measurement` です．最後の 1 つを除いて種の入力は CMake が書き出すので（MIDI の方は，ビルドしたコアごとに 1 つずつ）ビルドディレクトリから渡し，測定の種は `fuzz/seeds/` にあります．
 
 ```
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_midi_synth
@@ -241,6 +242,8 @@ cmake --build --preset adl-sanitize --target ADLplug_fuzz_state
 build/adl-sanitize/fuzz/ADLplug_fuzz_state -dict=fuzz/dict/state.dict corpus build/adl-sanitize/fuzz/seeds/state
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_host
 build/adl-sanitize/fuzz/ADLplug_fuzz_host -dict=fuzz/dict/host.dict corpus build/adl-sanitize/fuzz/seeds/host
+cmake --build --preset adl-sanitize --target ADLplug_fuzz_bank_manager
+build/adl-sanitize/fuzz/ADLplug_fuzz_bank_manager -dict=fuzz/dict/bank_manager.dict corpus build/adl-sanitize/fuzz/seeds/bank_manager
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_measurement
 build/adl-sanitize/fuzz/ADLplug_fuzz_measurement -dict=fuzz/dict/measurement.dict corpus fuzz/seeds/opl3/measurement
 ```

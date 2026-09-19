@@ -56,3 +56,24 @@ ADLPLUG_TEST(name_field)
     copy_name_to_field(field, "");
     CHECK(name_view(field).empty());
 }
+
+ADLPLUG_TEST(name_field_of_other_bytes)
+{
+    // A bank file names its banks and instruments in bytes of its own, which
+    // need not be UTF-8, and a field keeps them as they are. Turning such a
+    // field into text gives text all the same -- the bytes read as
+    // Windows-1252, the way JUCE reads text whose encoding it does not know --
+    // so that it can be shown, and written into the state of a project and read
+    // back.
+    const char latin[8] = {'\xe9', 't', 'u', 'd', 'e', '\0', '\0', '\0'};
+    CHECK(name_from_field(latin) == String::fromUTF8("\xc3\xa9tude"));
+
+    // Bytes that are no text at all still come back as text, and as valid
+    // UTF-8: a state that held them is read back the same.
+    const char stray[4] = {'\x80', '\x81', '\x82', '\x83'};
+    const String text = name_from_field(stray);
+    CHECK(text.isNotEmpty());
+    char again[16] {};
+    copy_name_to_field(again, text);
+    CHECK(name_from_field(again) == text);
+}

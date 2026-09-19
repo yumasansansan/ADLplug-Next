@@ -374,7 +374,13 @@ ctest --preset adl-debug
     sounding;
   - the instruments whose length the plugin measures, which is how a host is
     told when a note has finished: a measurement gives back numbers that are
-    finite, and claims no more time than it played and listened for.
+    finite, and claims no more time than it played and listened for;
+  - the messages the editor sends about the banks — load an instrument, make
+    one, delete one, delete the bank, rename either, select a program: a slot
+    that holds programs is a bank the plugin can show, no two slots are the same
+    bank, a program counts as used exactly when the instrument in it is not
+    blank, what the plugin tells the editor is what the plugin holds, and
+    preparing the plugin again leaves the state it would save unchanged.
 - When [pluginval](https://github.com/Tracktion/pluginval) or
   [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint) (plugin
   validators) is on the `PATH` at configure time, it validates the VST3 or
@@ -401,11 +407,12 @@ fix, so that the tests replay it from then on.
 
 The other targets are `ADLplug_fuzz_midi_synth`, which plays MIDI,
 `ADLplug_fuzz_state`, which reads the state that a host kept in a project,
-`ADLplug_fuzz_host`, which plays the plugin the way a host does, and
-`ADLplug_fuzz_measurement`, which measures how long an instrument sounds. CMake
-writes the seed inputs of the first three — for the MIDI target, one for each
-emulator core the build has — so those come from the build directory, while the
-seed of the last is in `fuzz/seeds/`:
+`ADLplug_fuzz_host`, which plays the plugin the way a host does,
+`ADLplug_fuzz_bank_manager`, which sends the messages the editor sends about the
+banks, and `ADLplug_fuzz_measurement`, which measures how long an instrument
+sounds. CMake writes the seed inputs of all but the last — for the MIDI target,
+one for each emulator core the build has — so those come from the build
+directory, while the seed of the measurement is in `fuzz/seeds/`:
 
 ```
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_midi_synth
@@ -414,6 +421,8 @@ cmake --build --preset adl-sanitize --target ADLplug_fuzz_state
 build/adl-sanitize/fuzz/ADLplug_fuzz_state -dict=fuzz/dict/state.dict corpus build/adl-sanitize/fuzz/seeds/state
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_host
 build/adl-sanitize/fuzz/ADLplug_fuzz_host -dict=fuzz/dict/host.dict corpus build/adl-sanitize/fuzz/seeds/host
+cmake --build --preset adl-sanitize --target ADLplug_fuzz_bank_manager
+build/adl-sanitize/fuzz/ADLplug_fuzz_bank_manager -dict=fuzz/dict/bank_manager.dict corpus build/adl-sanitize/fuzz/seeds/bank_manager
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_measurement
 build/adl-sanitize/fuzz/ADLplug_fuzz_measurement -dict=fuzz/dict/measurement.dict corpus fuzz/seeds/opl3/measurement
 ```

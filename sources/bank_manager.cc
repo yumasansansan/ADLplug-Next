@@ -82,7 +82,7 @@ void Bank_Manager::clear_banks(bool notify)
         if (!info)
             continue;
         pl_.ensure_remove_bank(info.bank);
-        info.id = Bank_Id();
+        forget_bank(info);
     }
 
     if (notify)
@@ -152,7 +152,15 @@ void Bank_Manager::send_measurement_requests()
 
 bool Bank_Manager::load_program(const Bank_Id &id, unsigned program, const Instrument &ins, unsigned flags)
 {
-    if (program >= program_count)
+    // What comes in is from outside: a bank file names its own bank numbers and
+    // fills its own instruments (Midi_Bank::from_wopl), and so does the state of
+    // a project. The player is the one that says whether it will hold them, so
+    // nothing here is recorded that the player did not take: a number that is
+    // not a bank it can hold is refused before a slot is given one, and the
+    // calls below are all answered rather than assumed. Otherwise a slot would
+    // keep a bank reference that was never set, or a program would count as
+    // being in use while the player still had the instrument that was there.
+    if (program >= program_count || !id)
         return false;
 
     Player &pl = pl_;
@@ -185,25 +193,28 @@ bool Bank_Manager::load_program(const Bank_Id &id, unsigned program, const Instr
             pl.ensure_remove_bank(info.bank);
         }
 
+        forget_bank(info);
+        Bank_Ref bank;
+        if (!pl.get_bank(id, Player::Bank_CreateRt, bank))
+            return false;
         info.id = id;
-        pl.ensure_get_bank(id, Player::Bank_CreateRt, info.bank);
-        info.used.reset();
-        info.to_notify.reset();
-        info.to_measure.reset();
-        std::memset(info.bank_name, 0, sizeof info.bank_name);
-        info.ins_names = {};
+        info.bank = bank;
     }
 
     Bank_Info &info = bank_infos_[*slot];
 
     Instrument old_ins;
-    pl.ensure_get_instrument(info.bank, program, old_ins);
+    if (!pl.get_instrument(info.bank, program, old_ins))
+        return false;
 
     const bool replace = (flags & LP_NoReplaceExisting) == 0 || old_ins.blank();
     if (!replace)
         return false;
 
-    pl.ensure_set_instrument(info.bank, program, ins);
+    // The library takes an instrument of the version it knows and refuses any
+    // other, so this can say no to what it was given.
+    if (!pl.set_instrument(info.bank, program, ins))
+        return false;
 
     // copy name
     static_assert(sizeof ins.name == name_size);
@@ -242,9 +253,11 @@ bool Bank_Manager::delete_program(const Bank_Id &id, unsigned program, unsigned 
         return false;
 
     Instrument ins;
-    pl_.ensure_get_instrument(info.bank, program, ins);
+    if (!pl_.get_instrument(info.bank, program, ins))
+        return false;
     ins.blank(true);
-    pl_.ensure_set_instrument(info.bank, program, ins);
+    if (!pl_.set_instrument(info.bank, program, ins))
+        return false;
     info.used.reset(program);
 
     if ((flags & LP_Notify) != 0)
@@ -260,7 +273,7 @@ bool Bank_Manager::delete_bank(const Bank_Id &id, unsigned flags)
 
     Bank_Info &info = bank_infos_[*slot];
     pl_.ensure_remove_bank(info.bank);
-    info.id = Bank_Id();
+    forget_bank(info);
 
     if ((flags & LP_Notify) != 0)
         slots_notify_flag_ = true;
@@ -283,7 +296,8 @@ bool Bank_Manager::load_measurement(const Bank_Id &id, unsigned program, const I
 
     Bank_Info &info = bank_infos_[*slot];
     Instrument current;
-    pl_.ensure_get_instrument(info.bank, program, current);
+    if (!pl_.get_instrument(info.bank, program, current))
+        return false;
 
     if (!ins.equal_instrument_except_delays(current)) {
         trace("The program for received measurement does not match");
@@ -294,7 +308,8 @@ bool Bank_Manager::load_measurement(const Bank_Id &id, unsigned program, const I
 
     current.delay_on_ms = kon;
     current.delay_off_ms = koff;
-    pl_.ensure_set_instrument(info.bank, program, current);
+    if (!pl_.set_instrument(info.bank, program, current))
+        return false;
 
     if (notify)
         info.to_notify.set(program);
@@ -334,8 +349,7 @@ bool Bank_Manager::find_program(const Bank_Id &id, unsigned program, Instrument 
     if (!slot)
         return false;
 
-    pl_.ensure_get_instrument(bank_infos_[*slot].bank, program, ins);
-    return true;
+    return pl_.get_instrument(bank_infos_[*slot].bank, program, ins);
 }
 
 void Bank_Manager::initialize_all_banks()
@@ -373,11 +387,32 @@ void Bank_Manager::initialize_all_banks()
 
     trace("Clear slots %u-%u", index, bank_reserve_size - 1);
     for (; index < bank_reserve_size; ++index)
-        bank_infos_[index].id = Bank_Id();
+        forget_bank(bank_infos_[index]);
+}
+
+// A slot that is no longer a bank holds nothing. Without this, the bits and the
+// names of the bank that was there would stay until something took the slot, and
+// anything that read them without asking first whether the slot is a bank would
+// find programs in a bank that is not there.
+void Bank_Manager::forget_bank(Bank_Info &info) noexcept
+{
+    info.id = Bank_Id();
+    info.bank = Bank_Ref();
+    info.used.reset();
+    info.to_notify.reset();
+    info.to_measure.reset();
+    std::memset(info.bank_name, 0, sizeof info.bank_name);
+    info.ins_names = {};
 }
 
 std::optional<unsigned> Bank_Manager::find_slot(const Bank_Id &id) const noexcept
 {
+    // A number that is not a bank names no slot. An empty slot keeps such a
+    // number of its own, so without this a message could name one and rename or
+    // delete the empty slot it found.
+    if (!id)
+        return std::nullopt;
+
     for (unsigned i = 0; i < bank_reserve_size; ++i) {
         if (bank_infos_[i].id == id)
             return i;

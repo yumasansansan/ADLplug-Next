@@ -90,6 +90,7 @@ public:
 
 private:
     void initialize_all_banks();
+    static void forget_bank(Bank_Info &info) noexcept;
 
     std::optional<unsigned> find_slot(const Bank_Id &id) const noexcept;
     std::optional<unsigned> find_empty_slot() const noexcept;
