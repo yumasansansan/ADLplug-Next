@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# libFuzzer's dictionary for the target that plays the processor the way a host
+# does (-dict=): the records that fuzz/host.cc reads, and the status bytes of the
+# MIDI a host puts in its buffer. The two kinds of record whose first bit is set
+# are here because the seed cannot hold them: CMake writes the seed, and it can
+# only write bytes below 128.
+
+# The records
+record_midi_one_byte="\x00"
+record_midi_two_bytes="\x01"
+record_midi_three_bytes="\x02"
+record_midi_four_bytes="\x03"
+record_midi_at_sample_four="\x11"
+record_midi_at_sample_fifteen="\x3e"
+record_block_one_sample="\x40"
+record_block_of_a_few="\x43"
+record_block_half="\x4f"
+record_block_all="\x5f"
+record_note_channel_0="\x60"
+record_note_channel_9="\x69"
+record_note_channel_15="\x6f"
+record_automation="\x80"
+record_automation_high="\xbf"
+record_prepare_again="\xc0"
+record_block_bypassed="\xc1"
+record_reset="\xc2"
+record_all_notes_off="\xc3"
+
+# A note and a controller, as a record carries them
+note_middle_c="\x3c"
+note_lowest="\x00"
+note_highest="\x7f"
+velocity_loud="\x7f"
+velocity_off="\x00"
+
+# The status bytes of the MIDI a host sends, on the first channel
+status_note_off="\x80"
+status_note_on="\x90"
+status_aftertouch="\xa0"
+status_controller="\xb0"
+status_program="\xc0"
+status_channel_pressure="\xd0"
+status_bend="\xe0"
+status_sysex="\xf0"
+status_sysex_end="\xf7"
+status_reset="\xff"
+channel_drums="\x09"
+
+# The controllers the plugin acts on
+controller_bank_msb="\x00"
+controller_bank_lsb="\x20"
+controller_volume="\x07"
+controller_pan="\x0a"
+controller_expression="\x0b"
+controller_all_sound_off="\x78"
+controller_reset_all="\x79"
+controller_all_notes_off="\x7b"
+
+# The System Exclusive messages the plugin answers, whole
+sysex_gm_reset="\xf0\x7e\x7f\x09\x01\xf7"
+sysex_gs_reset="\xf0\x41\x10\x42\x12\x40\x00\x7f\x00\x41\xf7"
+sysex_master_volume="\xf0\x7f\x7f\x04\x01\x00\x7f\xf7"
