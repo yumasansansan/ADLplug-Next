@@ -77,7 +77,7 @@ void create_default_configuration(CSimpleIniA &ini)
 }
 
 // Where upstream ADLplug, or OPNplug, keeps its configuration. ADLplug-Next
-// starts from it when it has none of its own (plan D02), and saves to its own.
+// starts from it when it has none of its own, and saves to its own.
 File upstream_system_file_path()
 {
 #if defined(JUCE_LINUX)

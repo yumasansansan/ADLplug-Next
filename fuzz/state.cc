@@ -6,11 +6,11 @@
 // GNU General Public License, version 3 or any later version
 // (LICENSES/GPL-3.0-or-later.txt).
 //
-// F1: the state that a host kept in a project (plan D48). A project is the one
-// input that the plugin is handed whole: banks, instruments, the selection of
-// each part, the chip settings and the master volume, all of them written by a
-// version of the plugin that may not be this one, and edited or damaged by
-// anything that has touched the project since.
+// The state that a host kept in a project. A project is the one input that the
+// plugin is handed whole: banks, instruments, the selection of each part, the
+// chip settings and the master volume, all of them written by a version of the
+// plugin that may not be this one, and edited or damaged by anything that has
+// touched the project since.
 //
 // The input is the text of the state. A host keeps it as
 // AudioProcessor::copyXmlToBinary() leaves it, which is a header and a
@@ -27,8 +27,8 @@
 // leave a host's undo history and its "unsaved changes" mark lying.
 //
 // Reading a state makes a player, which loads the plugin's own bank of
-// instruments, so one input costs a few milliseconds; the audio is left to F3
-// and F5.
+// instruments, so one input costs a few milliseconds; the audio is left to the
+// target that plays MIDI, and to the one that will play the processor.
 
 #include "fuzz.h"
 #include "plugin_processor.h"

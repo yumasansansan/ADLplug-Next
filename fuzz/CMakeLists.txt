@@ -6,7 +6,7 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-# The fuzz targets (plan D48). Each target is a file <name>.cc that defines
+# The fuzz targets. Each target is a file <name>.cc that defines
 # LLVMFuzzerTestOneInput, and is built two ways:
 #  - with ADLplug_BUILD_TESTS, as ADLplug_fuzz_<name>_replay, the target and
 #    replay.cc, which CTest runs as fuzz.<name> on the target's seed inputs and
@@ -139,18 +139,18 @@ function(adlplug_fuzz_target name)
   endif()
 endfunction()
 
-# F2: the bank and instrument files that people open.
+# The bank and instrument files that people open.
 adlplug_fuzz_target(bank_file
   OWN_SOURCES "${PROJECT_SOURCE_DIR}/sources/${ADLplug_FUZZ_CHIP}/adl/instrument.cc"
   OTHER_SOURCES "${ADLplug_FUZZ_FILE_SOURCE}"
   SEEDS ${ADLplug_FUZZ_BANK_SEEDS}
   DICTIONARY "${ADLplug_FUZZ_FILE_DICTIONARY}")
 
-# F3: the MIDI that a host sends, and the synthesis it drives. This one plays,
-# so it links the library instead of compiling the sources it tests: the
-# emulator cores, the real-time API and the MIDI driver are most of it. The
-# libFuzzer build gives the library coverage instrumentation below, so that the
-# fuzzer can see inside it.
+# The MIDI that a host sends, and the synthesis it drives. This one plays, so
+# it links the library instead of compiling the sources it tests: the emulator
+# cores, the real-time API and the MIDI driver are most of it. The libFuzzer
+# build gives the library coverage instrumentation below, so that the fuzzer
+# can see inside it.
 if(ADLplug_CHIP STREQUAL "OPL3")
   set(ADLplug_FUZZ_PLAY_LIBRARY ADLMIDI_static)
   set(ADLplug_FUZZ_PLAY_BANK "${ADLplug_FUZZ_LIBRARY}/fm_banks/wopl_files/GM-By-J.A.Nguyen-and-Wohlstand.wopl")
@@ -162,8 +162,8 @@ endif()
 # A seed for each emulator core of the build: it plays a note on that core and
 # generates a moment of audio. The replay test then plays every core on every
 # system, which is where the sanitizers see the cores that the render tests
-# leave to Release builds (plan D84). Every byte of a seed is below 128, so
-# that CMake can write it; fuzz/midi_synth.cc says what they mean.
+# leave to Release builds. Every byte of a seed is below 128, so that CMake can
+# write it; fuzz/midi_synth.cc says what they mean.
 set(ADLplug_FUZZ_PLAY_SEEDS "${CMAKE_CURRENT_BINARY_DIR}/seeds/midi_synth")
 file(MAKE_DIRECTORY "${ADLplug_FUZZ_PLAY_SEEDS}")
 foreach(core IN LISTS ADLplug_CORES)
@@ -190,14 +190,14 @@ if(ADLplug_BUILD_FUZZERS)
   target_compile_options(${ADLplug_FUZZ_PLAY_LIBRARY} PRIVATE -fsanitize=fuzzer-no-link)
 endif()
 
-# F1: the state that a host kept in a project. The processor is what reads it,
-# so this target builds the plugin's own sources, the interface left out:
+# The state that a host kept in a project. The processor is what reads it, so
+# this target builds the plugin's own sources, the interface left out:
 # plugin_processor.cc knows nothing of the editor (hasEditor() and
 # createEditor() are in plugin_editor.cc, and this target says instead that
 # there is none), so neither the interface nor the modules it alone needs come
 # in. With JUCE 9's headless audio processors module, that leaves a program
-# without juce_gui_basics, which builds where the plugin cannot: a Linux without
-# the X11 development packages, for one.
+# without juce_gui_basics, which builds where the plugin cannot: a Linux
+# without the X11 development packages, for one.
 set(ADLplug_FUZZ_STATE_SOURCES
   "${PROJECT_SOURCE_DIR}/sources/plugin_processor.cc"
   "${PROJECT_SOURCE_DIR}/sources/plugin_state.cc"

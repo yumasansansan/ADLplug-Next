@@ -13,8 +13,8 @@
 #
 # The publish job of CI on a push to main (.github/workflows/ci.yml).
 #
-# fuzzing stops the release while the daily fuzzing fails (plan D48): the last
-# run of .github/workflows/fuzz.yml on main that passed or failed decides, and a
+# fuzzing stops the release while the daily fuzzing fails: the last run of
+# .github/workflows/fuzz.yml on main that passed or failed decides, and a
 # release goes out only when it passed or there has been none. A run that was
 # cancelled or skipped decides nothing. When gh cannot tell, the release waits
 # as well.
@@ -22,10 +22,10 @@
 # assemble merges the packs of both chips that ci/package.sh made into one
 # archive for each system and instruction set, ADLplug-Next-<version>-<system>
 # .zip or .tar.xz, where <version> is the version to show with dashes for its +
-# and the dot before git (plan D43). With the deb and rpm packages of
-# ci/package.sh and ci/package-rpm.sh, the archives go into <assets>, which
-# SHA256SUMS lists. The release notes, written to <notes>, give the version, the
-# commit, the commits since the tag nightly, the requirements and the cautions.
+# and the dot before git. With the deb and rpm packages of ci/package.sh and
+# ci/package-rpm.sh, the archives go into <assets>, which SHA256SUMS lists. The
+# release notes, written to <notes>, give the version, the commit, the commits
+# since the tag nightly, the requirements and the cautions.
 #
 # release replaces the pre-release "Nightly" with those: the release and the tag
 # nightly are deleted, and made again on the commit built ($GITHUB_SHA), with gh

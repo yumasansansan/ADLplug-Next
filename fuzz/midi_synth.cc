@@ -6,12 +6,11 @@
 // GNU General Public License, version 3 or any later version
 // (LICENSES/GPL-3.0-or-later.txt).
 //
-// F3: the MIDI that a host sends, and the synthesis it drives (plan D48). The
-// input stands for everything a host and a project can ask of the player:
-// which emulator plays, how many chips it has, what the chip settings are, and
-// then a stream of MIDI messages and of audio to generate. It is the way into
-// the real-time API of libADLMIDI / libOPNMIDI, which the file loaders (F2)
-// never touch.
+// The MIDI that a host sends, and the synthesis it drives. The input stands
+// for everything a host and a project can ask of the player: which emulator
+// plays, how many chips it has, what the chip settings are, and then a stream
+// of MIDI messages and of audio to generate. It is the way into the real-time
+// API of libADLMIDI / libOPNMIDI, which the file loaders never touch.
 //
 // The input is a header, then records. A byte that the input does not reach is
 // read as zero, and a zero means "leave it as it is", so an empty input plays
@@ -67,8 +66,8 @@ constexpr unsigned frames_at_once = 1024;
 constexpr unsigned records_max = 1024;
 
 // The bank of instruments that the notes play, which CMake names. It is read
-// once: the file is the same for every input, and F2 is what looks at the
-// reading of bank files.
+// once: the file is the same for every input, and the target for bank files is
+// what looks at the reading of them.
 std::span<const std::uint8_t> bank_data()
 {
     static const std::vector<std::uint8_t> bytes = [] {

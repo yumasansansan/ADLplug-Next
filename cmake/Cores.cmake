@@ -11,7 +11,7 @@
 # that includes it, and the number of the core that plays in its place when a
 # build leaves it out: an OPL2 core plays as DOSBox in OPL2 mode, an OPNA core
 # as MAME YM2608, any other as the default core, ADLplug_DEFAULT_CORE
-# (sources/*/adl/chip_settings.cc, plan D36). The tests render with the cores
+# (sources/*/adl/chip_settings.cc). The tests render with the cores
 # (tests/CMakeLists.txt), and so does the training of profile-guided
 # optimisation (cmake/PGO.cmake).
 

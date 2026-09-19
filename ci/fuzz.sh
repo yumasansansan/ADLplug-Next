@@ -10,11 +10,11 @@
 #   ci/fuzz.sh <preset> <seconds> <corpora> <crashes> [<earlier crashes>]
 #
 # Runs every fuzz target that a build of <preset> with ADLplug_BUILD_FUZZERS
-# made, each for <seconds> with libFuzzer (plan D48). A target runs with the
-# arguments that CMake listed beside it (build/<preset>/fuzz/*.args: its
-# dictionary, seed inputs and regression inputs), on a corpus of its own in
-# <corpora>/<target>/, which it grows and which may carry over from an earlier
-# run. An input that fails is written to <crashes>/<target>/.
+# made, each for <seconds> with libFuzzer. A target runs with the arguments
+# that CMake listed beside it (build/<preset>/fuzz/*.args: its dictionary, seed
+# inputs and regression inputs), on a corpus of its own in <corpora>/<target>/,
+# which it grows and which may carry over from an earlier run. An input that
+# fails is written to <crashes>/<target>/.
 #
 # Given <earlier crashes>, each target first runs once on the inputs under
 # <earlier crashes>/<target>/ that failed in an earlier run. One that still

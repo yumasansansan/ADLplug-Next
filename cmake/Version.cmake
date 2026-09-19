@@ -6,10 +6,10 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-# The version of ADLplug-Next, from the git history (plan D43). Until 2.0.0 the
-# builds are 1.99.N, where N counts the commits of main since a488abe, the last
-# commit of upstream ADLplug; an odd minor number marks a development version.
-# The version to show adds the time of the commit, in UTC, and its hash:
+# The version of ADLplug-Next, from the git history. Until 2.0.0 the builds are
+# 1.99.N, where N counts the commits of main since a488abe, the last commit of
+# upstream ADLplug; an odd minor number marks a development version. The
+# version to show adds the time of the commit, in UTC, and its hash:
 # 1.99.N+YYYYMMDD.HHMM.git<hash>. A commit gives the same version however often
 # it is built. Without git or the history, as in an archive of the sources, the
 # version is 1.99.0+unknown.

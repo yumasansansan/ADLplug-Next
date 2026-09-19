@@ -15,7 +15,7 @@
 #    the build made them, the texts of the banks, the licenses
 #    (ci/licenses.py) and version.txt, which ci/publish.sh merges with the
 #    other chip's into the archive of the system;
-#  - on Linux, the deb package for Ubuntu 26.04 or later (plan D59) of what the
+#  - on Linux, the deb package for Ubuntu 26.04 or later of what the
 #    build installs under /usr. The AVX2 build is the amd64v3 variant of the
 #    same package.
 set -euo pipefail

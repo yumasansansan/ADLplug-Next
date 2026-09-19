@@ -158,9 +158,9 @@ if(NOT ADLplug_BUILD_TOOLS)
   return()
 endif()
 
-# References are kept per system and instruction set: where the target has
-# FMA instructions, Clang fuses multiply-adds, and the systems' maths libraries
-# differ (plan D42). Debug and Release builds share a key.
+# References are kept per system and instruction set: where the target has FMA
+# instructions, Clang fuses multiply-adds, and the systems' maths libraries
+# differ. Debug and Release builds share a key.
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   set(ADLplug_RENDER_SYSTEM "macos")
 else()
@@ -242,9 +242,9 @@ add_test(NAME render.prepare_again
   COMMAND ADLplug_render "${plugin}" "${render_out}/prepare_again.f32" 2 1000 --prepare-again)
 set_tests_properties(render.prepare_again PROPERTIES TIMEOUT 300)
 
-# The parameters of upstream ADLplug 1 come first, in their order and with their
-# IDs: projects saved with the plugins of upstream refer to them, and the VST3
-# plugin maps them for hosts that replace those plugins with it (plan D02).
+# The parameters of upstream ADLplug 1 come first, in their order and with
+# their IDs: projects saved with the plugins of upstream refer to them, and the
+# VST3 plugin maps them for hosts that replace those plugins with it.
 add_test(NAME render.upstream_parameters
   COMMAND ADLplug_render "${plugin}" "${render_out}/upstream_parameters.f32" 1 0
     --upstream-parameters "${ADLplug_CHIP}")

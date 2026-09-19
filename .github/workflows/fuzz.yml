@@ -6,10 +6,10 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-# The long fuzzing (plan D48). Once a day, and whenever it is started by hand,
-# every fuzz target of both plugins runs for fifteen minutes with libFuzzer and
-# the address and undefined sanitizers, on Ubuntu (ci/fuzz.sh). The short runs
-# of a minute are part of CI (.github/workflows/ci.yml).
+# The long fuzzing. Once a day, and whenever it is started by hand, every fuzz
+# target of both plugins runs for fifteen minutes with libFuzzer and the
+# address and undefined sanitizers, on Ubuntu (ci/fuzz.sh). The short runs of a
+# minute are part of CI (.github/workflows/ci.yml).
 #
 # A run carries on from the corpus that the last decided run (one that passed
 # or failed) grew and kept as an artifact; when that is gone, it starts again

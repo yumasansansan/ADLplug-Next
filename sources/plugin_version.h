@@ -17,8 +17,8 @@
 
 #pragma once
 // The version of ADLplug-Next, which cmake/Version.cmake finds in the git
-// history (plan D43). JucePlugin_VersionString, from juce_add_plugin(), has the
-// numbers, and ADLPLUG_VERSION_DISPLAY adds the time and the hash of the commit.
+// history. JucePlugin_VersionString, from juce_add_plugin(), has the numbers,
+// and ADLPLUG_VERSION_DISPLAY adds the time and the hash of the commit.
 #include <JuceHeader.h>
 
 #define ADLplug_Version JucePlugin_VersionString

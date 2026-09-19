@@ -7,9 +7,9 @@
 // (LICENSES/GPL-3.0-or-later.txt).
 //
 // A program that leaks on purpose, so that a test can show LeakSanitizer is
-// really looking (plan D47). LeakSanitizer says nothing when it finds nothing,
-// and silence cannot tell "no leaks" from "the check never ran": this is the
-// leak that has to be reported for the other tests' silence to mean anything.
+// really looking. LeakSanitizer says nothing when it finds nothing, and
+// silence cannot tell "no leaks" from "the check never ran": this is the leak
+// that has to be reported for the other tests' silence to mean anything.
 //
 // The block is dropped in a function of its own, which the compiler may not
 // inline, so that no register or stack slot of main still holds its address

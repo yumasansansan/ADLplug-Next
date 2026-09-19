@@ -106,8 +106,7 @@ endforeach()
 
 # The low-level emulators (LLE) simulate their chips gate by gate and keep the
 # latches in int. A bit shifted left through one of them passes the sign in the
-# end, which C leaves undefined and which the sanitizers stop the program at
-# (plan D47):
+# end, which C leaves undefined and which the sanitizers stop the program at:
 #
 #   nuked_fmopl3.c:48:48: runtime error: left shift of 2147483647 by 1 places
 #   cannot be represented in type 'int'

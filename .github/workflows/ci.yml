@@ -12,16 +12,16 @@
 # ci/setup.sh installs a pinned toolchain.
 #
 # The sanitize jobs build both plugins on Ubuntu and macOS with the address,
-# undefined and vptr sanitizers (plan D47, D83) and run the tests, leaving out
-# the programs that load the plugins from outside. On Ubuntu they also build
-# the fuzz targets with libFuzzer and run each for a minute (ci/fuzz.sh, plan
-# D48); an input that fails is kept as an artifact. The long fuzzing runs once
-# a day in .github/workflows/fuzz.yml.
+# undefined and vptr sanitizers and run the tests, leaving out the programs
+# that load the plugins from outside. On Ubuntu they also build the fuzz
+# targets with libFuzzer and run each for a minute (ci/fuzz.sh); an input that
+# fails is kept as an artifact. The long fuzzing runs once a day in
+# .github/workflows/fuzz.yml.
 #
 # The reuse job checks with reuse lint, from Ubuntu's reuse package, that every
 # file names its copyright holders and license (see REUSE.toml and LICENSES/).
 #
-# A push to main also makes the Nightly release (plan D44):
+# A push to main also makes the Nightly release:
 #  - the Release builds are packed, with a deb package from each Ubuntu build
 #    (ci/package.sh);
 #  - an AlmaLinux 10 container builds and tests the Release configurations for

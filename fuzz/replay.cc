@@ -7,8 +7,8 @@
 // (LICENSES/GPL-3.0-or-later.txt).
 //
 // Runs a fuzz target on files, the way a libFuzzer build replays them, for the
-// systems and builds that have no libFuzzer (plan D48). CTest gives it the seed
-// inputs and the regression inputs of its target on every system.
+// systems and builds that have no libFuzzer. CTest gives it the seed inputs
+// and the regression inputs of its target on every system.
 //
 //     <target>_replay <file or directory>...
 //

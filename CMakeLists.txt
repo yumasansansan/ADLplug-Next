@@ -19,7 +19,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Architectures to build for on macOS")
 
-# The version comes from the git history (cmake/Version.cmake, plan D43).
+# The version comes from the git history (cmake/Version.cmake).
 include(Version)
 project(ADLplug VERSION "${ADLplug_VERSION}" LANGUAGES C CXX)
 set(PROJECT_VENDOR "DyTect")
@@ -67,7 +67,7 @@ option(ADLplug_WERROR "Treat warnings in ADLplug's own sources as errors" OFF)
 option(ADLplug_BUILD_TOOLS "Build developer tools (tools/render: offline VST3 renderer)" OFF)
 option(ADLplug_BUILD_TESTS "Build the tests and register them with CTest (render tests need ADLplug_BUILD_TOOLS)" OFF)
 option(ADLplug_BUILD_FUZZERS "Build the fuzz targets with libFuzzer (fuzz/; meant for the address and undefined sanitizers)" OFF)
-# libFuzzer runs on Ubuntu (plan D48). On Windows it cannot be linked at all: the
+# libFuzzer runs on Ubuntu. On Windows it cannot be linked at all: the
 # libFuzzer that LLVM builds for Windows uses the static C runtime, and
 # ADLplug-Next the dynamic one, and the two cannot go into one program.
 if(ADLplug_BUILD_FUZZERS AND CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -204,16 +204,16 @@ endif()
 #
 # ADLplug_SANITIZERS names the sanitizers of a build, comma-separated (address,
 # undefined, vptr, thread), and gives them to every target: ADLplug-Next's own
-# code, JUCE, libADLMIDI and libOPNMIDI. The emulator cores are part of what the
-# plugins ship, so a mistake of memory or an undefined operation in them is the
-# plugin's (plan D47). Undefined behaviour stops the program
-# (-fno-sanitize-recover=all) instead of being reported and passed over, and the
-# frame pointer stays, so that the reports name the callers.
+# code, JUCE, libADLMIDI and libOPNMIDI. The emulator cores are part of what
+# the plugins ship, so a mistake of memory or an undefined operation in them is
+# the plugin's. Undefined behaviour stops the program
+# (-fno-sanitize-recover=all) instead of being reported and passed over, and
+# the frame pointer stays, so that the reports name the callers.
 #
 # vptr is the check that an object really is of the class it is used as, when a
 # downcast or a call of a member function takes it to be one; undefined leaves
-# it out (plan D83). Clang has no such check for the MSVC ABI and refuses the
-# option there, so a Windows build leaves vptr out and says so.
+# it out. Clang has no such check for the MSVC ABI and refuses the option
+# there, so a Windows build leaves vptr out and says so.
 #
 # Sanitizers are not for Release builds, whose optimisations, link-time
 # optimisation and profile would stand in the way: the *-sanitize presets
@@ -310,10 +310,10 @@ include(PGO)
 #
 # The names, the maker and the identifiers differ from those of upstream
 # ADLplug, so that both can be installed side by side; only the plugin codes
-# stay (plan D02). The VST3 plugins declare themselves compatible with the VST2
-# and VST3 plugins of upstream (JUCE_VST3_COMPATIBLE_CLASSES below, and the
-# VST3 extensions of AdlplugAudioProcessor), so that hosts which support it
-# open projects that used those. Audio Unit and LV2 hosts see other plugins.
+# stay. The VST3 plugins declare themselves compatible with the VST2 and VST3
+# plugins of upstream (JUCE_VST3_COMPATIBLE_CLASSES below, and the VST3
+# extensions of AdlplugAudioProcessor), so that hosts which support it open
+# projects that used those. Audio Unit and LV2 hosts see other plugins.
 
 set(ADLplug_MANUFACTURER_CODE "DyTc")
 set(ADLplug_UPSTREAM_MANUFACTURER "Jean Pierre Cimalando")
@@ -432,7 +432,7 @@ endforeach()
 # belongs to the program that loads the plugin, and its symbols are left
 # undefined in the plugin's shared object. JUCE asks the linker to refuse a
 # plugin that has undefined symbols, which is right for a plugin that is to be
-# published and wrong for this one (plan D47).
+# published and wrong for this one.
 if(ADLplug_SANITIZERS)
   foreach(ADLplug_FORMAT IN LISTS ADLplug_FORMATS)
     get_target_property(ADLplug_FORMAT_LINK_OPTIONS
@@ -823,8 +823,8 @@ if(ADLplug_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
-# The fuzz targets (fuzz/, plan D48): replayed on their inputs as tests, and
-# built with libFuzzer on request.
+# The fuzz targets (fuzz/): replayed on their inputs as tests, and built with
+# libFuzzer on request.
 if(ADLplug_BUILD_TESTS OR ADLplug_BUILD_FUZZERS)
   add_subdirectory(fuzz)
 endif()

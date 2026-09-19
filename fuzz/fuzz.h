@@ -6,12 +6,12 @@
 // GNU General Public License, version 3 or any later version
 // (LICENSES/GPL-3.0-or-later.txt).
 //
-// What every fuzz target shares (plan D48). A target defines
-// LLVMFuzzerTestOneInput, which libFuzzer calls with each input it makes up
-// (ADLplug_BUILD_FUZZERS), and which replay.cc calls with the files it is given
-// on every system (ADLplug_BUILD_TESTS). The sanitizers catch what goes wrong
-// in memory; FUZZ_CHECK stops the program where a target finds that something
-// it expects of the input does not hold, so that libFuzzer keeps the input.
+// What every fuzz target shares. A target defines LLVMFuzzerTestOneInput,
+// which libFuzzer calls with each input it makes up (ADLplug_BUILD_FUZZERS),
+// and which replay.cc calls with the files it is given on every system
+// (ADLplug_BUILD_TESTS). The sanitizers catch what goes wrong in memory;
+// FUZZ_CHECK stops the program where a target finds that something it expects
+// of the input does not hold, so that libFuzzer keeps the input.
 
 #pragma once
 #include <cstddef>

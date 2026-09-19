@@ -6,8 +6,8 @@
 // GNU General Public License, version 3 or any later version
 // (LICENSES/GPL-3.0-or-later.txt).
 //
-// F2: the bank and instrument files that people open, which come from anywhere
-// (plan D48). The input goes where the editor sends a file
+// The bank and instrument files that people open, which come from anywhere.
+// The input goes where the editor sends a file
 // (Generic_Main_Component::load_bank_mem and load_single_instrument_mem):
 //
 //  - as a bank (WOPL or WOPN): loaded, it is saved again in its own version
