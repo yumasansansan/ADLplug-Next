@@ -262,6 +262,9 @@ set(ADLplug_FUZZ_PROCESSOR_SOURCES
   "${PROJECT_SOURCE_DIR}/sources/plugin_processor.cc"
   "${PROJECT_SOURCE_DIR}/sources/plugin_state.cc"
   "${PROJECT_SOURCE_DIR}/sources/bank_manager.cc"
+  # The bytes of a bank file, read and sent the way the editor does it
+  # (sources/bank_load.h): what fuzz/bank_manager.cc gives a file to.
+  "${PROJECT_SOURCE_DIR}/sources/bank_load.cc"
   "${PROJECT_SOURCE_DIR}/sources/worker.cc"
   "${PROJECT_SOURCE_DIR}/sources/messages.cc"
   "${PROJECT_SOURCE_DIR}/sources/utility/midi.cc"
@@ -423,7 +426,10 @@ adlplug_fuzz_target(bank_manager JUCE
   OWN_SOURCES ${ADLplug_FUZZ_PROCESSOR_SOURCES}
   LIBRARIES ${ADLplug_FUZZ_PROCESSOR_LIBRARIES}
   DEFINITIONS ${ADLplug_FUZZ_PROCESSOR_DEFINITIONS}
-  SEEDS "${ADLplug_FUZZ_BANKS_SEEDS}"
+  # The bank files of the submodules are seeds as they are: an input that
+  # begins as one of them is taken for a whole bank file (fuzz/bank_manager.cc),
+  # which is how the bytes of a real file travel the editor's path.
+  SEEDS "${ADLplug_FUZZ_BANKS_SEEDS}" ${ADLplug_FUZZ_BANK_SEEDS}
   DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/bank_manager.dict")
 
 # The small readers: the pack of banks the plugin carries, the fields a name sits

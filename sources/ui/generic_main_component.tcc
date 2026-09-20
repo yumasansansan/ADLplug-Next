@@ -23,6 +23,7 @@
 #include "ui/components/program_name_editor.h"
 #include "ui/components/midi_keyboard_ex.h"
 #include "adl/wopx_file.h"
+#include "bank_load.h"
 #include "midi/insnames.h"
 #include "utility/functional_timer.h"
 #include "utility/name_field.h"
@@ -986,108 +987,48 @@ void Generic_Main_Component<T>::load_single_instrument(std::uint32_t program, co
 template <class T>
 void Generic_Main_Component<T>::load_bank_mem(std::span<std::uint8_t> data, const String &bank_name, int format)
 {
-    std::vector<Midi_Bank> banks;
-    Instrument_Global_Parameters igp;
-    bool need_measurement = true;
     const char *error_title = "Error loading bank";
 
     switch (format) {
     default: {
-        const WOPx::BankFile_Ptr wopl(WOPx::LoadBankFromMem(data.data(), data.size(), nullptr));
-        if (!wopl) {
+        // Reading the bytes and sending what they say are bank_load.h's, so that
+        // the path from a file to the bank manager is one piece of code, which a
+        // fuzz target can hand bytes to as well.
+        const std::optional<Bank_File_Contents> contents = read_bank_file(data);
+        if (!contents) {
             AlertWindow::showMessageBoxAsync(
                 AlertWindow::WarningIcon, error_title, "The input file is not in " WOPx_BANK_FORMAT " format.");
             return;
         }
-        Midi_Bank::from_wopl(*wopl, banks, igp);
-        need_measurement = false;
 #if defined(ADLPLUG_OPN2)
-        *parameter_block_->p_chiptype = int{wopl->chip_type};
+        if (contents->chip_type)
+            *parameter_block_->p_chiptype = *contents->chip_type;
 #endif
+        send_bank_file([this](const auto &msg) { this->write_to_processor(msg); },
+                       *contents, bank_name, midichannel_);
         break;
     }
     }
-
-    {
-        Messages::User::SetBankTitle msg;
-        copy_name_to_field(msg.title, bank_name);
-        write_to_processor(msg);
-    }
-
-    {
-        Messages::User::LoadGlobalParameters msg;
-        msg.param = igp;
-        msg.notify_back = true;
-        write_to_processor(msg);
-    }
-
-    {
-        Messages::User::ClearBanks msg;
-        msg.notify_back = false;
-        write_to_processor(msg);
-    }
-
-    for (const Midi_Bank &bank : banks) {
-        for (unsigned i = 0; i < 128; ++i) {
-            Messages::User::LoadInstrument msg;
-            msg.part = midichannel_;
-            msg.bank = bank.id;
-            msg.program = static_cast<std::uint8_t>(i);
-            msg.instrument = bank.ins[i];
-            msg.need_measurement = need_measurement;
-            msg.notify_back = false;
-            write_to_processor(msg);
-        }
-
-        Messages::User::RenameBank msg;
-        msg.bank = bank.id;
-        msg.notify_back = false;
-        static_assert(sizeof msg.name == sizeof bank.name);
-        std::memcpy(msg.name, bank.name, sizeof msg.name);
-        write_to_processor(msg);
-    }
-
-    write_to_processor(Messages::User::RequestFullBankState{});
-    write_to_processor(Messages::User::RequestBankTitle{});
 }
 
 template <class T>
 void Generic_Main_Component<T>::load_single_instrument_mem(std::uint32_t program, std::span<std::uint8_t> data, [[maybe_unused]] const String &bank_name, int format)
 {
-    Instrument ins;
-    const char *error_title = "Error loading instrument";
-
-    switch (format) {
-    default: {
-        WOPx::InstrumentFile wopi = {};
-        if (WOPx::LoadInstFromMem(&wopi, data.data(), data.size()) != 0) {
-            AlertWindow::showMessageBoxAsync(
-                AlertWindow::WarningIcon, error_title, "The input file is not in " WOPx_INST_FORMAT " format.");
-            return;
-        }
-        ins = Instrument::from_wopl(wopi.inst);
-        break;
-    }
+    const std::optional<Instrument> ins = read_instrument_file(data, format);
+    if (!ins) {
 #if defined(ADLPLUG_OPL3)
-    case 1:
-        ins = Instrument::from_sbi(data.data(), data.size());
-        if (ins.blank()) {
-            AlertWindow::showMessageBoxAsync(
-                AlertWindow::WarningIcon, error_title, "The input file is not in SBI format.");
-            return;
-        }
-        break;
+        const char *what = (format == 1) ? "The input file is not in SBI format."
+                                         : "The input file is not in " WOPx_INST_FORMAT " format.";
+#else
+        const char *what = "The input file is not in " WOPx_INST_FORMAT " format.";
 #endif
+        AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon, "Error loading instrument", what);
+        return;
     }
 
-    Messages::User::LoadInstrument msg;
-    msg.part = midichannel_;
-    msg.bank = bank_of_psid(program >> 8, (program & 128) != 0);
-    msg.program = static_cast<std::uint8_t>(program & 127);
-    msg.instrument = ins;
-    msg.need_measurement = true;
-    msg.notify_back = true;
-    write_to_processor(msg);
+    send_instrument_file([this](const auto &msg) { this->write_to_processor(msg); }, *ins,
+                         bank_of_psid(program >> 8, (program & 128) != 0),
+                         static_cast<std::uint8_t>(program & 127), midichannel_);
 }
 
 template <class T>

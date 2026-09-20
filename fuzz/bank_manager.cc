@@ -16,6 +16,12 @@
 // host takes the same road (plugin_processor.cc reads the state into the same
 // calls), so what the messages can reach, a project can reach.
 //
+// A file the user opens is the other way in, and this target takes one whole:
+// the bytes go through the library's reader and the editor's own way of turning
+// what it found into these messages (sources/bank_load.h), which is the piece
+// between fuzz/bank_file.cc, where a file's bytes stop at the reader, and the
+// records here, where the messages start with values of their own.
+//
 // The input is a list of records; there is no header. A record is one byte, the
 // top four bits saying what it is and the low four carrying what fits, and the
 // bytes after it carry the rest:
@@ -34,8 +40,15 @@
 //   12  a measurement as the worker sends one back, of the instrument the plugin
 //       holds or of another, with the two times it found (two bytes each)
 //   13  the global parameters (two bytes: the volume model, and what else is
-//       global to the chip), 14 prepare the plugin again, 15 the best number of
-//       four-operator channels (OPL3; nothing on OPN2)
+//       global to the chip), 14 prepare the plugin again
+//   15  with the low bit clear, the best number of four-operator channels (OPL3;
+//       nothing on OPN2). With it set, the rest of the input as the bytes of a
+//       file the user opens, read and sent the way the editor does it: a bank
+//       file, or, with bit 2, an instrument file for the bank and the program
+//       that follow -- in the other format of one instrument with bit 3, which is
+//       SBI on OPL3. An input that begins as one of the library's files is such a
+//       file whole, with no record at all, which makes every bank of the
+//       submodules a seed of this target
 //
 // An instrument is one of four: blank, not blank and otherwise empty, one whose
 // first bytes come from the input, or the one the plugin already holds there.
@@ -66,6 +79,7 @@
 #include "fuzz.h"
 #include "plugin_processor.h"
 #include "bank_manager.h"
+#include "bank_load.h"
 #include "messages.h"
 #include "definitions.h"
 #include "adl/instrument.h"
@@ -78,7 +92,10 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <span>
+#include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -94,15 +111,21 @@ using Native_Instrument = OPN2_Instrument;
 // What one input may ask for. These bound the time one input may take, not what
 // the plugin is expected to stand: every message is of a fixed size and the
 // plugin sees each one on its own, and 512 records are more than the sixty-four
-// slots can be filled with. Input that arrives as one lump of any size -- a bank
-// file, the state of a project, the configuration -- belongs to the targets that
-// take those.
+// slots can be filled with. The one lump of any size that belongs here is a file
+// the user opens, because what the editor does with one is send these messages;
+// the state of a project and the configuration belong to the targets that take
+// those.
 constexpr unsigned records_max = 512;
 constexpr unsigned prepares_max = 4;
 
 // How many instruments the check that reads every program may look at while the
 // records run; the check after the last record reads them all.
 constexpr unsigned lookups_max = 8192;
+
+// How many times one message of a file is offered to the queue, a block of audio
+// apart: the processor takes what is there in one block, so the first of these is
+// nearly always enough.
+constexpr unsigned send_tries = 8;
 
 // The blocks in which the notifications of the whole state come back at the end,
 // and the blocks before them, in which the parameters settle what they owe.
@@ -125,6 +148,15 @@ public:
 
     std::uint8_t byte() noexcept
         { return (at_ < size_) ? data_[at_++] : 0; }
+
+    // The rest of the input, whatever it is, and nothing after it: what a record
+    // hands over as one lump, as the bytes of a file are.
+    std::span<const std::uint8_t> rest() noexcept
+    {
+        const std::size_t from = std::min(at_, size_);
+        at_ = size_;
+        return {data_ + from, size_ - from};
+    }
 
     // The next `count` bytes, whatever they are.
     std::vector<char> bytes(std::size_t count)
@@ -310,12 +342,13 @@ void play_block(AdlplugAudioProcessor &processor, unsigned frames, bool check)
     }
 }
 
-// A message to the processor, as the editor writes one.
+// A message to the processor, as the editor writes one; false when the queue had
+// no room for it, which is what the editor answers by keeping it for later.
 template <class T, class Fill>
-void send(AdlplugAudioProcessor &processor, Fill &&fill)
+bool send(AdlplugAudioProcessor &processor, Fill &&fill)
 {
-    if (const std::shared_ptr<Simple_Fifo> queue = processor.message_queue_for_ui())
-        Messages::send<T>(*queue, std::forward<Fill>(fill));
+    const std::shared_ptr<Simple_Fifo> queue = processor.message_queue_for_ui();
+    return queue && Messages::send<T>(*queue, std::forward<Fill>(fill));
 }
 
 // A name into a field of a message: a field is of a fixed size and carries a
@@ -324,6 +357,92 @@ void set_name(std::span<char> field, const std::vector<char> &name)
 {
     std::fill(std::copy_n(name.begin(), std::min(name.size(), field.size()), field.begin()),
               field.end(), '\0');
+}
+
+// The words that a file of the library's formats begins with. An input that
+// begins with one of them is that file, whole, so that a bank of the submodules
+// is a seed as it is: nothing a fuzzer makes up comes upon the words by itself.
+#if defined(ADLPLUG_OPL3)
+constexpr std::string_view bank_file_mark = "WOPL3-BANK";
+constexpr std::string_view instrument_file_mark = "WOPL3-INST";
+#elif defined(ADLPLUG_OPN2)
+constexpr std::string_view bank_file_mark = "WOPN2-B";
+constexpr std::string_view instrument_file_mark = "WOPN2-INST";
+#endif
+
+bool begins_with(std::span<const std::uint8_t> bytes, std::string_view mark) noexcept
+{
+    return bytes.size() >= mark.size() && std::memcmp(bytes.data(), mark.data(), mark.size()) == 0;
+}
+
+// Which file an input begins as, if it begins as one at all. The formats are the
+// ones the editor opens: a bank file, an instrument file of the library's format,
+// and, where the chip has it, the other format of one instrument, whose files are
+// among the seeds as well (fuzz/dict/wopl.dict has every word that begins one).
+enum class File_Kind { bank, instrument, other_instrument };
+
+std::optional<File_Kind> file_kind(std::span<const std::uint8_t> bytes) noexcept
+{
+    if (begins_with(bytes, instrument_file_mark))
+        return File_Kind::instrument;
+    if (begins_with(bytes, bank_file_mark))
+        return File_Kind::bank;
+#if defined(ADLPLUG_OPL3)
+    if (begins_with(bytes, "SBI") || begins_with(bytes, "2OP") ||
+        begins_with(bytes, "4OP"))
+        return File_Kind::other_instrument;
+#endif
+    return {};
+}
+
+// The messages of a file go into the editor's queue, because that is whose they
+// are: sources/bank_load.h reads the bytes and says what to send, and what sends
+// it is the caller's -- the editor keeps what the queue cannot take and sends it
+// again, and this writes straight to the queue.
+auto sender(AdlplugAudioProcessor &processor)
+{
+    return [&processor](const auto &message) {
+        using Message = std::decay_t<decltype(message)>;
+        // A file is more messages than the queue holds at once: the editor keeps
+        // what it cannot send and sends it again once the audio thread has made
+        // room, and the block that makes the room is played here on the spot, so
+        // that a whole file arrives rather than the first bank of it. A message
+        // still dropped after that is a host that never came back for the audio,
+        // and what the plugin holds has to add up either way.
+        for (unsigned tries = 0; tries < send_tries; ++tries) {
+            if (send<Message>(processor, [&message](Message &body) { body = message; }))
+                return;
+            play_block(processor, block_size, false);
+        }
+    };
+}
+
+// A file, read and sent the way the editor reads and sends one. This is the join
+// that the other targets leave open: fuzz/bank_file.cc gives the library's reader
+// any bytes and looks at what comes back, and the records here give the messages
+// any values, while what is between the two -- every bank and every program of a
+// file turned into messages, and the bank manager left holding them -- used to be
+// inside the editor where nothing could reach it.
+//
+// The title is longer than the field it goes into, since a file's name is not the
+// file's to choose and the editor cuts it to fit.
+void load_bank_file(AdlplugAudioProcessor &processor, std::span<const std::uint8_t> bytes,
+                    unsigned part)
+{
+    // The bytes of an input belong to the fuzzer, and the library's reader takes
+    // memory it may write to (sources/bank_load.h): it gets a copy.
+    std::vector<std::uint8_t> own(bytes.begin(), bytes.end());
+    if (const std::optional<Bank_File_Contents> contents = read_bank_file(own))
+        send_bank_file(sender(processor), *contents,
+                       "a bank file whose title is longer than the field it goes into", part);
+}
+
+void load_instrument_file(AdlplugAudioProcessor &processor, std::span<const std::uint8_t> bytes,
+                          int format, Bank_Id bank, std::uint8_t program, unsigned part)
+{
+    std::vector<std::uint8_t> own(bytes.begin(), bytes.end());
+    if (const std::optional<Instrument> instrument = read_instrument_file(own, format))
+        send_instrument_file(sender(processor), *instrument, bank, program, part);
 }
 
 // How many bytes of a name a record asks for. The whole field is among them,
@@ -363,11 +482,31 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
     AdlplugAudioProcessor processor;
     processor.prepareToPlay(rate, block_size);
 
+    // A file the user opens, whole: an input that begins as one of the files the
+    // editor opens is that file and nothing else, read and sent as the editor does
+    // it. The blocks at the end then let the plugin take the messages, and the
+    // checks look at what it made of them.
+    const std::span<const std::uint8_t> whole(data, size);
+    const std::optional<File_Kind> kind = file_kind(whole);
+    if (kind) {
+        switch (*kind) {
+        case File_Kind::bank:
+            load_bank_file(processor, whole, 0);
+            break;
+        case File_Kind::instrument:
+            load_instrument_file(processor, whole, 0, Bank_Id(0, 0, false), 0, 0);
+            break;
+        case File_Kind::other_instrument:
+            load_instrument_file(processor, whole, 1, Bank_Id(0, 0, false), 0, 0);
+            break;
+        }
+    }
+
     unsigned records_left = records_max;
     unsigned prepares_left = prepares_max;
     unsigned lookups_left = lookups_max;
 
-    while (!input.done() && records_left-- > 0) {
+    while (!kind && !input.done() && records_left-- > 0) {
         const std::uint8_t record = input.byte();
         const unsigned value = record & 15u;
         const bool notify = (value & 1u) != 0;
@@ -566,9 +705,24 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
             }
             break;
         default:
+            // Two things, by the low bit: the best number of four-operator
+            // channels, or the rest of the input as a file, which is how a
+            // sequence of messages can have a file opened in the middle of it.
+            if ((value & 1u) == 0) {
 #if defined(ADLPLUG_OPL3)
-            send<Messages::User::SelectOptimal4Ops>(processor, [](auto &) {});
+                send<Messages::User::SelectOptimal4Ops>(processor, [](auto &) {});
 #endif
+                break;
+            }
+            if ((value & 4u) != 0) {
+                const Bank_Id bank = bank_from(input, percussive);
+                const std::uint8_t program = input.byte();
+                load_instrument_file(processor, input.rest(), ((value & 8u) != 0) ? 1 : 0,
+                                     bank, program, 0);
+            }
+            else {
+                load_bank_file(processor, input.rest(), 0);
+            }
             break;
         }
     }

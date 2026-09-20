@@ -540,6 +540,7 @@ target_sources(ADLplug PRIVATE
   "sources/plugin_processor.cc"
   "sources/plugin_state.cc"
   "sources/bank_manager.cc"
+  "sources/bank_load.cc"
   "sources/configuration.cc"
   "sources/messages.cc"
   "sources/worker.cc"
