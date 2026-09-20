@@ -50,9 +50,10 @@ set(ADLplug_UNIT_TESTED_SOURCES
 
 # Under the sanitizers, the tests get their environment from the top
 # (adlplug_sanitizer_test_environment in CMakeLists.txt), and a test shows that
-# LeakSanitizer is really looking: it leaks on purpose and passes only when the
-# leak is reported. On Linux with the address sanitizer only, where leak
-# detection is asked for.
+# the checks which say nothing when they find nothing are really looking: the
+# programs below leak and race on purpose, and each test passes only when that
+# is reported. Leaks: on Linux with the address sanitizer only, where leak
+# detection is asked for. Races: wherever the thread sanitizer is built with.
 if(ADLplug_SANITIZERS)
   cmake_language(DEFER CALL adlplug_sanitizer_test_environment)
 
@@ -63,6 +64,15 @@ if(ADLplug_SANITIZERS)
     add_test(NAME sanitizer.leak_detection COMMAND ADLplug_leak_canary)
     set_tests_properties(sanitizer.leak_detection PROPERTIES
       PASS_REGULAR_EXPRESSION "ERROR: LeakSanitizer: detected memory leaks")
+  endif()
+
+  if(ADLplug_SANITIZERS MATCHES "(^|,)thread(,|$)")
+    add_executable(ADLplug_race_canary sanitizers/race_canary.c)
+    adlplug_set_language_standard(ADLplug_race_canary)
+    adlplug_own_sources(sanitizers/race_canary.c)
+    add_test(NAME sanitizer.race_detection COMMAND ADLplug_race_canary)
+    set_tests_properties(sanitizer.race_detection PROPERTIES
+      PASS_REGULAR_EXPRESSION "WARNING: ThreadSanitizer: data race")
   endif()
 endif()
 

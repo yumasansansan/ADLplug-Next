@@ -29,6 +29,28 @@ set(PROJECT_HOMEPAGE "https://github.com/yumasansansan/ADLplug-Next")
 # (ci/package.sh).
 file(CONFIGURE OUTPUT "version.txt" CONTENT "${ADLplug_VERSION}\n${ADLplug_VERSION_DISPLAY}\n")
 
+# --------------------------------------------------------------------------
+# The presets are how this project is configured
+#
+# CMakePresets.json chooses the compilers, the linker, the generator and the
+# settings that ADLplug-Next is built and tested with. A configuration put
+# together by hand differs from them without saying so, which is how a build ends
+# up with flags the project never chose; the checks below would catch a missing
+# compiler or linker, but not the rest. Every preset inherits base, which names
+# the preset here, and the instrumented build of profile-guided optimisation
+# carries the name into the build it configures itself (cmake/PGO.cmake).
+set(ADLplug_PRESET "" CACHE STRING
+  "The preset this build was configured with; CMakePresets.json sets it")
+if(NOT ADLplug_PRESET)
+  message(FATAL_ERROR
+    "Configure through a preset: cmake --preset adl-release, and cmake --list-presets names them "
+    "all. The presets choose the compilers, the linker, the generator and the settings this "
+    "project is built and tested with, which a configuration by hand differs from without saying "
+    "so. A build that has to differ can inherit a preset of its own in CMakeUserPresets.json, or "
+    "say -DADLplug_PRESET=<a name for it> and own the settings it is then left with.")
+endif()
+message(STATUS "Preset: ${ADLplug_PRESET}")
+
 # The warning policy, the language standards and LTO below are written for
 # Clang; GCC and MSVC are not supported compilers.
 if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang" OR NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -215,9 +237,25 @@ endif()
 # it out. Clang has no such check for the MSVC ABI and refuses the option
 # there, so a Windows build leaves vptr out and says so.
 #
+# thread finds what the others cannot see at all: two threads that reach the
+# same memory with nothing to order the one against the other, locks taken in
+# an order that could meet another thread's order and stop both, and a thread
+# that is left running when the program ends. A host runs a plugin on several
+# threads at once -- the audio thread it asks for blocks on, the message thread
+# the editor lives on, and the plugin's own worker -- so these are mistakes
+# ADLplug-Next can make wherever those threads share anything. It cannot be
+# built together with address: each of the two keeps a shadow of all of memory
+# in its own way, and Clang refuses the pair. The *-tsan presets name it with
+# undefined, and it has a build of its own in CI, beside the address one, so that
+# neither kind of mistake is left unlooked-for. It goes without vptr, whose check
+# races with the thread sanitizer's runtime inside LLVM itself (below), and the
+# address build has that one. Clang has no thread sanitizer at all for Windows,
+# and the configuration says so rather than leaving the compiler to refuse the
+# option later.
+#
 # Sanitizers are not for Release builds, whose optimisations, link-time
-# optimisation and profile would stand in the way: the *-sanitize presets
-# configure RelWithDebInfo.
+# optimisation and profile would stand in the way: the *-sanitize and *-tsan
+# presets configure RelWithDebInfo.
 #
 # The tests run with the environment below, given to them by the directories
 # that register them (tests/, fuzz/) once all their tests exist. UBSan names the
@@ -235,6 +273,14 @@ endif()
 # finds nothing, which cannot be told from a check that never ran: the test
 # sanitizer.leak_detection leaks on purpose and passes only when that leak is
 # reported, so that the silence of the other tests means something.
+#
+# Races: ThreadSanitizer reports one and carries on by default, and tells the
+# caller only in the exit status when the program ends. The tests have it stop
+# at the first report instead (halt_on_error=1), as -fno-sanitize-recover=all
+# has undefined behaviour stop the program: a fuzz run then keeps the input that
+# found it, and nothing else happens in a program whose memory is already in
+# doubt. A report of locks taken in two orders names the other order's place as
+# well (second_deadlock_stack=1), which is what makes it possible to act on.
 if(ADLplug_SANITIZERS)
   if(CMAKE_BUILD_TYPE STREQUAL "Release")
     message(FATAL_ERROR
@@ -252,6 +298,26 @@ if(ADLplug_SANITIZERS)
     message(FATAL_ERROR
       "ADLplug_SANITIZERS names both address and thread, which cannot be built together.")
   endif()
+  if("thread" IN_LIST ADLplug_SANITIZER_LIST AND CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    message(FATAL_ERROR
+      "ADLplug_SANITIZERS names thread, which Clang has no thread sanitizer for on Windows: it "
+      "refuses -fsanitize=thread there. The *-tsan presets are for Linux and macOS.")
+  endif()
+  # LLVM's own runtime races with itself when the vptr check runs on more than
+  # one thread: the check asks IsAccessibleMemoryRange() whether a vtable
+  # pointer can be read, that makes a pipe, and the write of the two descriptors
+  # is what ThreadSanitizer then reports -- a report with no frame of the
+  # program in it at all. A program of thirty lines that does nothing but call a
+  # virtual function from two threads is enough to bring it out (Clang 23.1.2),
+  # and there is nothing in a build here to fix: it has been known upstream since
+  # 2019 (google/sanitizers issue 1106). A thread build leaves vptr out; the
+  # address build keeps it, and what it finds has nothing to do with threads.
+  if("thread" IN_LIST ADLplug_SANITIZER_LIST AND "vptr" IN_LIST ADLplug_SANITIZER_LIST)
+    list(REMOVE_ITEM ADLplug_SANITIZER_LIST "vptr")
+    message(STATUS
+      "Sanitizers: vptr is left out, since its check and the thread sanitizer's runtime race "
+      "with one another inside LLVM")
+  endif()
   if("vptr" IN_LIST ADLplug_SANITIZER_LIST AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
     list(REMOVE_ITEM ADLplug_SANITIZER_LIST "vptr")
     message(STATUS "Sanitizers: vptr is left out, since Clang has no vptr check for the MSVC ABI")
@@ -265,8 +331,12 @@ if(ADLplug_SANITIZERS)
   add_link_options("-fsanitize=${ADLplug_SANITIZER_OPTION}")
 
   set(ADLplug_SANITIZER_TEST_ENVIRONMENT "UBSAN_OPTIONS=print_stacktrace=1")
-  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  if("address" IN_LIST ADLplug_SANITIZER_LIST AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND ADLplug_SANITIZER_TEST_ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1")
+  endif()
+  if("thread" IN_LIST ADLplug_SANITIZER_LIST)
+    list(APPEND ADLplug_SANITIZER_TEST_ENVIRONMENT
+      "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1")
   endif()
 
   # On Windows the address sanitizer's runtime is a DLL that stays beside the

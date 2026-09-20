@@ -29,6 +29,14 @@
 # target fails.
 set -euo pipefail
 
+# ThreadSanitizer reports a race and carries on by default, and says so only in
+# the exit status at the end, by which time libFuzzer has fuzzed past the input
+# that found it. It stops at the first report instead, as the tests have it
+# (CMakeLists.txt), so that libFuzzer writes that input out; a report of locks
+# taken in two orders names the other order's place as well. A build without
+# the thread sanitizer pays this no heed.
+export TSAN_OPTIONS=${TSAN_OPTIONS:-halt_on_error=1:second_deadlock_stack=1}
+
 with_long=0
 if [ "${1:-}" = "--with-long" ]; then
   with_long=1

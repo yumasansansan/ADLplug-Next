@@ -13,11 +13,15 @@
 #
 # The sanitize jobs build both plugins on Ubuntu and macOS with the address,
 # undefined and vptr sanitizers and run the tests, leaving out the programs
-# that load the plugins from outside. On Ubuntu they also build the fuzz
-# targets with libFuzzer and run each for a minute (ci/fuzz.sh); an input that
-# fails is kept as an artifact. A target whose every input is heavy is not among
-# them -- a minute would get through too few -- and the long fuzzing takes those
-# instead, once a day, in .github/workflows/fuzz.yml.
+# that load the plugins from outside. On Ubuntu each plugin is built a second
+# way as well, with the thread sanitizer in place of the address one, which it
+# cannot be built together with (the *-tsan presets): races between the threads
+# a host runs a plugin on, and locks taken in an order that could stop both, are
+# found by nothing else. The Ubuntu jobs also build the fuzz targets with
+# libFuzzer and run each for a minute (ci/fuzz.sh); an input that fails is kept
+# as an artifact. A target whose every input is heavy is not among them -- a
+# minute would get through too few -- and the long fuzzing takes those instead,
+# once a day, in .github/workflows/fuzz.yml.
 #
 # The reuse job checks with reuse lint, from Ubuntu's reuse package, that every
 # file names its copyright holders and license (see REUSE.toml and LICENSES/).
@@ -129,6 +133,8 @@ jobs:
         include:
           - { os: ubuntu-26.04, arch: baseline, preset: adl-sanitize, fuzz: true }
           - { os: ubuntu-26.04, arch: baseline, preset: opn-sanitize, fuzz: true }
+          - { os: ubuntu-26.04, arch: baseline, preset: adl-tsan, fuzz: true }
+          - { os: ubuntu-26.04, arch: baseline, preset: opn-tsan, fuzz: true }
           - { os: macos-26, arch: arm64, preset: adl-sanitize, fuzz: false }
           - { os: macos-26, arch: arm64, preset: opn-sanitize, fuzz: false }
 

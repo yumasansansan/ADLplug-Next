@@ -237,7 +237,14 @@ The presets in `CMakePresets.json` (ready-made build settings) work on
 Windows, Linux and macOS alike. They select the LLVM toolchain, such as Clang
 and LLD (`CMAKE_LINKER_TYPE=LLD`), and Ninja. Their versions are not fixed,
 but LLVM 23 is recommended. Pass the options below to `cmake` to customise
-the build.
+the build, on the same command line: `cmake --preset adl-release
+-DADLplug_GREYZONE_BANKS=ON`.
+
+Configuring without a preset stops with an error. The presets carry the
+compilers, the linker, the generator and the settings that ADLplug-Next is
+built and tested with, and a configuration put together by hand differs from
+them without saying so. `cmake --list-presets` names them all, and a build that
+has to differ can inherit one in a `CMakeUserPresets.json` of its own.
 
 Configuring also applies the patches of `patches/` to the submodules, so that
 every build has them. They are ADLplug-Next's fixes for faults it has found in
@@ -263,7 +270,7 @@ An option chooses whether ADLplug-Next or OPNplug-Next is built:
 | -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | Include the banks of the grey zone (see below)                                                |
 | -DADLplug_ARCH=baseline/avx2    | baseline                               | x86-64 instruction set: baseline (every x86-64 CPU) or avx2 (CPUs with AVX2)                  |
 | -DADLplug_PGO=ON/OFF            | ON                                     | Profile-guided optimisation of Release builds (see below)                                     |
-| -DADLplug_SANITIZERS=<list>     | empty                                  | Build with sanitizers: address, undefined, vptr (comma-separated; see below)                  |
+| -DADLplug_SANITIZERS=<list>     | empty                                  | Build with sanitizers: address, undefined, vptr, thread (comma-separated; see below)          |
 | -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | Enable assertions (internal consistency checks) in any build type (Debug, Release and others) |
 | -DADLplug_WERROR=ON/OFF         | OFF (the presets set ON)               | Treat warnings in ADLplug-Next's own code as errors                                           |
 | -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | Build developer tools (a tool that loads the VST3 plugin and writes out its sound)            |
@@ -290,6 +297,22 @@ address, undefined and vptr sanitizers, with a RelWithDebInfo build:
 class that the code takes it to be, which undefined does not check; Clang does
 not have it on Windows, so a Windows build leaves it out. Such a build is for
 finding mistakes, not for playing: it runs several times slower.
+
+The `adl-tsan` and `opn-tsan` presets name the thread and undefined sanitizers
+instead. thread watches the threads a host runs a plugin on — the one it asks
+for audio on, the one the editor lives on, and the plugin's own worker — for two
+of them reaching the same memory with nothing to order the one against the
+other, for locks taken in an order that could leave two threads each waiting for
+the other, and for a thread still running when the program ends. It cannot be
+built together with address, since each of the two keeps a shadow of all of
+memory in its own way, which is why it has presets of its own; CI builds both
+plugins both ways. It goes without vptr, whose check and the thread sanitizer's
+runtime race with one another inside LLVM itself — known upstream since 2019, as
+google/sanitizers issue 1106 — so a build with both reports LLVM's race and not
+the plugin's: such a build leaves vptr out and says so, and the address build is
+where that check belongs. Clang has no thread sanitizer for Windows, so a thread
+build is for Linux and macOS, and configuring one on Windows stops with a
+message that says as much.
 
 Every emulator core is built by default. To leave cores out, turn off options
 in the Build option column of the tables under

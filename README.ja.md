@@ -149,7 +149,9 @@ cmake --preset adl-release     # OPNplug-Next をビルドする場合は opn-re
 cmake --build --preset adl-release     # 上と同様です．
 ```
 
-`CMakePresets.json` に書かれているプリセット（あらかじめ用意されたビルドの設定）は，Windows，Linux，macOS のどれでも動作します．Clang，LLD（`CMAKE_LINKER_TYPE=LLD`）といった LLVM のツールチェーンと，Ninja が指定されています．バージョンは固定されていませんが，LLVM 23 を推奨します．なお，以下のオプションを `cmake` に渡すと，コンパイルの設定をカスタマイズできます．
+`CMakePresets.json` に書かれているプリセット（あらかじめ用意されたビルドの設定）は，Windows，Linux，macOS のどれでも動作します．Clang，LLD（`CMAKE_LINKER_TYPE=LLD`）といった LLVM のツールチェーンと，Ninja が指定されています．バージョンは固定されていませんが，LLVM 23 を推奨します．なお，以下のオプションを同じコマンドラインで渡すと，コンパイルの設定をカスタマイズできます（例: `cmake --preset adl-release -DADLplug_GREYZONE_BANKS=ON`）．
+
+プリセットを使わずに configure すると，エラーになります．プリセットには，ADLplug-Next がビルドとテストに使っているコンパイラ・リンカ・ジェネレータ・各種設定が入っており，手で組み立てた設定は，そうとは分からないままそれらと違ってしまうためです．`cmake --list-presets` で一覧を表示できます．どうしても違う設定が必要な場合は，`CMakeUserPresets.json` に自分のプリセットを作り，これらを継承してください．
 
 また，構成時に `patches/` にあるパッチがサブモジュールに適用されます．同梱しているライブラリと JUCE に見つかった不具合を，ADLplug-Next が直したものです．それぞれ元のプロジェクトにも提出しており，取り込まれたものは削除します．なお，パッチを適用するとサブモジュールに変更が入るため，`git status` に表示されます．
 
@@ -169,7 +171,7 @@ cmake --build --preset adl-release     # 上と同様です．
 | -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | グレーゾーンのバンクを含める（後述） |
 | -DADLplug_ARCH=baseline/avx2    | baseline                               | x86-64 の命令セット（baseline はすべての x86-64 CPU 向け，avx2 は AVX2 に対応した CPU 向け） |
 | -DADLplug_PGO=ON/OFF            | ON                                     | Release ビルドで，プロファイルに基づく最適化（PGO）を行う（後述） |
-| -DADLplug_SANITIZERS=<list>     | 空                                     | サニタイザ付きでビルドする（address・undefined・vptr をカンマ区切りで指定，後述） |
+| -DADLplug_SANITIZERS=<list>     | 空                                     | サニタイザ付きでビルドする（address・undefined・vptr・thread をカンマ区切りで指定，後述） |
 | -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | ビルドの種類（Debug・Release など）にかかわらず，アサーション（内部の整合性のチェック）を有効にする |
 | -DADLplug_WERROR=ON/OFF         | OFF（プリセットでは ON に設定されています）  | ADLplug-Next 自身のコードの警告をエラーとして扱う |
 | -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | 開発者向けのツール（VST3 プラグインを読み込んで，音を書き出すツール）をビルドする |
@@ -181,6 +183,8 @@ cmake --build --preset adl-release     # 上と同様です．
 `ADLplug_PGO` を有効にすると，Release ビルドはコンパイルの前に学習（プロファイルの取得）を行います．ビルドディレクトリの `pgo/instrumented` に，オフラインレンダラと，プロファイル（どの処理がよく使われるかを計測したデータ）を取るためのコードを埋め込んだ VST3 プラグインをビルドし，ビルドに含まれるすべてのエミュレータコアでレンダリングして，そのプロファイルを使ってプラグインをコンパイルします．プロファイルを作り直すのは，プラグインが変わったときだけになります．`llvm-profdata` と LLVM の compiler-rt のプロファイル用ランタイム（apt.llvm.org では `libclang-rt-<version>-dev` パッケージに含まれます）に加えて，ビルドしたプラグインを実行できるマシンが必要です．AVX2 のない CPU で AVX2 版をビルドするときや，ビルドを速く済ませたいときは，無効にしてください．
 
 `ADLplug_SANITIZERS` を指定すると，ADLplug-Next 自身のコード，JUCE，ライブラリのすべてを，指定したサニタイザ付きでビルドします．未定義の操作が見つかった時点で止まります．`adl-sanitize`・`opn-sanitize` のプリセットが，address・undefined・vptr のサニタイザと RelWithDebInfo を指定します（例: `cmake --preset adl-sanitize`）．vptr は，オブジェクトが，コードの想定しているクラスのものであるかを確かめる検査で，undefined には含まれません．Windows の Clang にはないため，Windows ではこれを除いてビルドします．誤りを見つけるためのビルドなので，演奏には向きません．動作は数倍遅くなります．
+
+`adl-tsan`・`opn-tsan` のプリセットは，address の代わりに thread を，undefined と組み合わせて指定します．thread は，ホストがプラグインを動かす複数のスレッド（同時に進む処理の流れ．音声を要求してくるスレッド，エディタが動いているスレッド，プラグイン自身のワーカーがあります）を見張り，そのうちの 2 つが，順序を決めるしくみなしに同じメモリを読み書きしていないか，互いを待ち合って止まってしまうような順序でロック（他のスレッドを待たせるしくみ）を取っていないか，プログラムの終了時にまだ動いているスレッドがないかを調べます．address とは，どちらもメモリ全体の状態を独自の方法で覚えておくため，同時にビルドできません．そのため，別のプリセットになっています．CI では，どちらのプラグインも，両方の組み合わせでビルドしています．vptr は含めません．vptr の検査と thread のランタイムは，LLVM 自身の中で互いに競合するため（2019 年から google/sanitizers の issue 1106 として知られています），両方を指定したビルドでは，プラグインの問題ではなく LLVM の競合が報告されてしまいます（指定した場合は，vptr を除いた旨を表示してビルドします）．vptr の検査は address のビルドが受け持ちます．なお，Windows の Clang には thread がないため，これは Linux と macOS 向けのビルドです．Windows で configure すると，その旨のメッセージを表示して止まります．
 
 エミュレータコアは，デフォルトですべてビルドされます．コアを除くには，[FM 音源コアの特徴](#fm-音源コアの特徴) の表の「ビルドオプション」の列にあるオプションを OFF にします（例: `-DUSE_OPAL_EMULATOR=OFF`）．`USE_NUKED_EMULATOR` のように，1 つで複数のコアをまとめて除くオプションや，libADLMIDI と libOPNMIDI の両方にある名前のオプションもあります．両方にある名前でも，影響するのはビルドするプラグインの側（ADLplug-Next なら libADLMIDI）だけです．`USE_DOSBOX_EMULATOR`（ADLplug-Next）と `USE_MAME_EMULATOR`（OPNplug-Next）は，プラグインが音色の計測に使うため，OFF にすることはできません（configure の時点でエラーになります）．
 

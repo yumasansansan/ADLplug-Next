@@ -31,7 +31,8 @@
         "CMAKE_ADDR2LINE": "llvm-addr2line",
         "CMAKE_DLLTOOL": "llvm-dlltool",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "ADLplug_WERROR": "ON"
+        "ADLplug_WERROR": "ON",
+        "ADLplug_PRESET": "${presetName}"
       }
     },
 
@@ -69,6 +70,14 @@
         "ADLplug_SANITIZERS": "address,undefined,vptr"
       }
     },
+    {
+      "name": "sanitize-thread",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "ADLplug_SANITIZERS": "thread,undefined"
+      }
+    },
 
     {
       "name": "adl-debug",
@@ -91,6 +100,11 @@
       "inherits": ["base", "adl", "sanitize"]
     },
     {
+      "name": "adl-tsan",
+      "displayName": "ADLplug (OPL3) — RelWithDebInfo with the thread and undefined sanitizers",
+      "inherits": ["base", "adl", "sanitize-thread"]
+    },
+    {
       "name": "opn-debug",
       "displayName": "OPNplug (OPN2) — Debug",
       "inherits": ["base", "opn", "debug"]
@@ -109,6 +123,11 @@
       "name": "opn-sanitize",
       "displayName": "OPNplug (OPN2) — RelWithDebInfo with the address, undefined and vptr sanitizers",
       "inherits": ["base", "opn", "sanitize"]
+    },
+    {
+      "name": "opn-tsan",
+      "displayName": "OPNplug (OPN2) — RelWithDebInfo with the thread and undefined sanitizers",
+      "inherits": ["base", "opn", "sanitize-thread"]
     }
   ],
 
@@ -117,10 +136,12 @@
     { "name": "adl-relwithdebinfo", "configurePreset": "adl-relwithdebinfo" },
     { "name": "adl-release",        "configurePreset": "adl-release" },
     { "name": "adl-sanitize",       "configurePreset": "adl-sanitize",       "environment": { "ASAN_OPTIONS": "detect_leaks=0" } },
+    { "name": "adl-tsan",           "configurePreset": "adl-tsan" },
     { "name": "opn-debug",          "configurePreset": "opn-debug" },
     { "name": "opn-relwithdebinfo", "configurePreset": "opn-relwithdebinfo" },
     { "name": "opn-release",        "configurePreset": "opn-release" },
-    { "name": "opn-sanitize",       "configurePreset": "opn-sanitize",       "environment": { "ASAN_OPTIONS": "detect_leaks=0" } }
+    { "name": "opn-sanitize",       "configurePreset": "opn-sanitize",       "environment": { "ASAN_OPTIONS": "detect_leaks=0" } },
+    { "name": "opn-tsan",           "configurePreset": "opn-tsan" }
   ],
 
   "testPresets": [
@@ -135,10 +156,14 @@
     { "name": "adl-release",        "configurePreset": "adl-release",        "inherits": "base" },
     { "name": "adl-sanitize",       "configurePreset": "adl-sanitize",       "inherits": "base",
       "output": { "outputOnFailure": true, "verbosity": "verbose" } },
+    { "name": "adl-tsan",           "configurePreset": "adl-tsan",           "inherits": "base",
+      "output": { "outputOnFailure": true, "verbosity": "verbose" } },
     { "name": "opn-debug",          "configurePreset": "opn-debug",          "inherits": "base" },
     { "name": "opn-relwithdebinfo", "configurePreset": "opn-relwithdebinfo", "inherits": "base" },
     { "name": "opn-release",        "configurePreset": "opn-release",        "inherits": "base" },
     { "name": "opn-sanitize",       "configurePreset": "opn-sanitize",       "inherits": "base",
+      "output": { "outputOnFailure": true, "verbosity": "verbose" } },
+    { "name": "opn-tsan",           "configurePreset": "opn-tsan",           "inherits": "base",
       "output": { "outputOnFailure": true, "verbosity": "verbose" } }
   ]
 }

@@ -7,10 +7,11 @@
 # (LICENSES/GPL-3.0-or-later.txt).
 #
 # The long fuzzing. Once a day, and whenever it is started by hand, every fuzz
-# target of both plugins runs for fifteen minutes with libFuzzer and the
-# address and undefined sanitizers, on Ubuntu (ci/fuzz.sh --with-long). That
-# includes the targets whose every input is heavy, which the short runs of a
-# minute in CI leave out (.github/workflows/ci.yml).
+# target of both plugins runs for fifteen minutes with libFuzzer, on Ubuntu
+# (ci/fuzz.sh --with-long), in each of the two sanitizer builds: the one with the
+# address sanitizer and the one with the thread sanitizer, which no build can
+# have both of. That includes the targets whose every input is heavy, which the
+# short runs of a minute in CI leave out (.github/workflows/ci.yml).
 #
 # A run carries on from the corpus that the last decided run (one that passed
 # or failed) grew and kept as an artifact; when that is gone, it starts again
@@ -51,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        preset: [adl-sanitize, opn-sanitize]
+        preset: [adl-sanitize, opn-sanitize, adl-tsan, opn-tsan]
 
     steps:
       - name: Check out
