@@ -224,6 +224,7 @@ ctest --preset adl-debug
   - プラグインが読み込まれている間にホストがすること: バッファに入れる MIDI，パラメータに書くオートメーション，要求してくるブロックを与え，出てくる標本がすべて有限の値であること，そしてプラグインが数えているチャンネルごとの発音数が，そのチャンネルで鳴っているとプラグインが思っている音の数と一致することを確認します．
   - プラグインが長さを測る楽器: ホストに音の終わりを伝えるための測定で，返ってくる数がすべて有限で，鳴らして聴いた時間より長い時間を申告しないことを確認します．
   - エディタがバンクについて送るメッセージ（楽器の読み込み・作成・削除，バンクの削除，どちらの名前の変更，プログラムの選択）: プログラムを持つ枠がプラグインの見せられるバンクであること，同じバンクが 2 つの枠にないこと，プログラムが使用中とされるのは中の楽器が空でないときだけであること，プラグインがエディタに伝える内容がプラグインの持っている内容と一致すること，そしてプラグインを準備し直しても保存される状態が変わらないことを確認します．
+  - 小さな読み取り処理: プラグインが内部に持つバンクのパック，バンクファイルの名前を収める固定長の欄，そして設定ファイルです．パックが「ある」と言うバンクは実際に読み出せて名前で見つけられること，欄に収めた名前を読み戻してもう一度収めても変わらないこと，設定ファイルの値が保存と読み込みを経ても同じであることを確認します．
 - fuzz の対象にはどれも，fuzz のツールが作るよりはるかに大きい入力も与えます（64 MiB のゼロ，`0xff`，擬似乱数のバイト列）．外から来る入力の大きさはプラグインが選べるものではないからです（バンクファイルはその大きさのまま来ますし，ホストはプロジェクトの状態をまとめて渡します）．この入力はプログラムが作るので（`--made`），その大きさのファイルはリポジトリに置いていません．
 - configure のときに [pluginval](https://github.com/Tracktion/pluginval) や [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint)（プラグインの検証ツール）が `PATH` にあれば，それらを使って VST3・LV2 プラグインも検証します．
 
@@ -238,7 +239,7 @@ build/adl-sanitize/fuzz/ADLplug_fuzz_bank_file -dict=fuzz/dict/wopl.dict corpus 
 
 不具合を起こす入力が見つかるか，止められるまで動き続けます（`-max_total_time=<秒数>` で時間を区切れます）．見つかった入力は `crash-<ハッシュ>` という名前のファイルに書き出されます．その入力は，修正と一緒に `fuzz/regressions/opl3/<対象名>`（OPNplug-Next では `opn2`）に加えてください．以後，テストでその入力が再生されます．
 
-残る 5 つの対象は，MIDI を鳴らす `ADLplug_fuzz_midi_synth`，プロジェクトにホストが保存した状態を読む `ADLplug_fuzz_state`，ホストと同じようにプラグインを動かす `ADLplug_fuzz_host`，エディタがバンクについて送るメッセージを送る `ADLplug_fuzz_bank_manager`，そして楽器の長さを測る `ADLplug_fuzz_measurement` です．最後の 1 つを除いて種の入力は CMake が書き出すので（MIDI の方は，ビルドしたコアごとに 1 つずつ）ビルドディレクトリから渡し，測定の種は `fuzz/seeds/` にあります．
+残る 6 つの対象は，MIDI を鳴らす `ADLplug_fuzz_midi_synth`，プロジェクトにホストが保存した状態を読む `ADLplug_fuzz_state`，ホストと同じようにプラグインを動かす `ADLplug_fuzz_host`，エディタがバンクについて送るメッセージを送る `ADLplug_fuzz_bank_manager`，楽器の長さを測る `ADLplug_fuzz_measurement`，そしてバンクのパック・名前の欄・設定ファイルを読む `ADLplug_fuzz_parsers` です．測定を除いて種の入力は CMake が書き出すので（MIDI の方はビルドしたコアごとに 1 つずつ，読み取り処理の方はビルドが作ったパックそのもの）ビルドディレクトリから渡し，測定の種は `fuzz/seeds/` にあります．
 
 ```
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_midi_synth
@@ -251,6 +252,8 @@ cmake --build --preset adl-sanitize --target ADLplug_fuzz_bank_manager
 build/adl-sanitize/fuzz/ADLplug_fuzz_bank_manager -dict=fuzz/dict/bank_manager.dict corpus build/adl-sanitize/fuzz/seeds/bank_manager
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_measurement
 build/adl-sanitize/fuzz/ADLplug_fuzz_measurement -dict=fuzz/dict/measurement.dict corpus fuzz/seeds/opl3/measurement
+cmake --build --preset adl-sanitize --target ADLplug_fuzz_parsers
+build/adl-sanitize/fuzz/ADLplug_fuzz_parsers -dict=fuzz/dict/parsers.dict corpus build/adl-sanitize/fuzz/seeds/parsers
 ```
 
 楽器 1 つの測定は 100 秒ぶんの音を鳴らすので，この対象は push ごとの 1 分の fuzz からは外してあり，毎日の fuzz で回ります．入力の再生テストは，他と同じようにすべての環境で走ります．

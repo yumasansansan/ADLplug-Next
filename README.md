@@ -403,7 +403,12 @@ ctest --preset adl-debug
     that holds programs is a bank the plugin can show, no two slots are the same
     bank, a program counts as used exactly when the instrument in it is not
     blank, what the plugin tells the editor is what the plugin holds, and
-    preparing the plugin again leaves the state it would save unchanged.
+    preparing the plugin again leaves the state it would save unchanged;
+  - the small readers: the pack of banks the plugin carries, the fields that
+    hold the names out of a bank file, and the configuration file. A bank the
+    pack says it has is one that can be read and found again by name; a name
+    stored in a field and read back stores again unchanged; and the values of a
+    configuration file survive being saved and loaded.
 - Every fuzz target is also given an input far larger than a fuzzer would make:
   sixty-four mebibytes of zeros, of `0xff`, and of bytes from a generator. The
   size of what comes from outside is not the plugin's to choose — a bank file is
@@ -438,9 +443,11 @@ The other targets are `ADLplug_fuzz_midi_synth`, which plays MIDI,
 `ADLplug_fuzz_state`, which reads the state that a host kept in a project,
 `ADLplug_fuzz_host`, which plays the plugin the way a host does,
 `ADLplug_fuzz_bank_manager`, which sends the messages the editor sends about the
-banks, and `ADLplug_fuzz_measurement`, which measures how long an instrument
-sounds. CMake writes the seed inputs of all but the last — for the MIDI target,
-one for each emulator core the build has — so those come from the build
+banks, `ADLplug_fuzz_measurement`, which measures how long an instrument sounds,
+and `ADLplug_fuzz_parsers`, which reads the pack of banks, the fields a name sits
+in and the configuration file. CMake writes the seed inputs of all but the
+measurement — for the MIDI target, one for each emulator core the build has, and
+for the readers the pack the build just made — so those come from the build
 directory, while the seed of the measurement is in `fuzz/seeds/`:
 
 ```
@@ -454,6 +461,8 @@ cmake --build --preset adl-sanitize --target ADLplug_fuzz_bank_manager
 build/adl-sanitize/fuzz/ADLplug_fuzz_bank_manager -dict=fuzz/dict/bank_manager.dict corpus build/adl-sanitize/fuzz/seeds/bank_manager
 cmake --build --preset adl-sanitize --target ADLplug_fuzz_measurement
 build/adl-sanitize/fuzz/ADLplug_fuzz_measurement -dict=fuzz/dict/measurement.dict corpus fuzz/seeds/opl3/measurement
+cmake --build --preset adl-sanitize --target ADLplug_fuzz_parsers
+build/adl-sanitize/fuzz/ADLplug_fuzz_parsers -dict=fuzz/dict/parsers.dict corpus build/adl-sanitize/fuzz/seeds/parsers
 ```
 
 Measuring one instrument plays a hundred seconds of audio, so that target is

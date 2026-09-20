@@ -405,6 +405,60 @@ adlplug_fuzz_target(bank_manager JUCE
   SEEDS "${ADLplug_FUZZ_BANKS_SEEDS}"
   DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/bank_manager.dict")
 
+# The small readers: the pack of banks the plugin carries, the fields a name sits
+# in, and the configuration file. None of them plays, and all three read bytes the
+# plugin did not write. Configuration itself is not here: it includes the key map,
+# which includes the keyboard of the editor, which wants the interface modules of
+# JUCE that these targets do without (the processor's targets use the headless one
+# for the same reason), so the configuration goes through SimpleIni the way
+# Configuration::load_ini does. juce_core is all the rest of it needs: a name
+# becomes a String, and a pack reads its content through JUCE's streams.
+#
+# The seeds: the pack that the build just made for the plugin, whole, since a
+# fuzzer would never come upon the zlib stream inside one (fuzz/parsers.cc takes
+# an input that begins as a pack does for a pack); and a configuration file, a
+# field of bytes and a name, which are text and are written here.
+set(ADLplug_FUZZ_PARSERS_SEEDS "${CMAKE_CURRENT_BINARY_DIR}/seeds/parsers")
+file(MAKE_DIRECTORY "${ADLplug_FUZZ_PARSERS_SEEDS}")
+add_custom_command(
+  OUTPUT "${ADLplug_FUZZ_PARSERS_SEEDS}/a-pack-of-banks"
+  COMMAND "${CMAKE_COMMAND}" -E copy "${ADLplug_BANKS_PAK}"
+    "${ADLplug_FUZZ_PARSERS_SEEDS}/a-pack-of-banks"
+  DEPENDS "${ADLplug_BANKS_PAK}"
+  COMMENT "Taking the pack of banks as a fuzz seed"
+  VERBATIM)
+add_custom_target(ADLplug_fuzz_parsers_seeds
+  DEPENDS "${ADLplug_FUZZ_PARSERS_SEEDS}/a-pack-of-banks")
+
+# A configuration file as the plugin writes one, a field of sixteen bytes, and a
+# name of six bytes for a field of four, which is a character cut in half.
+string(ASCII 194 ADLplug_FUZZ_PARSERS_INI_RECORD)
+file(WRITE "${ADLplug_FUZZ_PARSERS_SEEDS}/a-configuration-file"
+  "${ADLplug_FUZZ_PARSERS_INI_RECORD}configuration-version = 1\n[paths]\nlast-instrument-directory = \n[piano]\nlayout = qwerty\nkeymap:qwerty = zsxdcvgbhnjm\n")
+string(ASCII 79 66 97 110 107 32 111 110 101 32 105 110 32 97 32 102 105
+  ADLplug_FUZZ_PARSERS_FIELD)
+file(WRITE "${ADLplug_FUZZ_PARSERS_SEEDS}/a-field-of-bytes" "${ADLplug_FUZZ_PARSERS_FIELD}")
+string(ASCII 134 66 97 110 107 32 49 4 ADLplug_FUZZ_PARSERS_NAME)
+file(WRITE "${ADLplug_FUZZ_PARSERS_SEEDS}/a-name-for-a-field" "${ADLplug_FUZZ_PARSERS_NAME}")
+
+# Nothing at all, which a reader is as entitled to as it is to bytes: a pack and
+# a configuration file of no bytes and no address, the same two with an address
+# they have not got but a length they claim, and a name of no bytes for a field
+# of none.
+string(ASCII 7 199 128 64 193 1 1 3 1 1 ADLplug_FUZZ_PARSERS_NOTHING)
+file(WRITE "${ADLplug_FUZZ_PARSERS_SEEDS}/nothing-at-all" "${ADLplug_FUZZ_PARSERS_NOTHING}")
+
+adlplug_fuzz_target(parsers JUCE
+  OWN_SOURCES "${PROJECT_SOURCE_DIR}/sources/utility/pak.cc"
+  LIBRARIES simple-ini juce::juce_core juce::juce_recommended_config_flags
+  SEEDS "${ADLplug_FUZZ_PARSERS_SEEDS}"
+  DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/parsers.dict")
+foreach(target IN ITEMS ADLplug_fuzz_parsers_replay ADLplug_fuzz_parsers)
+  if(TARGET ${target})
+    add_dependencies(${target} ADLplug_fuzz_parsers_seeds)
+  endif()
+endforeach()
+
 # resources.c embeds the pack of banks that the build makes for the plugin, and
 # a source property belongs to the directory that compiles the file.
 adlplug_embed_banks("${PROJECT_SOURCE_DIR}/sources/resources.c")

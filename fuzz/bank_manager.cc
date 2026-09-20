@@ -136,6 +136,16 @@ public:
         return out;
     }
 
+    // The next two bytes as one number, the first of them the higher. They are
+    // read one after the other rather than in one expression, where nothing
+    // would say which of them comes first.
+    unsigned two_bytes() noexcept
+    {
+        const unsigned high = byte();
+        const unsigned low = byte();
+        return high << 8 | low;
+    }
+
 private:
     const std::uint8_t *data_;
     std::size_t size_;
@@ -377,7 +387,7 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
                 send<Messages::User::RequestChipSettings>(processor, [](auto &) {});
                 break;
             case 3: {
-                const unsigned mask = (unsigned{input.byte()} << 8) | input.byte();
+                const unsigned mask = input.two_bytes();
                 send<Messages::User::RequestSelections>(processor,
                     [mask](auto &body) { body.channel_mask = std::bitset<16>(mask); });
                 break;
@@ -507,8 +517,8 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
             // the instrument is still the one that was measured.
             const Bank_Id bank = bank_from(input, percussive);
             const std::uint8_t program = input.byte();
-            const auto kon = static_cast<std::uint16_t>((unsigned{input.byte()} << 8) | input.byte());
-            const auto koff = static_cast<std::uint16_t>((unsigned{input.byte()} << 8) | input.byte());
+            const auto kon = static_cast<std::uint16_t>(input.two_bytes());
+            const auto koff = static_cast<std::uint16_t>(input.two_bytes());
             Instrument held;
             processor.bank_manager().find_program(bank, program, held);
             const Instrument ins = instrument_from(input, value >> 2, held);

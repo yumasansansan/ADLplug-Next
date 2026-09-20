@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# libFuzzer's dictionary for the target of the small readers (-dict=): the
+# records the input is made of, the words a pack and a configuration file begin
+# with, the keys the plugin asks the configuration for, and the bytes that lead a
+# character of more than one byte, which is what a name field has to keep whole.
+
+# The records (fuzz/parsers.cc says what they mean)
+pack="\x02"
+pack_of_the_rest="\x02"
+pack_of_nothing="\x03"
+field="\x7f"
+name="\xbf"
+configuration="\xc2"
+configuration_of_nothing="\xc3"
+
+# A pack: its word, the end of its list of banks, and a name of one
+pak="PAK2"
+pak_end="\x00\x00\x00\x00"
+pak_size_one="\x00\x00\x00\x01"
+zlib="\x78\x9c"
+zlib_best="\x78\xda"
+
+# A configuration file. The numbers are there because the version a file names is
+# read as one (GetLongValue), and a file may say anything: no number at all, a
+# number past what a long holds, or the words a number is not.
+number_negative="-1"
+number_zero="0"
+number_huge="99999999999999999999"
+number_hex="0x7fffffffffffffff"
+number_exponent="1e999"
+number_infinity="inf"
+number_not_a_number="nan"
+section_piano="[piano]"
+section_paths="[paths]"
+version="configuration-version="
+layout="layout="
+keymap_qwerty="keymap:qwerty="
+keymap_azerty="keymap:azerty="
+keymap_qwertz="keymap:qwertz="
+directory="last-instrument-directory="
+comment="# "
+quote="\""
+equals="="
+newline="\x0a"
+carriage_return="\x0d"
+
+# The bytes that lead a character of two, three and four, and one that follows
+lead_two="\xc2"
+lead_three="\xe0"
+lead_four="\xf0"
+follow="\x80"

@@ -71,6 +71,8 @@ adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0002-memory-block-two-blocks-of-no-bytes-are-equal.patch")
 adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0003-no-bytes-to-zero-is-no-call-to-memset.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0004-a-string-of-no-text-reads-none-of-it.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0001-esfmu-the-rhythm-volume-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libADLMIDI"

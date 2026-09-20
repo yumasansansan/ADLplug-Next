@@ -17,6 +17,7 @@
 
 #include "pak.h"
 #include "JuceHeader.h"
+#include <algorithm>
 #include <cstring>
 #include <limits>
 #include <utility>
@@ -78,10 +79,23 @@ std::vector<std::uint8_t> Pak_File_Reader::read_content(std::uint32_t offset, st
     if (!zlib_stream.setPosition(offset))
         return {};
 
-    std::vector<std::uint8_t> content(size);
-    const int length = static_cast<int>(size);
-    if (zlib_stream.read(content.data(), length) != length)
-        return {};
+    // The size is what the pack says, and a pack that says a gigabyte would have
+    // a gigabyte taken for it before a byte had been read. The content is read in
+    // pieces, into itself, and grows with what the stream really gives, so that a
+    // size larger than the stream holds costs no more than what is there. The
+    // room doubles rather than following the pieces, so that a bank of any size
+    // is copied as few times as a vector ever copies it. A stream that gives less
+    // than the pack said is no answer, as it was before.
+    constexpr std::size_t piece_size = 64 * 1024;
+    std::vector<std::uint8_t> content;
+    while (content.size() < size) {
+        const std::size_t have = content.size();
+        const auto want = static_cast<int>(std::min<std::size_t>(piece_size, size - have));
+        content.reserve(std::max(have + static_cast<std::size_t>(want), 2 * content.capacity()));
+        content.resize(have + static_cast<std::size_t>(want));
+        if (zlib_stream.read(content.data() + have, want) != want)
+            return {};
+    }
 
     return content;
 }
@@ -92,7 +106,11 @@ bool Pak_File_Reader::read_dictionary()
     entries_.reserve(256);
     content_offset_ = 0;
 
-    if (size_ < sizeof pak_magic || std::memcmp(data_, pak_magic, sizeof pak_magic) != 0)
+    // A caller with nothing to give has nothing at all: no bytes, and no address
+    // either. Neither is a pack, and memcmp() may not be given a null pointer
+    // even for none of them.
+    if (data_ == nullptr || size_ < sizeof pak_magic ||
+        std::memcmp(data_, pak_magic, sizeof pak_magic) != 0)
         return false;
 
     const std::uint8_t *ptr = data_ + sizeof pak_magic;

@@ -1,0 +1,43 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+A string of no text reads none of it
+
+StringHolderUtils::createFromCharPointer() takes the text between two pointers and asks the first of them whether it is empty, which reads the character there. When the two pointers are the same there is no character there to read: the one at the end is the first the caller does not have. AddressSanitizer stops on it:
+
+  ERROR: AddressSanitizer: heap-buffer-overflow on address 0x...
+  READ of size 1 at 0x... thread T0
+      #0 juce::CharPointer_UTF8::isEmpty() const modules/juce_core/text/juce_CharPointer_UTF8.h:81:59
+      #1 juce::StringHolderUtils::createFromCharPointer(juce::CharPointer_UTF8, juce::CharPointer_UTF8) modules/juce_core/text/juce_String.cpp:145:52
+      #2 juce::String::String(juce::CharPointer_UTF8, juce::CharPointer_UTF8) modules/juce_core/text/juce_String.cpp:382:74
+      #3 juce::String::createStringFromData(void const*, int) modules/juce_core/text/juce_String.cpp:2031:16
+
+  0x... is located 0 bytes after 3-byte region [0x..., 0x...)
+
+String::createStringFromData() is one way there, and it does not need a mistake to get there: it is told how many bytes it has, and it hands on a pointer to the first and a pointer past the last. Data of no bytes makes the two the same. So does data that is a byte order mark and nothing else, since the mark is stepped over and the three bytes are gone. Both are things a caller may be given: four bytes of a name field that a file filled with a mark, or a field with nothing in it.
+
+Between the two pointers there is nothing to read, and the answer is the empty string either way, so the comparison that says so comes first.
+
+A fuzz target of ADLplug-Next found it: it puts whatever bytes a bank file may hold into the fields that such a file keeps its names in, and reads them back as text. Three bytes that are a byte order mark are enough.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_core/text/juce_String.cpp b/modules/juce_core/text/juce_String.cpp
+index 2e00fdf472..d9df380d9c 100644
+--- a/modules/juce_core/text/juce_String.cpp
++++ b/modules/juce_core/text/juce_String.cpp
+@@ -142,7 +142,12 @@ public:
+ 
+     static CharPointerType createFromCharPointer (const CharPointerType start, const CharPointerType end)
+     {
+-        if (start.getAddress() == nullptr || start.isEmpty())
++        // Between start and end there may be nothing, and then there is nothing
++        // to read either: start.isEmpty() would look at the character at the end,
++        // which is the first one the caller does not have. createStringFromData()
++        // arrives here that way, with data of no bytes, or of a byte order mark
++        // and no bytes after it.
++        if (start.getAddress() == nullptr || start == end || start.isEmpty())
+             return CharPointerType (emptyString.text);
+ 
+         auto numBytes = (size_t) (reinterpret_cast<const char*> (end.getAddress())
