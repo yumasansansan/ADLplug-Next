@@ -16,6 +16,11 @@
 # be of that major version. The presets name the tools without a version, and
 # this check decides what the build accepts.
 #
+# The C++ library is the one part that is not LLVM's everywhere: it is the
+# system's, and a build asks the system for it at load time, so it is recorded
+# with its version and checked to be there to link, rather than required to be of
+# a version of ours.
+#
 # Included after project(). Defines adlplug_check_llvm_tool(), with which
 # CMakeLists.txt checks the resource compiler on Windows.
 
@@ -115,3 +120,78 @@ foreach(ADLplug_LLVM_ARCHIVER IN ITEMS
   adlplug_check_llvm_tool("${ADLplug_LLVM_ARCHIVER}" "${${ADLplug_LLVM_ARCHIVER}}"
     "^llvm-(ar|ranlib)(-[0-9]+)?(\\.exe)?$")
 endforeach()
+
+# Checks the C++ library that the compilers are given, and records which one it
+# is. That library is the system's on every OS -- libstdc++ on Linux, the libc++
+# of the SDK on macOS, the MSVC STL on Windows -- and what a build produces asks
+# the system for it at load time, so its version is a thing to know and to show
+# rather than to require: it decides how old a system the build runs on
+# (ci/build.sh shows what the plugin asks for), and it is the reason a bug in the
+# C++ library is the system's to fix and not a reason to release again. The
+# preprocessor is asked which library and which version the headers on the
+# include path are, because the headers, not the file names, are what the build
+# uses. Then a program that throws is compiled and linked, which is what says
+# that the library is there to link and not only to include.
+function(adlplug_check_cxx_library)
+  set(source "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/cxx-library.cpp")
+  file(WRITE "${source}"
+    "#include <version>\n"
+    "#if defined(_LIBCPP_VERSION)\n"
+    "ADLplug_CXX_LIBRARY libc++ _LIBCPP_VERSION 0\n"
+    "#elif defined(__GLIBCXX__)\n"
+    "ADLplug_CXX_LIBRARY libstdc++ _GLIBCXX_RELEASE __GLIBCXX__\n"
+    "#elif defined(_MSVC_STL_UPDATE)\n"
+    "ADLplug_CXX_LIBRARY MSVC-STL _MSVC_STL_VERSION _MSVC_STL_UPDATE\n"
+    "#else\n"
+    "ADLplug_CXX_LIBRARY none 0 0\n"
+    "#endif\n")
+  execute_process(COMMAND "${CMAKE_CXX_COMPILER}" -E -P -x c++ "${source}"
+    OUTPUT_VARIABLE preprocessed ERROR_VARIABLE complaint RESULT_VARIABLE failed TIMEOUT 60)
+  if(NOT failed EQUAL 0 OR NOT preprocessed MATCHES
+      "ADLplug_CXX_LIBRARY ([A-Za-z+-]+) ([0-9]+) ([0-9]+)")
+    message(FATAL_ERROR
+      "The C++ compiler cannot say which C++ library its headers are:\n${complaint}")
+  endif()
+  set(library "${CMAKE_MATCH_1}")
+  set(version "${CMAKE_MATCH_2}")
+  set(date "${CMAKE_MATCH_3}")
+  if(library STREQUAL "none")
+    message(FATAL_ERROR
+      "The headers on the include path are of no C++ library that this build knows: not "
+      "libstdc++, not libc++, not the MSVC STL.")
+  endif()
+  if(library STREQUAL "MSVC-STL")
+    set(library "MSVC STL")
+  endif()
+  set(named "${library} ${version}")
+  if(NOT date EQUAL 0)
+    string(APPEND named " (${date})")
+  endif()
+
+  # And it links: a program that throws needs the library itself, not its headers
+  # alone, and on a system where only the headers are installed this is where that
+  # is said. LLD links it, as it links the build.
+  set(check "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/cxx-library-link")
+  file(WRITE "${check}/main.cpp"
+    "#include <stdexcept>\n#include <string>\n"
+    "int main() { try { throw std::runtime_error(std::string(\"x\")); }\n"
+    "             catch (const std::exception &e) { return e.what()[0] == 'x' ? 0 : 1; } }\n")
+  try_compile(ADLplug_CXX_LIBRARY_LINKS "${check}/build" SOURCES "${check}/main.cpp"
+    CMAKE_FLAGS "-DCMAKE_CXX_STANDARD=23" "-DCMAKE_LINKER_TYPE=LLD"
+    OUTPUT_VARIABLE output)
+  if(NOT ADLplug_CXX_LIBRARY_LINKS)
+    message(FATAL_ERROR
+      "A C++ program cannot be linked against ${named}, the C++ library of these headers. On "
+      "Ubuntu that library comes with libstdc++-<version>-dev, on AlmaLinux with gcc-c++:\n"
+      "${output}")
+  endif()
+
+  message(STATUS "  C++ library: ${named}")
+  set(record "${library}")
+  if(NOT date EQUAL 0)
+    set(record "${library} ${date}")
+  endif()
+  file(APPEND "${ADLplug_LLVM_TOOLCHAIN_FILE}" "C++ library\t${version}\t${record}\n")
+endfunction()
+
+adlplug_check_cxx_library()

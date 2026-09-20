@@ -18,8 +18,9 @@
 # compile commands, and ThinLTO in those of Release builds, whose every compile
 # and link option it lists (ci/flags.py). Then it builds, with every command
 # shown in full, those of the builds that the build starts included (the
-# instrumented build of profile-guided optimisation), and lists the artefacts
-# and the libraries the VST3 plugin links against.
+# instrumented build of profile-guided optimisation), and lists the artefacts,
+# the libraries the VST3 plugin links against and, on Linux, the newest version
+# it asks of the libraries of the system.
 set -euo pipefail
 
 preset=$1
@@ -116,7 +117,18 @@ find "$artefacts" -mindepth 3 -maxdepth 3
 echo "== libraries the VST3 plugin links against"
 case "$(uname -s)" in
   Linux)
-    ldd "$(find "$artefacts" -path '*/VST3/*' -name '*.so' -print -quit)"
+    plugin=$(find "$artefacts" -path '*/VST3/*' -name '*.so' -print -quit)
+    ldd "$plugin"
+    # The C library and the C++ library are the system's, and the plugin asks for
+    # a version of each by name: the newest version it asks for is the oldest
+    # system that can load it. A build on a newer system raises them with nothing
+    # else to say so, which is what this shows. It is the same arrangement that
+    # leaves a fault in either library for the system to update.
+    echo "== the newest version the VST3 plugin asks of the system's libraries"
+    for library in GLIBC GLIBCXX CXXABI; do
+      asked=$(objdump -T "$plugin" | grep -o -E "${library}_[0-9.]+" | sort -u -V | tail -1)
+      printf '   %s\n' "${asked:-(no $library)}"
+    done
     ;;
   Darwin)
     binary=$(find "$artefacts" -path '*/VST3/*/Contents/MacOS/*' -type f -print -quit)
