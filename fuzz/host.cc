@@ -81,7 +81,10 @@ namespace {
 // play at about the speed of the clock with the sanitizers on top. A tenth of a
 // second at the rate the host gave keeps an input to a few milliseconds of work
 // whatever rate it asks for, and at a rate too low for a single sample of that,
-// the blocks it asks for are none.
+// the blocks it asks for are none. What those milliseconds cost still follows
+// the chips and the emulator core that automation may put in, which this says
+// nothing about: libFuzzer is given a minute an input (fuzz/CMakeLists.txt), so
+// that a block which costs more than that is told of rather than worked on.
 constexpr unsigned frames_max = 4096;
 constexpr double seconds_max = 0.1;
 constexpr unsigned records_max = 512;

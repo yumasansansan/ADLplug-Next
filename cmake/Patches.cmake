@@ -8,10 +8,9 @@
 #
 # The patches of patches/, applied to the submodules when CMake configures, so
 # that every build has them. They are for the faults that ADLplug-Next finds in
-# the libraries and the framework it ships, the sanitizers' among them (plan
-# D47): the fault is fixed rather than left alone, and the patch is offered
-# upstream. A patch goes away once it is upstream and the submodule has moved
-# on.
+# the libraries and the framework it ships, the sanitizers' among them: the
+# fault is fixed rather than left alone, and the patch is offered upstream. A
+# patch goes away once it is upstream and the submodule has moved on.
 #
 # Configuring twice is not an error: a patch that is already in place is left
 # alone. Editing one makes CMake configure again.
@@ -88,6 +87,8 @@ adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0007-models-the-frequency-models-stay-inside-their-tables.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0008-nuked-opl3-the-fast-path-silences-a-slot-as-the-other-does.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0009-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-psg-a-noise-table-that-does-not-overflow.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
@@ -110,3 +111,5 @@ adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0010-gens-the-phase-a-channel-update-works-with-wraps-as-well.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0011-the-chip-type-that-is-no-family.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0012-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")

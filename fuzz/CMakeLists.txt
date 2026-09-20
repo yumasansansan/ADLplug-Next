@@ -67,7 +67,17 @@ set(ADLplug_FUZZ_BIG_INPUT "64M")
 # modules: the plugin's processor, for one.
 #
 # ARGUMENTS go into the manifest before the inputs, for a target that asks
-# something of libFuzzer that the others do not.
+# something of libFuzzer that the others do not. They come after the arguments
+# every target gets, so a target that names one of those again has the say.
+#
+# Every manifest says -timeout=60. An input is meant to be a few milliseconds of
+# work, or a second or two for the targets that play a whole measurement, so a
+# minute of one means something has gone wrong with it rather than that it is
+# long. libFuzzer would otherwise work on it for twenty minutes, which is its
+# own default, and then hand back a job that spent itself on the one input: that
+# is how a rate of 16 Hz, which the resampler of both libraries never came back
+# from, took a whole fuzzing job of CI (patches/libADLMIDI/0009-*, and
+# fuzz/regressions/<chip>/host/sixteen-samples-a-second, which is the input).
 #
 # LONG_RUNS_ONLY marks a target whose every input is heavy enough that the
 # fuzzing of a push would get through too few of them to be worth the minute.
@@ -126,7 +136,7 @@ function(adlplug_fuzz_target name)
     if(configuration STREQUAL "libfuzzer")
       target_compile_options(${target} PRIVATE -fsanitize=fuzzer)
       target_link_options(${target} PRIVATE -fsanitize=fuzzer)
-      set(arguments "")
+      set(arguments "-timeout=60")
       if(arg_DICTIONARY)
         list(APPEND arguments "-dict=${arg_DICTIONARY}")
       endif()
@@ -358,9 +368,8 @@ adlplug_fuzz_target(host JUCE
 # How long an instrument sounds: the measurement the worker makes for every
 # instrument the plugin is given. One input plays a hundred seconds of audio on
 # a chip of its own, so the target says LONG_RUNS_ONLY and the fuzzing of a push
-# passes it by; -timeout says what an input that will not end looks like, since
-# one of them takes a second or two and no more, and -max_len keeps the fuzzer
-# inside the instrument, since the bytes past it are read by nobody. The seed is
+# passes it by; -max_len keeps the fuzzer inside the instrument, since the bytes
+# past it are read by nobody. The seed is
 # an instrument that sounds, and it is in the repository rather than written
 # here: an instrument is mostly zeros, and CMake writes text.
 # fuzz/dict/measurement.dict has the register bytes worth trying.
@@ -370,7 +379,7 @@ adlplug_fuzz_target(measurement LONG_RUNS_ONLY
   LIBRARIES ${ADLplug_FUZZ_PLAY_LIBRARY}
   SEEDS "${CMAKE_CURRENT_SOURCE_DIR}/seeds/${ADLplug_FUZZ_CHIP}/measurement"
   DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/measurement.dict"
-  ARGUMENTS "-timeout=60" "-max_len=64")
+  ARGUMENTS "-max_len=64")
 
 # The messages the editor sends the plugin about its banks, one after another,
 # and the bookkeeping they leave behind. The processor is the same one the
@@ -379,9 +388,9 @@ adlplug_fuzz_target(measurement LONG_RUNS_ONLY
 # and deletes one, asking for the layout of the banks in between; every byte
 # of it is between 1 and 127, which is what CMake can write, so the records
 # whose first bit is set are not in it -- fuzz/dict/bank_manager.dict has
-# those, along with the numbers that are not banks. -timeout says what an
-# input that will not end looks like: the parameters of a selected program ask
-# the worker for a measurement, and a measurement can take a second or two.
+# those, along with the numbers that are not banks. An input here takes longer
+# than most: the parameters of a selected program ask the worker for a
+# measurement, and a measurement can take a second or two.
 set(ADLplug_FUZZ_BANKS_SEEDS "${CMAKE_CURRENT_BINARY_DIR}/seeds/bank_manager")
 file(MAKE_DIRECTORY "${ADLplug_FUZZ_BANKS_SEEDS}")
 string(ASCII 37 1 1 5 17 2 17 5 101 1 1 66 97 110 107 32 111 110 101 49 1 1 7 3
@@ -394,8 +403,7 @@ adlplug_fuzz_target(bank_manager JUCE
   LIBRARIES ${ADLplug_FUZZ_PROCESSOR_LIBRARIES}
   DEFINITIONS ${ADLplug_FUZZ_PROCESSOR_DEFINITIONS}
   SEEDS "${ADLplug_FUZZ_BANKS_SEEDS}"
-  DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/bank_manager.dict"
-  ARGUMENTS "-timeout=60")
+  DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/dict/bank_manager.dict")
 
 # resources.c embeds the pack of banks that the build makes for the plugin, and
 # a source property belongs to the directory that compiles the file.

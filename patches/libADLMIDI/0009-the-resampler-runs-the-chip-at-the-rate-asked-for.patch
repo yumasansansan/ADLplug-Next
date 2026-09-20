@@ -1,0 +1,110 @@
+SPDX-FileCopyrightText: 2017-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+The resampler runs the chip at the rate that was asked for
+
+setupResampler() held the rate a caller asked for against the chip's own as a fixed-point number with ten bits of fraction, (rate << rsm_frac) / 49716, and resampledGenerate() ticked the chip while a count of the output samples stood above that ratio. Ten bits of fraction cannot hold that ratio, and both ends of the range of rates show it.
+
+A rate below 49716 / (1 << rsm_frac), which is 48 Hz, leaves nothing of the ratio: it is nought. The loop then never ends:
+
+  int32_t samplecnt = m_samplecnt;
+  const int32_t rateratio = m_rateratio;
+  while(samplecnt >= rateratio)
+  {
+      ...
+      samplecnt -= rateratio;
+  }
+
+Nought is taken from the count for ever and the chip is ticked for ever; were the loop ever left, the two divisions by the ratio under it would be divisions by nought. The top of the range does the same for another reason: rate is a uint32_t, so the shift of a rate of 1 << (32 - rsm_frac) or more wraps, and what it wraps to may be nought as well. In between, where the ratio is a number, it is a truncated one, and the chip is run fast by whatever was truncated: at 44100 Hz the ratio is 908 where 908.14 was meant, so the chip runs 0.036% fast, about two thirds of a cent sharp. The interpolation under the loop has its own limit: the count rises with the ratio, and a sample by a count of tens of millions does not fit the int32_t the product is taken in.
+
+The ratio goes away. The count is kept in the rate itself: resampledGenerate() adds the chip's own rate to it for every sample it gives back, and takes one of the chip's samples for every whole rate in it. The chip then runs at exactly nativeRate / rate of the output, for every rate from 1 Hz to the largest a uint32_t holds -- nothing is truncated, nothing is out of range, and there is no rate the loop does not end for. A rate of nought, which is no rate, is taken for one, since the count is divided by it.
+
+The count and the two products are int64_t. The count is under the rate, which is a uint32_t, and a sample is at most 32768 * resamplerPreAmplify, so a product is some thousandths of what an int64_t holds; the two weights are not negative and add up to the rate, so what the division gives back lies between the chip's two samples and fits the int32_t it is cast to. The work per output sample is what it always was, one tick of the chip for each of its samples the output passes: at a rate far below the chip's that is many ticks a sample, which is the audio those samples cover and not a fault of the arithmetic.
+
+This changes what comes out, at every rate: the chip now runs at the rate it was given rather than a truncation of it. In ADLplug-Next, whose fuzz target for what a host does found the endless loop -- a rate of about 16 Hz had libFuzzer working on the one input for twenty-nine minutes, inside DOSBox's resampledGenerate(), before it gave up -- the hash of the reference render changes with it.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/chips/opl_chip_base.h b/src/chips/opl_chip_base.h
+index f0c9c38..547d602 100644
+--- a/src/chips/opl_chip_base.h
++++ b/src/chips/opl_chip_base.h
+@@ -130,9 +130,13 @@ private:
+ #else
+     int32_t m_oldsamples[2];
+     int32_t m_samples[2];
+-    int32_t m_samplecnt;
+-    int32_t m_rateratio;
+-    enum { rsm_frac = 10 };
++    /* Where the sample that comes out sits between the chip's last two, counted
++       in units of the rate asked for: nought is the older of the two, and it is
++       always under m_outrate. */
++    int64_t m_samplecnt;
++    /* The rate that was asked for, at least one: a rate of nought is no rate,
++       and the resampling divides by this. */
++    int64_t m_outrate;
+ #endif
+     // amplitude scale factors in and out of resampler, varying for chips;
+     // values are OK to "redefine", the static polymorphism will accept it.
+diff --git a/src/chips/opl_chip_base.tcc b/src/chips/opl_chip_base.tcc
+index ba959c0..7e7da2e 100644
+--- a/src/chips/opl_chip_base.tcc
++++ b/src/chips/opl_chip_base.tcc
+@@ -207,7 +207,17 @@ void OPLChipBaseT<T>::setupResampler(uint32_t rate)
+     m_oldsamples[0] = m_oldsamples[1] = 0;
+     m_samples[0] = m_samples[1] = 0;
+     m_samplecnt = 0;
+-    m_rateratio = (int32_t)((rate << rsm_frac) / 49716);
++    /* Nothing is worked out here any more. resampledGenerate() counts in the
++     * rate itself: it adds the chip's own rate to the count for every sample it
++     * gives back and takes one of the chip's for every whole rate in it, so the
++     * chip runs at exactly nativeRate / rate of the output, whatever the two
++     * rates are. A ratio held in a fixed number of bits of fraction cannot say
++     * that: it was nought for every rate under 49716 / 1024, which left
++     * resampledGenerate() taking nought from its count for ever, and above that
++     * it was truncated, which ran the chip fast -- at 44100 Hz by 0.036%, about
++     * two thirds of a cent. A rate of nought is no rate, and is taken for one,
++     * since the count is divided by it. */
++    m_outrate = (rate > 0) ? (int64_t)rate : 1;
+ #endif
+ }
+ 
+@@ -272,9 +282,9 @@ void OPLChipBaseT<T>::resampledGenerate(int32_t *output)
+         return;
+     }
+ 
+-    int32_t samplecnt = m_samplecnt;
+-    const int32_t rateratio = m_rateratio;
+-    while(samplecnt >= rateratio)
++    int64_t samplecnt = m_samplecnt;
++    const int64_t outrate = m_outrate;
++    while(samplecnt >= outrate)
+     {
+         m_oldsamples[0] = m_samples[0];
+         m_oldsamples[1] = m_samples[1];
+@@ -282,13 +292,18 @@ void OPLChipBaseT<T>::resampledGenerate(int32_t *output)
+         static_cast<T *>(this)->nativeTick(buffer);
+         m_samples[0] = buffer[0] * T::resamplerPreAmplify;
+         m_samples[1] = buffer[1] * T::resamplerPreAmplify;
+-        samplecnt -= rateratio;
++        samplecnt -= outrate;
+     }
+-    output[0] = (int32_t)(((m_oldsamples[0] * (rateratio - samplecnt)
+-                            + m_samples[0] * samplecnt) / rateratio)/T::resamplerPostAttenuate);
+-    output[1] = (int32_t)(((m_oldsamples[1] * (rateratio - samplecnt)
+-                            + m_samples[1] * samplecnt) / rateratio)/T::resamplerPostAttenuate);
+-    m_samplecnt = samplecnt + (1 << rsm_frac);
++    /* Between the chip's two samples, in 64 bits. The count is under the rate,
++     * which is a uint32_t, and a sample is at most 32768 * resamplerPreAmplify,
++     * so a product is some thousandths of what an int64_t holds; the two weights
++     * are not negative and add up to the rate, so what the division gives back
++     * lies between the two samples and fits the int32_t it is cast to. */
++    output[0] = (int32_t)((((int64_t)m_oldsamples[0] * (outrate - samplecnt)
++                            + (int64_t)m_samples[0] * samplecnt) / outrate)/T::resamplerPostAttenuate);
++    output[1] = (int32_t)((((int64_t)m_oldsamples[1] * (outrate - samplecnt)
++                            + (int64_t)m_samples[1] * samplecnt) / outrate)/T::resamplerPostAttenuate);
++    m_samplecnt = samplecnt + nativeRate;
+ }
+ #endif
+ 
