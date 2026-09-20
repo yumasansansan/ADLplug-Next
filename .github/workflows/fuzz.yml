@@ -36,8 +36,10 @@ name: Fuzz
 # says it, so that the list of runs shows what each one was worth. A run started
 # by hand takes the choice; the daily one has no way to be given an input, so the
 # twenty minutes below is what it uses. GitHub reads none of a workflow's own
-# variables where these three expressions are, which is why the same default is
-# written in each of them.
+# variables where the name of a run and the limit of a job are written, which is
+# why the same default stands in each of them; and its expressions have no
+# arithmetic at all, which is why the limits are a table and the seconds are the
+# shell's to work out.
 run-name: Fuzz, ${{ github.event.inputs.minutes || '20' }} minutes each
 
 on:
@@ -68,12 +70,15 @@ jobs:
   fuzz:
     name: ${{ matrix.preset }} (ubuntu-26.04)
     runs-on: ubuntu-26.04
-    # The targets run one after another, after a build: ten times one target's
-    # time, and half an hour for the build and the corpus, leaves room for the
-    # seven targets there are and for a few more, and stops a job that hangs at a
-    # time that follows what was asked of it. A choice longer than thirty minutes
-    # would want the six hours that a job of a hosted runner may take at the most.
-    timeout-minutes: ${{ fromJSON(github.event.inputs.minutes || '20') * 10 + 30 }}
+    # What each choice is allowed: the targets run one after another after a build,
+    # so ten times one target's time and half an hour for the build and the corpus
+    # is room for the seven targets there are and for a few more, and still stops a
+    # job that hangs after a time that has to do with what was asked of it. The
+    # table is worked out here because an expression of GitHub's cannot multiply;
+    # every choice above is a key of it, and none may go past the six hours that a
+    # job of a hosted runner may take at the most.
+    timeout-minutes: >-
+      ${{ fromJSON('{"1": 40, "5": 80, "10": 130, "15": 180, "20": 230, "30": 330}')[github.event.inputs.minutes || '20'] }}
     strategy:
       fail-fast: false
       matrix:
@@ -119,7 +124,9 @@ jobs:
             || echo "Run $last kept no inputs that failed."
 
       - name: Fuzz each target
-        run: bash ci/fuzz.sh --with-long "${{ matrix.preset }}" ${{ fromJSON(github.event.inputs.minutes || '20') * 60 }} fuzz-run/corpora fuzz-run/crashes fuzz-run/earlier
+        env:
+          ADLplug_FUZZ_MINUTES: ${{ github.event.inputs.minutes || '20' }}
+        run: bash ci/fuzz.sh --with-long "${{ matrix.preset }}" "$((ADLplug_FUZZ_MINUTES * 60))" fuzz-run/corpora fuzz-run/crashes fuzz-run/earlier
 
       - name: Keep the corpus
         if: ${{ !cancelled() }}
