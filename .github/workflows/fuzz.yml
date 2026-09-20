@@ -7,11 +7,12 @@
 # (LICENSES/GPL-3.0-or-later.txt).
 #
 # The long fuzzing. Once a day, and whenever it is started by hand, every fuzz
-# target of both plugins runs for fifteen minutes with libFuzzer, on Ubuntu
-# (ci/fuzz.sh --with-long), in each of the two sanitizer builds: the one with the
-# address sanitizer and the one with the thread sanitizer, which no build can
-# have both of. That includes the targets whose every input is heavy, which the
-# short runs of a minute in CI leave out (.github/workflows/ci.yml).
+# target of both plugins runs with libFuzzer, on Ubuntu (ci/fuzz.sh --with-long),
+# in each of the two sanitizer builds: the one with the address sanitizer and the
+# one with the thread sanitizer, which no build can have both of. That includes
+# the targets whose every input is heavy, which the short runs of a minute in CI
+# leave out (.github/workflows/ci.yml). How long each target runs is twenty
+# minutes for the daily run and the run's own choice when it is started by hand.
 #
 # The build is the fuzz targets alone, with every coverage feature libFuzzer can
 # steer by (ci/build.sh --fuzz-only). These runs are where the fuzzer has the
@@ -31,10 +32,24 @@
 
 name: Fuzz
 
+# How long each target is fuzzed is the run's to choose, and the name of the run
+# says it, so that the list of runs shows what each one was worth. A run started
+# by hand takes the choice; the daily one has no way to be given an input, so the
+# twenty minutes below is what it uses. GitHub reads none of a workflow's own
+# variables where these three expressions are, which is why the same default is
+# written in each of them.
+run-name: Fuzz, ${{ github.event.inputs.minutes || '20' }} minutes each
+
 on:
   schedule:
     - cron: '27 17 * * *'
   workflow_dispatch:
+    inputs:
+      minutes:
+        description: How long to fuzz each target
+        type: choice
+        default: '20'
+        options: ['1', '5', '10', '15', '20', '30']
 
 permissions:
   contents: read
@@ -53,7 +68,12 @@ jobs:
   fuzz:
     name: ${{ matrix.preset }} (ubuntu-26.04)
     runs-on: ubuntu-26.04
-    timeout-minutes: 180
+    # The targets run one after another, after a build: ten times one target's
+    # time, and half an hour for the build and the corpus, leaves room for the
+    # seven targets there are and for a few more, and stops a job that hangs at a
+    # time that follows what was asked of it. A choice longer than thirty minutes
+    # would want the six hours that a job of a hosted runner may take at the most.
+    timeout-minutes: ${{ fromJSON(github.event.inputs.minutes || '20') * 10 + 30 }}
     strategy:
       fail-fast: false
       matrix:
@@ -98,8 +118,8 @@ jobs:
             --name "fuzz-crashes-${{ matrix.preset }}" --dir fuzz-run/earlier \
             || echo "Run $last kept no inputs that failed."
 
-      - name: Fuzz for fifteen minutes each
-        run: bash ci/fuzz.sh --with-long "${{ matrix.preset }}" 900 fuzz-run/corpora fuzz-run/crashes fuzz-run/earlier
+      - name: Fuzz each target
+        run: bash ci/fuzz.sh --with-long "${{ matrix.preset }}" ${{ fromJSON(github.event.inputs.minutes || '20') * 60 }} fuzz-run/corpora fuzz-run/crashes fuzz-run/earlier
 
       - name: Keep the corpus
         if: ${{ !cancelled() }}
