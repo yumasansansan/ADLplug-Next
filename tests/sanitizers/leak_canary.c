@@ -24,7 +24,7 @@ static void *volatile lost;
 {
     lost = malloc(64);
     memset(lost, 0x55, 64);
-    lost = NULL;
+    lost = nullptr;
 }
 
 int main(void)

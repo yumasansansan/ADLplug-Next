@@ -11,17 +11,28 @@
 # baseline instruction set and for AVX2. The checkout is plain git, and
 # ci/setup.sh installs a pinned toolchain.
 #
-# The sanitize jobs build both plugins on Ubuntu and macOS with the address,
+# The sanitize jobs build both plugins on all three systems with the address,
 # undefined and vptr sanitizers and run the tests, leaving out the programs
-# that load the plugins from outside. On Ubuntu each plugin is built a second
-# way as well, with the thread sanitizer in place of the address one, which it
-# cannot be built together with (the *-tsan presets): races between the threads
-# a host runs a plugin on, and locks taken in an order that could stop both, are
-# found by nothing else. The Ubuntu jobs also build the fuzz targets with
+# that load the plugins from outside. Windows leaves the vptr check out, since
+# Clang has none for the MSVC ABI, and is the one place where the code that only
+# Windows compiles -- its semaphore, its files, its windows, the MSVC standard
+# library -- is looked at under a sanitizer at all. On Ubuntu each plugin is
+# built a second way as well, with the thread sanitizer in place of the address
+# one, which it cannot be built together with (the *-tsan presets): races between
+# the threads a host runs a plugin on, and locks taken in an order that could
+# stop both, are found by nothing else. The Ubuntu jobs also build the fuzz targets with
 # libFuzzer and run each for a minute (ci/fuzz.sh); an input that fails is kept
 # as an artifact. A target whose every input is heavy is not among them -- a
 # minute would get through too few -- and the long fuzzing takes those instead,
 # once a day, in .github/workflows/fuzz.yml.
+#
+# The tidy jobs read every file this project writes with clang-tidy, of the same
+# version as the compiler, and fail on anything it reports (.clang-tidy names the
+# checks and makes them errors; ci/tidy.sh runs them). They read a Debug build of
+# each chip, where the assertions are compiled in, and nothing of thirdparty/.
+# They also read the C of this project for a rule that no compiler and no check of
+# clang-tidy has, and that its own script keeps (ci/prototypes.sh): a function
+# takes (void), never ().
 #
 # The reuse job checks with reuse lint, from Ubuntu's reuse package, that every
 # file names its copyright holders and license (see REUSE.toml and LICENSES/).
@@ -131,6 +142,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - { os: windows-2025-vs2026, arch: baseline, preset: adl-sanitize, fuzz: false }
+          - { os: windows-2025-vs2026, arch: baseline, preset: opn-sanitize, fuzz: false }
           - { os: ubuntu-26.04, arch: baseline, preset: adl-sanitize, fuzz: true }
           - { os: ubuntu-26.04, arch: baseline, preset: opn-sanitize, fuzz: true }
           - { os: ubuntu-26.04, arch: baseline, preset: adl-tsan, fuzz: true }
@@ -172,6 +185,47 @@ jobs:
           path: fuzz-run/crashes/
           if-no-files-found: ignore
           retention-days: 30
+
+  tidy:
+    name: static analysis (${{ matrix.preset }})
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [adl-debug, opn-debug]
+
+    steps:
+      - name: Check out
+        run: |
+          # The commit with its whole history, the submodules at depth 1. Git
+          # keeps the files as committed, CRLF or LF, on every runner.
+          git config --global core.autocrlf false
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git submodule update --init --depth 1 --jobs 4
+          git log -1 --format='%H %s'
+
+      - name: Set up the toolchain
+        run: bash ci/setup.sh
+
+      # clang-tidy reads each file with the options the build compiles it with,
+      # so what the build generates -- the JUCE headers, the pack of banks, the
+      # seed inputs -- has to be there first. The fuzz targets are configured so
+      # that their sources are looked at too.
+      - name: Build
+        run: bash ci/build.sh "${{ matrix.preset }}" baseline -DADLplug_BUILD_FUZZERS=ON
+
+      - name: Look at every file of ours
+        run: bash ci/tidy.sh "${{ matrix.preset }}"
+
+      # What the compiler and clang-tidy cannot say, since C23 made the two forms
+      # mean the same and the tree keeps no difference: the parameter list of a
+      # function of this project's C is written (void).
+      - name: Read the parameter lists of the C
+        run: bash ci/prototypes.sh
 
   reuse:
     name: REUSE compliance
@@ -293,7 +347,7 @@ jobs:
 
   publish:
     name: Nightly release
-    needs: [build, reuse, fallback, rpm, sanitize]
+    needs: [build, reuse, fallback, rpm, sanitize, tidy]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-26.04
     timeout-minutes: 30

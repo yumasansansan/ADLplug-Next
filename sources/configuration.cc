@@ -23,7 +23,7 @@
 #include <string>
 
 #if 1
-#   define trace(fmt, ...)
+#   define trace(fmt, ...) ((void)0)
 #else
 #   define trace(fmt, ...) std::fprintf(stderr, "[Configuration] " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 #endif

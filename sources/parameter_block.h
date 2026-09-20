@@ -69,10 +69,17 @@ private:
     std::vector<std::unique_ptr<AudioProcessorParameter>> internal_parameters_;
 };
 
+// The chip's own block completes Parameter_Block on top of the class above, and
+// parameter_block.tcc below needs both; so it is a part of this header rather
+// than a header of its own, and it is reached only from here. The macro is what
+// it looks for: a file that included it first would put the definitions in the
+// wrong order, and would rather say so than compile.
+#define ADLPLUG_PARAMETER_BLOCK_PARTS
 #if defined(ADLPLUG_OPL3)
 #include "opl3/parameter_block.h"
 #elif defined(ADLPLUG_OPN2)
 #include "opn2/parameter_block.h"
 #endif
+#undef ADLPLUG_PARAMETER_BLOCK_PARTS
 
 #include "parameter_block.tcc"

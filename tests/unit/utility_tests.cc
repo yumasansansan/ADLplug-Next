@@ -93,6 +93,7 @@ ADLPLUG_TEST(atomic_bit_set_threads)
     // Four threads set the bits of their own residue at once; every one sticks.
     Atomic_Bit_Set<1024> bits;
     std::vector<std::thread> threads;
+    threads.reserve(4);
     for (std::size_t t = 0; t < 4; ++t) {
         threads.emplace_back([&bits, t] {
             for (std::size_t i = t; i < bits.size(); i += 4)

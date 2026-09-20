@@ -49,7 +49,14 @@ public:
     T *self();
     const T *self() const;
 
+private:
+    // The class that derives from this one builds it, and nothing else: one built
+    // as a class of its own, or one derived from as an ordinary template, would
+    // have no self() to call.
     Generic_Main_Component(AdlplugAudioProcessor &proc, Parameter_Block &pb, Configuration &conf);
+    friend T;
+
+public:
     ~Generic_Main_Component() override;
 
     void setup_generic_components();

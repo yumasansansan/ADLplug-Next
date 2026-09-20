@@ -52,8 +52,8 @@ std::optional<std::size_t> made_size(const char *text) noexcept
     std::size_t scale = 1;
     switch (*end) {
     case 'k': case 'K': scale = 1024; ++end; break;
-    case 'M':           scale = 1024 * 1024; ++end; break;
-    case 'G':           scale = 1024 * 1024 * 1024; ++end; break;
+    case 'M':           scale = std::size_t{1024} * 1024; ++end; break;
+    case 'G':           scale = std::size_t{1024} * 1024 * 1024; ++end; break;
     default: break;
     }
     if (*end != '\0' || value > std::numeric_limits<std::size_t>::max() / scale)
@@ -80,6 +80,9 @@ void run_made(std::size_t size)
 
     // A generator of its own, and a seed that does not change, so that an input
     // which fails can be had again.
+    // The seed does not change on purpose: the input that a size makes up is the
+    // same one every run, so that a failure of it can be looked at again.
+    // NOLINTNEXTLINE(bugprone-random-generator-seed)
     std::minstd_rand generator(20260919u);
     for (std::uint8_t &byte : bytes)
         byte = static_cast<std::uint8_t>(generator() & 0xffu);

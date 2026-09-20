@@ -156,6 +156,9 @@ Instrument Instrument::from_sbi(const std::uint8_t *data, std::size_t length) no
     switch (kind) {
     case Kind::Dos:
         if (length > 1)
+            // The offset is a signed byte of the file, and its sign is the point:
+            // reading it as an unsigned char first would turn -1 into 255.
+            // NOLINTNEXTLINE(bugprone-signed-char-misuse)
             ins.note_offset1 = std::bit_cast<std::int8_t>(data[1]);
         if (length > 2)
             ins.percussion_key_number = data[2];

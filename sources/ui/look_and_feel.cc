@@ -20,7 +20,7 @@
 #include <algorithm>
 
 #if 1
-#   define trace(fmt, ...)
+#   define trace(fmt, ...) ((void)0)
 #else
 #   define trace(fmt, ...) fprintf(stderr, "[LF] " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 #endif
@@ -91,6 +91,9 @@ Typeface::Ptr Custom_Look_And_Feel::getOrCreateFont(Typeface::Ptr &font, const R
 
         font = Typeface::createSystemTypefaceFor(mem_block.getData(), mem_block.getSize());
 
+        // Both branches are a trace, and a build with tracing off leaves nothing to
+        // tell them apart.
+        // NOLINTNEXTLINE(bugprone-branch-clone)
         if (!font)
             trace("Could not load font data.");
         else

@@ -61,24 +61,27 @@ inline std::string_view name_view(std::span<const char> field) noexcept
 // character of the name like any other, and a bank file is free to hold one. To
 // read it away would lose what the file holds, and would leave a field whose text
 // is not the text of the field it was written to: the name would lose its first
-// character every time a project was saved and read again. String::fromUTF8 is no
-// answer either, since it asserts on bytes that are not UTF-8 and reads past what
-// they mean.
+// character every time a project was saved and read again. String::fromUTF8 does
+// the reading once the bytes are known to be UTF-8, which is why the check comes
+// first: it asserts what the check has just established, and every call here
+// carries the length, so nothing reads past the field.
 inline String name_from_field(std::span<const char> field)
 {
     const std::string_view text = name_view(field);
     if (text.empty())
         return {};
-    if (CharPointer_UTF8::isValidString(text.data(), static_cast<int>(text.size())))
-        return String(CharPointer_UTF8(text.data()), CharPointer_UTF8(text.data() + text.size()));
+    const auto bytes = static_cast<int>(text.size());
+    if (CharPointer_UTF8::isValidString(text.data(), bytes))
+        return String::fromUTF8(text.data(), bytes);
 
-    // Windows-1252, character by character, as JUCE reads that code page.
+    // Windows-1252, character by character, as JUCE reads that code page. The
+    // last character of the buffer is the zero that ends it, which is how a
+    // CharPointer knows where the text stops.
     std::vector<juce_wchar> characters(text.size() + 1, 0);
     for (std::size_t i = 0; i < text.size(); ++i)
         characters[i] = CharacterFunctions::getUnicodeCharFromWindows1252Codepage(
             static_cast<std::uint8_t>(text[i]));
-    return String(CharPointer_UTF32(characters.data()),
-                  CharPointer_UTF32(characters.data() + text.size()));
+    return String(CharPointer_UTF32(characters.data()));
 }
 
 // Stores a name in a field, leaving out the characters which do not fit whole.

@@ -300,6 +300,8 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
             const std::vector<std::uint8_t> message = input.bytes(1u + (value & 3u));
             // The sample an event sits at is the host's to choose: a buffer takes
             // any number, and a host need not keep inside the block it asked for.
+            // The byte is read as a signed offset on purpose, as above.
+            // NOLINTNEXTLINE(bugprone-signed-char-misuse)
             const auto at = static_cast<int>(static_cast<std::int8_t>(input.byte()));
             midi.addEvent(message.data(), static_cast<int>(message.size()), at);
             break;

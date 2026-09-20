@@ -121,6 +121,28 @@ case $preset in
     ;;
 esac
 
+# On Windows the address sanitizer's runtime is a DLL that stays beside the
+# compiler, and the programs the build itself runs -- the JUCE helpers that write
+# the VST3 and LV2 manifests, instrumented like everything else they are built
+# with -- do not look there for it. Windows answers a program that cannot find a
+# DLL with a dialog box rather than a message, so the build would stop with
+# nothing said. Its directory goes at the front of PATH for the build; the tests
+# get it from CMake (adlplug_sanitizer_test_environment in CMakeLists.txt).
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*)
+    if grep -q '^ADLplug_SANITIZERS:STRING=.*address' "build/$preset/CMakeCache.txt"; then
+      asan_runtime=$(cygpath -u "$(clang++ -print-file-name=clang_rt.asan_dynamic-x86_64.dll)")
+      if [ ! -f "$asan_runtime" ]; then
+        echo "error: clang_rt.asan_dynamic-x86_64.dll was not found beside the compiler" >&2
+        exit 1
+      fi
+      PATH="$(dirname "$asan_runtime"):$PATH"
+      export PATH
+      echo "== the address sanitizer's runtime, for the programs the build runs: $asan_runtime"
+    fi
+    ;;
+esac
+
 # Ninja shows every command in full, rather than its short description. The
 # VERBOSE variable carries that into the builds that CMake starts within the
 # build, such as the instrumented build of cmake/PGO.cmake.

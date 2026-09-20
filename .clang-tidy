@@ -1,0 +1,142 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# What clang-tidy looks for in this project's own code. ci/tidy.sh runs it over
+# every file of sources/, tests/, fuzz/ and tools/ that a build compiles, and a
+# job of every push runs that; nothing of thirdparty/ is asked to be clean, since
+# the submodules carry code this project does not write. Every check named here is
+# an error, as every compiler warning is: the project is clean of them, and
+# anything new is either a fault to fix or a decision to write down.
+#
+# The checks are the ones that find faults, or that lead to code which holds up
+# better. The ones that only say how code should look are left out: this project
+# has its own way of writing, .clang-format for the shape of it, and a gate that
+# argued about names, magic numbers, braces or trailing return types would say
+# thousands of things about code that is not wrong. What is left out for a
+# reason of its own:
+#
+#   bugprone-signed-bitwise sees the integral promotion of every uint8_t, not a
+#     signedness that could go wrong: masking a promoted byte with 127u yields an
+#     unsigned value, and the shift after it cannot be the shift of a negative
+#     number. The shifts that really can are found where they happen, by the
+#     undefined behaviour sanitizer in the sanitize jobs -- which is how the ones
+#     in the emulator cores were found (patches/).
+#   misc-override-with-different-visibility and misc-multiple-inheritance
+#     describe how JUCE's classes are used: a processor makes its editor through
+#     a public override of a private method, and an editor is a Component and a
+#     Listener at once. Neither is ours to change.
+#   performance-enum-size asks for smaller underlying types, which is size
+#     against speed; this project chooses speed.
+#   misc-include-cleaner wants every name's own header included, JUCE's included
+#     one by one among them, where this project includes JuceHeader.h as JUCE
+#     means it to.
+#   clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling asks for
+#     memcpy_s and its kin, which are Microsoft's and not in the C or C++ this
+#     project is written in.
+#   clang-analyzer-security.ArrayBound reports, here, a dozen places inside the INI
+#     parser of a submodule and none of this project's own code, and there is no
+#     line of ours to answer them on: the filters that keep the other checks out of
+#     thirdparty/ do not reach the analyser's reports, which every pattern tried
+#     showed. The reader they are about is fuzzed with the address sanitizer, which
+#     reads what the code does rather than what it might do, and has not found one
+#     of them in millions of inputs. Whether the one that looks at the byte after a
+#     carriage return is real is written down as work of its own.
+#   modernize-redundant-void-arg would take the void out of f(void), which is the
+#     one place it must not be taken out of: in C before C23 that leaves a function
+#     which takes anything, and C23, which this project's C is written in, made the
+#     two agree only after decades of the other meaning. The void says what the
+#     function takes; nothing about it is redundant. What this project wants is the
+#     check the other way round, and ci/prototypes.sh is it: a parameter list of
+#     nothing, written (), is an error there. Nothing else can say so -- Clang under
+#     -std=c23 says nothing about f() even with -Weverything, and the tree it builds
+#     gives both forms the same type, int (void), so only the text tells them apart.
+#   misc-const-correctness is right that a local which is never written could say
+#     so, and there are some fifty of them here. Its own fix writes "double const
+#     x" where this project writes "const double x", and it reaches into the
+#     signatures of functions, which belong to their headers as well; so the const
+#     of every local is a pass of its own to make and to read, not a thing to do
+#     while putting up the gate.
+#   readability-make-member-function-const looks at the members a method writes,
+#     which says nothing about a class that holds a chip behind a pointer: the
+#     methods of the measurer's chip write registers, and calling them const would
+#     say the object does not change when it does.
+#   readability-trivial-switch counts the labels of a switch. A switch on the
+#     format of a file that has one format today is still a switch on a format.
+#   bugprone-macro-parentheses reports, here, only the identifiers that JUCE's
+#     CMake defines on the command line -- JucePlugin_AAXIdentifier and its kind,
+#     dotted names for JUCE to stringify, which are no expressions to put
+#     parentheses around. A diagnostic about a macro defined on a command line has
+#     no line of a file to answer it on, so there is nothing to write a NOLINT
+#     beside.
+#   readability-simplify-boolean-expr offers DeMorgan's law, which says the same
+#     thing the other way round. The tests write the form that reads like the
+#     property they check.
+#   readability-redundant-nested-if would make one condition of two thoughts --
+#     whether there is something to tell the editor, and whether telling it
+#     worked -- which is a line that reads as neither.
+#
+# Some of what is here the compiler says as well, and saying it twice costs
+# nothing: -Wold-style-cast for the C-style casts, -Wsuggest-override for the
+# overrides. modernize-use-nullptr is the one place where saying it twice is
+# saying it once more than the compiler does: clang's
+# -Wzero-as-null-pointer-constant is a warning of C++ and is silent in C, where
+# C23 has nullptr all the same.
+#
+# A check that is right about a place where the code is deliberately unusual is
+# answered there with a NOLINT and the reason, not turned off here.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-macro-parentheses,
+  -bugprone-signed-bitwise,
+  clang-analyzer-*,
+  -clang-analyzer-security.ArrayBound,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  concurrency-*,
+  cppcoreguidelines-pro-type-cstyle-cast,
+  cppcoreguidelines-pro-type-member-init,
+  cppcoreguidelines-pro-type-reinterpret-cast,
+  cppcoreguidelines-pro-type-static-cast-downcast,
+  cppcoreguidelines-pro-type-union-access,
+  cppcoreguidelines-slicing,
+  cppcoreguidelines-virtual-class-destructor,
+  misc-*,
+  -misc-const-correctness,
+  -misc-include-cleaner,
+  -misc-multiple-inheritance,
+  -misc-non-private-member-variables-in-classes,
+  -misc-override-with-different-visibility,
+  -misc-use-anonymous-namespace,
+  modernize-deprecated-headers,
+  modernize-use-emplace,
+  modernize-use-nullptr,
+  modernize-use-equals-default,
+  modernize-use-equals-delete,
+  modernize-use-override,
+  modernize-use-starts-ends-with,
+  performance-*,
+  -performance-enum-size,
+  readability-misleading-indentation,
+  readability-non-const-parameter,
+  readability-redundant-declaration
+
+# What a check needs told about this project.
+CheckOptions:
+  # from_chars is given the end of the text, so the bytes it reads are bounded by
+  # what it was handed rather than by a terminator.
+  # A range of two pointers, and the two calls that take the length beside the
+  # pointer, are bounded by what they are handed rather than by a terminator.
+  bugprone-suspicious-stringview-data-usage.AllowedCallees: 'std::from_chars;juce::CharPointer_UTF8::isValidString;juce::String::fromUTF8'
+
+# Only this project's own code is reported in; ci/tidy.sh gives the same
+# directories as an absolute path, so that a build directory's generated headers
+# are left out wherever it sits.
+HeaderFilterRegex: '/(sources|tests|fuzz|tools)/'
+WarningsAsErrors: '*'
+FormatStyle: none

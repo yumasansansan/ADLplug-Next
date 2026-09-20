@@ -158,8 +158,12 @@ void Player::generate(float *left, float *right, unsigned nframes, unsigned stri
     // of bytes to copy out of afterwards would instead have the library store
     // floats in storage of another type, and without their alignment.
     const ADLMIDI_AudioFormat format {ADLMIDI_SampleType_F32, sizeof(float), static_cast<unsigned>(stride * sizeof(float))};
+    // The library takes the bytes of the buffers, and the format of a sample
+    // beside them, which is how it writes floats into them.
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
     adl_generateFormat(player_.get(), static_cast<int>(2 * nframes),
                        reinterpret_cast<ADL_UInt8 *>(left), reinterpret_cast<ADL_UInt8 *>(right), &format);
+    // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 }
 
 std::vector<std::string> Player::enumerate_emulators()

@@ -16,8 +16,10 @@
 // version (LICENSES/GPL-3.0-or-later.txt).
 
 #pragma once
+#if !defined(ADLPLUG_PARAMETER_BLOCK_PARTS)
+#error "This is a part of sources/parameter_block.h, which says why; include that."
+#endif
 #include "JuceHeader.h"
-#include "../parameter_block.h"
 struct Instrument;
 struct Chip_Settings;
 struct Instrument_Global_Parameters;

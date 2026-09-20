@@ -40,7 +40,7 @@
 #include <utility>
 
 #if 1
-#   define trace(fmt, ...)
+#   define trace(fmt, ...) ((void)0)
 #else
 #   define trace(fmt, ...) std::fprintf(stderr, "[UI Main] " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 #endif
@@ -1265,7 +1265,7 @@ void Generic_Main_Component<T>::initialize_bank_directory()
     if (!dir.isDirectory())
         dir = File::getSpecialLocation(File::userHomeDirectory);
 
-    bank_directory_ = dir;
+    bank_directory_ = std::move(dir);
 }
 
 template <class T>
@@ -1356,7 +1356,7 @@ auto Generic_Main_Component<T>::master_volume_limits(const AudioParameterFloat &
 template <class T>
 std::optional<std::vector<std::uint8_t>> Generic_Main_Component<T>::read_file_for_loading(const File &file, const char *error_title)
 {
-    constexpr int64 max_length = 8 * 1024 * 1024;
+    constexpr int64 max_length = int64{8} * 1024 * 1024;
 
     // A file which cannot be opened gives a stream which says so, whereas
     // File::createInputStream() gives none.

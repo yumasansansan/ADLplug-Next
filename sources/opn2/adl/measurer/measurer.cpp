@@ -204,7 +204,7 @@ struct TinySynth
             hertz /= 2.0;    // Calculate octave
             x2 += 0x800;
         }
-        x2 = static_cast<std::uint16_t>(x2 + static_cast<unsigned>(hertz + 0.5));
+        x2 = static_cast<std::uint16_t>(x2 + static_cast<unsigned>(std::lround(hertz)));
 
         // Keyon the note
         m_chip->writeReg(m_port, static_cast<std::uint16_t>(0xA4 + m_cc), static_cast<std::uint8_t>((x2 >> 8) & 0xFF));//Set frequency and octave

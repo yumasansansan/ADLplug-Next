@@ -153,7 +153,7 @@ ADLPLUG_TEST(messages_round_trip)
         const Messages::Fx::NotifyBankSlots slots = test_slots(round);
 
         Messages::User::RequestSelections selections;
-        selections.channel_mask = std::bitset<16>(0x9e37u * (round + 1));
+        selections.channel_mask = std::bitset<16>(0x9e37ull * (round + 1));
 
         const std::array<std::uint8_t, 3> midi {0x90, static_cast<std::uint8_t>(round % 128), 100};
 

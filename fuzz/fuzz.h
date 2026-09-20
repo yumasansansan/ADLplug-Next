@@ -32,12 +32,19 @@
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size);
 
+[[noreturn]] inline void fuzz_check_failed(const char *file, int line, const char *expression)
+{
+    std::fprintf(stderr, "%s:%d: FUZZ_CHECK(%s) failed\n", file, line, expression);
+    std::fflush(stderr);
+    // Leaving a program while another thread of it runs is a hazard in general.
+    // Here it is the end of a process that has just found a fault, and the one
+    // road that writes the input out.
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
+    std::exit(1);
+}
+
 #define FUZZ_CHECK(condition)                                               \
     do {                                                                    \
-        if (!(condition)) {                                                 \
-            std::fprintf(stderr, "%s:%d: FUZZ_CHECK(%s) failed\n",          \
-                         __FILE__, __LINE__, #condition);                   \
-            std::fflush(stderr);                                            \
-            std::exit(1);                                                   \
-        }                                                                   \
+        if (!(condition))                                                   \
+            fuzz_check_failed(__FILE__, __LINE__, #condition);              \
     } while (false)

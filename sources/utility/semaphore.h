@@ -136,6 +136,8 @@ inline bool Semaphore::try_wait()
     }
 }
 #else
+// sem_init is what initialises sem_, and POSIX has no other way to make one.
+// NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
 inline Semaphore::Semaphore(unsigned value)
 {
     if (sem_init(&sem_, 0, value) != 0)

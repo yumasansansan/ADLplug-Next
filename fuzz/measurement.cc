@@ -52,8 +52,8 @@ using Native_Instrument = OPN2_Instrument;
 
 // What the measurement can reach: it plays for forty seconds at the most and
 // listens for sixty (Measurer::ComputeDurations), in milliseconds.
-constexpr std::uint64_t sounding_max = 40 * 1000;
-constexpr std::uint64_t silence_max = 60 * 1000;
+constexpr std::uint64_t sounding_max = std::uint64_t{40} * 1000;
+constexpr std::uint64_t silence_max = std::uint64_t{60} * 1000;
 
 }  // namespace
 

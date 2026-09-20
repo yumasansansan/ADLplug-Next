@@ -1,0 +1,42 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+The time of a file is read where it lies
+
+WindowsFileHelpers::fileTimeToTime() reads the sixty-four bits of a FILETIME by casting its address to a ULARGE_INTEGER and taking the QuadPart. The two are the same size, which the static_assert above the cast says, but not of the same alignment: a FILETIME is two DWORDs and wants four bytes, and a ULARGE_INTEGER holds a ULONGLONG and wants eight. Where a FILETIME lies on a four-byte boundary, that read is undefined, and what a compiler may do with it is not only to load it: it is free to assume the alignment it was promised.
+
+It happens in the ordinary way of looking at a file. A WIN32_FILE_ATTRIBUTE_DATA keeps its three FILETIMEs after a DWORD of attributes, so the first of them sits four bytes past the front of the structure, and File::getFileTimesInternal() hands exactly those to fileTimeToTime(). In ADLplug-Next it came out the first time the Windows build was made with the sanitizers, in the plainest thing the render tool does: it asks the VST3 format for the descriptions of a plugin, that reads the file's modification time, and the run stopped there with "member access within misaligned address ... for type 'const ULARGE_INTEGER', which requires 8 byte alignment".
+
+timeToFileTime() writes the same sixty-four bits through the same cast, and is undefined for the same reason wherever the FILETIME it is given is not eight-aligned. Both are changed here: leaving one of them would make the other look like a matter of taste.
+
+The bytes are copied into a ULARGE_INTEGER of the function's own instead, which is what the sizes the static_assert compares are good for. The arithmetic and the result are what they were, and for an address that happens to be aligned a compiler emits the same load and store it emitted before.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_core/native/juce_Files_windows.cpp b/modules/juce_core/native/juce_Files_windows.cpp
+index 9497975130..ca8502b4d7 100644
+--- a/modules/juce_core/native/juce_Files_windows.cpp
++++ b/modules/juce_core/native/juce_Files_windows.cpp
+@@ -99,7 +99,9 @@ namespace WindowsFileHelpers
+         static_assert (sizeof (ULARGE_INTEGER) == sizeof (FILETIME),
+                        "ULARGE_INTEGER is too small to hold FILETIME: please report!");
+ 
+-        return (int64) ((reinterpret_cast<const ULARGE_INTEGER*> (ft)->QuadPart - 116444736000000000LL) / 10000);
++        ULARGE_INTEGER n;
++        memcpy (&n, ft, sizeof (n));
++        return (int64) ((n.QuadPart - 116444736000000000LL) / 10000);
+     }
+ 
+     static FILETIME* timeToFileTime (const int64 time, FILETIME* const ft) noexcept
+@@ -107,7 +109,9 @@ namespace WindowsFileHelpers
+         if (time <= 0)
+             return nullptr;
+ 
+-        reinterpret_cast<ULARGE_INTEGER*> (ft)->QuadPart = (ULONGLONG) (time * 10000 + 116444736000000000LL);
++        ULARGE_INTEGER n;
++        n.QuadPart = (ULONGLONG) (time * 10000 + 116444736000000000LL);
++        memcpy (ft, &n, sizeof (n));
+         return ft;
+     }
+ 

@@ -172,7 +172,7 @@ bool Reader::read(const std::string &text, Woplx_Bank &out, std::string &error)
             }
             continue;
         }
-        if (line.empty() || line.starts_with("#") || line.starts_with("//"))
+        if (line.empty() || line.starts_with('#') || line.starts_with("//"))
             continue;
 
         bool ok = false;
@@ -322,7 +322,7 @@ bool Reader::read_instrument(std::string_view line)
 bool Reader::start_instrument(std::string_view number)
 {
     number = trim(number);
-    if (!number.ends_with(":"))
+    if (!number.ends_with(':'))
         return fail("malformed instrument number");
     long program = 0;
     if (!to_integer(number.substr(0, number.size() - 1), 0, 127, program))

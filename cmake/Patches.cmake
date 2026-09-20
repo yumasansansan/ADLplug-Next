@@ -77,6 +77,8 @@ adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0005-a-parameter-takes-no-value-that-is-no-number.patch")
 adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0006-the-message-manager-lock-releases-what-it-took.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0007-the-time-of-a-file-is-read-where-it-lies.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0001-esfmu-the-rhythm-volume-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libADLMIDI"

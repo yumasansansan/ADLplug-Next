@@ -192,7 +192,7 @@ bool import_gems(std::span<const std::uint8_t> data, Imported_Bank &bank, std::s
         return fail("not a GEMS bank");
     const std::size_t count = (data.size() - name_size) / (patch_size + 4);
     const std::size_t bank_count = (count + 127) / 128;
-    if (bank_count > 128 * 128)
+    if (bank_count > std::size_t{128} * 128)
         return fail("too many patches");
 
     WOPNFile_Ptr file = blank_file(bank_count, 1);
@@ -237,7 +237,7 @@ bool import_gems(std::span<const std::uint8_t> data, Imported_Bank &bank, std::s
         ins.fbalg = p[32] & 0x3f;
         ins.lfosens = p[33] & 0x37;
         for (unsigned op = 0; op < 4; ++op) {
-            const std::uint8_t *o = p + 34 + 6 * op;
+            const std::uint8_t *o = p + 34 + std::size_t{6} * op;
             const std::uint8_t reg[7] {o[0], o[1], o[2], o[3], o[4], o[5], 0};
             set_operator(ins.operators[op], reg);
         }

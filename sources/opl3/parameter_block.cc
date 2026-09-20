@@ -15,7 +15,7 @@
 // changes are under the GNU General Public License, version 3 or any later
 // version (LICENSES/GPL-3.0-or-later.txt).
 
-#include "parameter_block.h"
+#include "../parameter_block.h"
 #include "adl/chip_settings.h"
 #include "adl/instrument.h"
 #include "adl/player.h"

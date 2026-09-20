@@ -141,9 +141,13 @@ setup_linux() {
 
   sudo apt-get update -qq
   # libclang-rt has the profile runtime that the instrumented build of
-  # profile-guided optimisation links (cmake/PGO.cmake).
+  # profile-guided optimisation links (cmake/PGO.cmake). clang-tidy is the
+  # static analysis of the job that runs ci/tidy.sh, and clang-tools brings
+  # run-clang-tidy, which is how that script reads many files at once; both are
+  # of the same version as the compiler, so that they parse what it compiles.
   sudo apt-get install -y -qq --no-install-recommends \
     "clang-$llvm_major" "lld-$llvm_major" "llvm-$llvm_major" "libclang-rt-$llvm_major-dev" \
+    "clang-tidy-$llvm_major" "clang-tools-$llvm_major" \
     "${linux_packages[@]}"
   llvm_bin=/usr/lib/llvm-$llvm_major/bin
 

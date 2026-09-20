@@ -23,6 +23,7 @@
 #include <cassert>
 #include <chrono>
 #include <limits>
+#include <system_error>
 
 #if 1
 #   define trace(fmt, ...) ((void)0)
@@ -48,7 +49,19 @@ Worker::Worker(AdlplugAudioProcessor &proc)
 
 Worker::~Worker()
 {
-    stop_worker();
+    // Joining a thread can fail, and std::thread::join says so by throwing. A
+    // destructor that lets that out ends the program where a plugin is only being
+    // taken away, and a caller has nothing it could do with the news: the thread
+    // it would hear about is gone with the object. So the word stops here. Where
+    // the worker is stopped on purpose, stop_worker() is called directly and
+    // throws as it always did.
+    try {
+        stop_worker();
+    }
+    // Nothing is done with what is caught, which is the point of catching it.
+    // NOLINTNEXTLINE(bugprone-empty-catch)
+    catch (...) {
+    }
 }
 
 void Worker::start_worker()

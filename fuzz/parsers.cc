@@ -270,6 +270,9 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
         }
         default: {
             const std::vector<std::uint8_t> file = input.bytes(input.length((value & 2u) != 0));
+            // The configuration is text to its reader and bytes here: that the
+            // bytes need not be text is the point of giving them to it.
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
             the_configuration_file(((value & 1u) == 0) ? reinterpret_cast<const char *>(file.data()) : nullptr,
                                    file.size());
             break;

@@ -45,16 +45,20 @@
 
 //[MiscUserDefs] You can add your own user definitions and misc code here...
 #if 1
-#   define trace(fmt, ...)
+#   define trace(fmt, ...) ((void)0)
 #else
 #   define trace(fmt, ...) fprintf(stderr, "[UI Main] " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 #endif
+
+namespace {
 
 enum class Radio_Button_Group {
     Fm_Mode = 1,
     Algo_12,
     Algo_34,
 };
+
+}  // namespace
 //[/MiscUserDefs]
 
 //==============================================================================

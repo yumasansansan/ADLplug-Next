@@ -210,7 +210,7 @@ struct TinySynth
                 hertz /= 2.0;    // Calculate octave
                 m_x[n] += 0x400;
             }
-            m_x[n] += static_cast<unsigned>(hertz + 0.5);
+            m_x[n] += static_cast<unsigned>(std::lround(hertz));
 
             // Keyon the note
             m_chip->writeReg(static_cast<std::uint16_t>(0xA0 + n * 3), static_cast<std::uint8_t>(m_x[n] & 0xFF));

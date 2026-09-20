@@ -100,8 +100,12 @@ void Player::generate(float *left, float *right, unsigned nframes, unsigned stri
     // of bytes to copy out of afterwards would instead have the library store
     // floats in storage of another type, and without their alignment.
     const OPNMIDI_AudioFormat format {OPNMIDI_SampleType_F32, sizeof(float), static_cast<unsigned>(stride * sizeof(float))};
+    // The library takes the bytes of the buffers, and the format of a sample
+    // beside them, which is how it writes floats into them.
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
     opn2_generateFormat(player_.get(), static_cast<int>(2 * nframes),
                         reinterpret_cast<OPN2_UInt8 *>(left), reinterpret_cast<OPN2_UInt8 *>(right), &format);
+    // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 }
 
 std::vector<std::string> Player::enumerate_emulators()

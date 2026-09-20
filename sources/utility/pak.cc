@@ -86,7 +86,7 @@ std::vector<std::uint8_t> Pak_File_Reader::read_content(std::uint32_t offset, st
     // room doubles rather than following the pieces, so that a bank of any size
     // is copied as few times as a vector ever copies it. A stream that gives less
     // than the pack said is no answer, as it was before.
-    constexpr std::size_t piece_size = 64 * 1024;
+    constexpr std::size_t piece_size = std::size_t{64} * 1024;
     std::vector<std::uint8_t> content;
     while (content.size() < size) {
         const std::size_t have = content.size();

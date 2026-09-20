@@ -250,4 +250,6 @@ private:
 // declares it in juce_audio_plugin_client, which only a plugin build has; a
 // test or a fuzz target that builds the processor by itself needs the
 // declaration from somewhere, and here it is.
+// A build without the plugin client has nowhere else to read it from, as above.
+// NOLINTNEXTLINE(readability-redundant-declaration)
 AudioProcessor *JUCE_CALLTYPE createPluginFilter();
