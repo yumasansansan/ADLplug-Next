@@ -35,12 +35,20 @@
 
 namespace {
 
-// Stores `name` in a name field, leaving out the characters which do not fit
-// whole. Returns false if the field held it already.
+// Stores `name` in a name field as the text that fits, and says whether the
+// field held it already.
+//
+// A name arrives as bytes -- a bank file writes what it likes in its name fields,
+// and so a message may carry anything -- while the state of a project holds it as
+// text. The text of bytes that are not UTF-8 is longer than the bytes it came
+// from, so it need not fit back into a field of this size: what did not fit would
+// be gone when a project was saved and read again, and the project would change
+// by being opened. So the bytes are made text here, once, and the field keeps the
+// text, of which a field's worth always fits.
 bool assign_name(std::span<char, Bank_Manager::name_size> field, const char *name) noexcept
 {
     std::array<char, Bank_Manager::name_size> stored {};
-    std::copy_n(name, utf8_fitting_length(name, stored.size()), stored.begin());
+    copy_name_to_field(stored, name_from_field(std::span(name, utf8_fitting_length(name, stored.size()))));
     if (std::ranges::equal(field, stored))
         return false;
     std::ranges::copy(stored, field.begin());
@@ -216,10 +224,11 @@ bool Bank_Manager::load_program(const Bank_Id &id, unsigned program, const Instr
     if (!pl.set_instrument(info.bank, program, ins))
         return false;
 
-    // copy name
+    // The name of the instrument, which the library does not keep, as the text
+    // that fits (assign_name says why).
     static_assert(sizeof ins.name == name_size);
     if ((flags & LP_KeepName) == 0)
-        std::ranges::copy(ins.name, info.program_name(program).begin());
+        assign_name(info.program_name(program), ins.name);
 
     // update program counts
     const std::size_t old_count = info.used.count();

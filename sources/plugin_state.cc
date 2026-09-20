@@ -55,9 +55,18 @@ Chip_Settings playable_chip_settings(const Chip_Settings &cs)
 {
     Chip_Settings playable = cs;
     playable.emulator = available_emulator(cs.emulator);
+    // A hundred chips is what the libraries take (ADL_MAX_CHIPS, OPN_MAX_CHIPS,
+    // which their private headers hold), and what the plugin's own parameter
+    // offers; a project can hold any number, and more than they take would have
+    // the library refuse the lot and keep what it had.
     playable.chip_count = std::clamp(cs.chip_count, 1u, 100u);
 #if defined(ADLPLUG_OPL3)
     playable.fourop_count = std::min(cs.fourop_count, 6 * playable.chip_count);
+#elif defined(ADLPLUG_OPN2)
+    // The chips the library has, the last of them being the highest number it
+    // knows: a project can hold any number, and a number that is no chip would
+    // have the library make a family of it that is none.
+    playable.chip_type = std::min(cs.chip_type, static_cast<unsigned>(OPNMIDI_ChipType_OPNA));
 #endif
     return playable;
 }

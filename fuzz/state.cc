@@ -36,13 +36,16 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 
 namespace {
 
-// A project can be any size, and there is nothing to learn from a state far
-// larger than one the plugin writes.
-constexpr std::size_t size_max = 256 * 1024;
+// A state as large as JUCE's own limit: setStateInformation takes the size as an
+// int, so that is as much as a host can hand over. The size of a project is not
+// ours to choose, and what the plugin does with a large one is part of what has
+// to hold (the fuzz.state.big test gives it far more than a fuzzer would make).
+constexpr std::size_t size_max = std::numeric_limits<int>::max();
 
 }  // namespace
 
@@ -68,6 +71,12 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
     size = std::min(size, size_max);
 
     AdlplugAudioProcessor processor;
+
+    // No state at all, which a host may hand over as readily as one: a pointer to
+    // nothing with a size that says so, and one with a size that says there are
+    // bytes to read. Reading a state begins by reading its first bytes.
+    processor.setStateInformation(nullptr, 0);
+    processor.setStateInformation(nullptr, static_cast<int>(size));
 
     const juce::String text = juce::String::createStringFromData(data, static_cast<int>(size));
     if (const std::unique_ptr<juce::XmlElement> xml = juce::parseXML(text)) {

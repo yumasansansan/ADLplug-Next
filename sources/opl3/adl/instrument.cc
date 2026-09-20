@@ -89,7 +89,10 @@ Instrument Instrument::from_sbi(const std::uint8_t *data, std::size_t length) no
     ins.version = ADLMIDI_InstrumentVersion;
     ins.blank(true);
 
-    if (length < 4 + 32)
+    // The bytes and how many of them are the caller's, and a file dialogue can
+    // hand over nothing at all: no bytes is no instrument, whatever the length
+    // says.
+    if (data == nullptr || length < 4 + 32)
         return ins;
 
     const std::uint8_t *magic = data;

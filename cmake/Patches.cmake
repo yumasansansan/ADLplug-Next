@@ -70,6 +70,8 @@ adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0001-xml-the-one-line-form-has-no-line-endings-to-write.patch")
 adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0002-memory-block-two-blocks-of-no-bytes-are-equal.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0003-no-bytes-to-zero-is-no-call-to-memset.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0001-esfmu-the-rhythm-volume-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libADLMIDI"
@@ -106,3 +108,5 @@ adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0009-the-api-looks-at-the-numbers-it-is-given.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0010-gens-the-phase-a-channel-update-works-with-wraps-as-well.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0011-the-chip-type-that-is-no-family.patch")

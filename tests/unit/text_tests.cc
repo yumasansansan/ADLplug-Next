@@ -9,7 +9,9 @@
 #include "test.h"
 #include "utility/name_field.h"
 #include "JuceHeader.h"
+#include <algorithm>
 #include <cstddef>
+#include <cstdio>
 #include <string_view>
 
 ADLPLUG_TEST(utf8_fitting_length)
@@ -76,4 +78,28 @@ ADLPLUG_TEST(name_field_of_other_bytes)
     char again[16] {};
     copy_name_to_field(again, text);
     CHECK(name_from_field(again) == text);
+}
+
+ADLPLUG_TEST(name_field_holds_its_own_text)
+{
+    // The text of bytes that are not UTF-8 is longer than the bytes: every
+    // byte of a field can become two or three. A field that keeps text put
+    // there from its own text holds it whole, whatever the bytes were -- which
+    // is what lets the state of a project keep a name and bring it back.
+    for (unsigned first = 0; first < 256; ++first) {
+        char bytes[8];
+        for (unsigned i = 0; i < sizeof bytes; ++i)
+            bytes[i] = static_cast<char>((first + i * 37u) & 0xffu);
+
+        char field[8] {};
+        copy_name_to_field(field, name_from_field(bytes));
+        char again[8] {};
+        copy_name_to_field(again, name_from_field(field));
+        if (!std::ranges::equal(field, again)) {
+            std::fprintf(stderr, "  a field of the bytes from %u does not keep its own text\n", first);
+            CHECK(false);
+            return;
+        }
+    }
+    CHECK(true);
 }

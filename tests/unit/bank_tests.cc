@@ -175,9 +175,15 @@ ADLPLUG_TEST(instrument_flags_in_state)
     const Instrument from_old = Instrument::from_properties(old_state);
     CHECK(from_old.rhythm_mode() == 0 && !from_old.fixed_note());
 
-    // A damaged state cannot select a drum type that does not exist.
+    // A damaged state cannot select a drum type that does not exist: a number that
+    // is no mode is no mode, rather than the last of them, which would put a drum
+    // where the project meant none.
     juce::PropertySet damaged = Instrument().to_properties();
     damaged.setValue("rhythm_mode", 7);
+    CHECK(Instrument::from_properties(damaged).rhythm_mode() == 0);
+    damaged.setValue("rhythm_mode", -1);
+    CHECK(Instrument::from_properties(damaged).rhythm_mode() == 0);
+    damaged.setValue("rhythm_mode", 5);
     CHECK(Instrument::from_properties(damaged).rhythm_mode() == 5);
 #elif defined(ADLPLUG_OPN2)
     for (const bool pseudo : {false, true}) {

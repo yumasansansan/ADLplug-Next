@@ -37,8 +37,12 @@
 //   10xxxxxx  a System Exclusive message of x bytes, which follow; the 0xf0 at
 //             the start and the 0xf7 at the end are put on here, the way a host
 //             hands one over
-//   11xxxxxx  what else a player is asked to do: reset, panic, and the chip
-//             settings again, which a project does when it is restored
+//   11xxxxxx  what else a player is asked to do: reset, panic, the number of
+//             chips as a byte of its own, what else is global to the chip as
+//             another (the four-operator count on OPL3, the frequency of the LFO
+//             on OPN2), and the chip settings again, which a project does when it
+//             is restored. The numbers go in as they come: a project can hold any
+//             of them, and it is the plugin that settles what the library can run
 //
 // What is checked: the sanitizers, and that every sample is a finite number. A
 // chip that is asked for silence answers with silence, not with a NaN that
@@ -92,12 +96,14 @@ public:
     std::uint8_t byte() noexcept
         { return (at_ < size_) ? data_[at_++] : 0; }
 
-    // The next `count` bytes, as many as there are.
+    // The next `count` bytes, whatever they are, with zeros past the end of the
+    // input as everywhere else.
     std::vector<std::uint8_t> bytes(std::size_t count)
     {
-        const std::size_t have = std::min(count, size_ - std::min(at_, size_));
-        std::vector<std::uint8_t> out(data_ + at_, data_ + at_ + have);
-        at_ += have;
+        std::vector<std::uint8_t> out;
+        out.reserve(count);
+        for (std::size_t i = 0; i < count; ++i)
+            out.push_back(byte());
         return out;
     }
 
@@ -142,10 +148,10 @@ void apply_settings(Player &pl, Input &input)
         pl.set_volume_model(static_cast<int>(value));
 #if defined(ADLPLUG_OPL3)
     if (given(input.byte(), value))
-        pl.set_num_4ops(value & 0x3fu);
+        pl.set_num_4ops(value);
 #elif defined(ADLPLUG_OPN2)
     if (given(input.byte(), value))
-        pl.set_chip_type(value & 3u);
+        pl.set_chip_type(value);
 #endif
 }
 
@@ -178,8 +184,7 @@ void play(Player &pl, Input &input)
         switch (record >> 6) {
         case 0: {
             const std::vector<std::uint8_t> message = input.bytes(1u + (value & 3u));
-            if (!message.empty())
-                pl.play_midi(message.data(), static_cast<unsigned>(message.size()));
+            pl.play_midi(message.data(), static_cast<unsigned>(message.size()));
             break;
         }
         case 1:
@@ -213,6 +218,27 @@ void play(Player &pl, Input &input)
             case 1:
                 pl.panic();
                 break;
+            case 2: {
+                // The number of chips as the next byte has it. A project can
+                // hold any number and the plugin settles what the library can
+                // run, so the number goes in as it comes; the audio left to the
+                // input shrinks with it, since every chip is generated.
+                const unsigned chips = input.byte();
+                pl.set_num_chips(chips);
+                frames_left = std::min(frames_left, frames_max / std::max(1u, chips));
+                break;
+            }
+            case 3: {
+                // What else is global to the chip, as numbers rather than as
+                // the bits of the header: a project holds these too.
+                const unsigned number = input.byte();
+#if defined(ADLPLUG_OPL3)
+                pl.set_num_4ops(number);
+#elif defined(ADLPLUG_OPN2)
+                pl.set_lfo_frequency(static_cast<int>(number));
+#endif
+                break;
+            }
             default:
                 apply_settings(pl, input);
                 break;
@@ -232,6 +258,12 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
     pl.init(44100);
     const std::span<const std::uint8_t> bank = bank_data();
     FUZZ_CHECK(pl.load_bank_data(bank.data(), bank.size()));
+
+    // Nothing at all: the plugin's own queue never holds a message of no bytes,
+    // but the player takes one all the same, and so does a System Exclusive
+    // message that is not there.
+    pl.play_midi(nullptr, 0);
+    FUZZ_CHECK(!pl.play_sysex(nullptr, 0));
 
     apply_settings(pl, input);
     play(pl, input);

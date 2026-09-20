@@ -381,6 +381,12 @@ ctest --preset adl-debug
     bank, a program counts as used exactly when the instrument in it is not
     blank, what the plugin tells the editor is what the plugin holds, and
     preparing the plugin again leaves the state it would save unchanged.
+- Every fuzz target is also given an input far larger than a fuzzer would make:
+  sixty-four mebibytes of zeros, of `0xff`, and of bytes from a generator. The
+  size of what comes from outside is not the plugin's to choose — a bank file is
+  as large as it is, and a host hands over the state of a project whole — so the
+  programs make such an input up (`--made`), and nothing of that size is kept in
+  the repository.
 - When [pluginval](https://github.com/Tracktion/pluginval) or
   [lv2lint](https://git.open-music-kontrollers.ch/~hp/lv2lint) (plugin
   validators) is on the `PATH` at configure time, it validates the VST3 or

@@ -29,7 +29,10 @@
 #include "resources.h"
 #include <algorithm>
 #include <cassert>
+#include <cmath>
+#include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <span>
 #include <string_view>
@@ -49,6 +52,39 @@ void copy_text(char *buffer, std::size_t size, std::string_view text) noexcept
 // The sample rate of a player made before prepareToPlay(). It only holds the
 // state until prepareToPlay() replaces it.
 constexpr unsigned state_only_sample_rate = 44100;
+
+// The rate the plugin runs at, for the rate a host gives it. The rate is the
+// host's to choose and nothing checks it on the way in: a host that is only
+// looking the plugin over, or that has not settled its audio, can pass none at
+// all or a number that is no rate. Everything downstream takes it as a positive
+// number -- the library is given the rate, the filters divide by it, and the
+// chips are made for it -- so a number that is not one becomes the rate a player
+// gets before a host has said anything.
+//
+// A rate that is a rate is passed on as it is, and where the numbers cannot carry
+// it, the nearest they can: a device that runs faster or slower than any that
+// exists today is still a device, and a plugin that ran at a rate of its own
+// choosing instead would play at the wrong pitch and the wrong speed -- the
+// further from the rate it was given, the worse. The plugin hands the rate over
+// as a count of samples a second, an unsigned that the library takes as a long,
+// so the rates it can carry run from one to the largest number both of those
+// hold. Half a sample a second becomes one, which is out by a factor of two;
+// the plugin's own rate instead would be out by a factor of ninety thousand.
+//
+// A number that is no rate at all -- none, less than none, or not a number -- is
+// a host that has not said what it will ask for, and the plugin keeps its own
+// until the host does.
+constexpr double sample_rate_min = 1.0;
+constexpr double sample_rate_max = static_cast<double>(
+    std::min<std::uint64_t>(std::numeric_limits<unsigned>::max(),
+                            static_cast<std::uint64_t>(std::numeric_limits<long>::max())));
+
+unsigned playable_sample_rate(double rate) noexcept
+{
+    if (!(rate > 0.0))
+        return state_only_sample_rate;
+    return static_cast<unsigned>(std::clamp(rate, sample_rate_min, sample_rate_max));
+}
 
 }  // namespace
 
@@ -151,9 +187,16 @@ void AdlplugAudioProcessor::changeProgramName([[maybe_unused]] int index, [[mayb
 }
 
 //==============================================================================
-void AdlplugAudioProcessor::prepareToPlay(double sample_rate, [[maybe_unused]] int block_size)
+void AdlplugAudioProcessor::prepareToPlay(double given_sample_rate, int block_size)
 {
+    const double sample_rate = playable_sample_rate(given_sample_rate);
+
     ready_.store(false);
+
+    // The channel to play the other half into, for a host that gives the plugin
+    // one channel where it asked for two. As long as the block the host says it
+    // will ask for, which is what it asks for.
+    spare_channel_.assign(static_cast<std::size_t>(std::max(0, block_size)), 0.0f);
 
     // Stop the worker before replacing the queues it reads and writes.
     if (worker_) {
@@ -674,9 +717,13 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
     }
     case std::to_underlying(User_Message::SetBankTitle): {
         const auto body = Messages::body<Messages::User::SetBankTitle>(msg);
-        // The title keeps the terminator after its last byte.
+        // The title comes in as bytes and a project keeps it as text, so it is
+        // made text here and kept as the text that fits, for the reason the
+        // names of banks and programs are (bank_manager.cc, assign_name). The
+        // terminator goes after its last byte.
         static_assert(sizeof body.title == bank_title_size_max && sizeof bank_title_ == bank_title_size_max + 1);
-        std::memcpy(bank_title_, body.title, bank_title_size_max);
+        name_from_field(std::span(body.title, sizeof body.title))
+            .copyToUTF8(bank_title_, bank_title_size_max + 1);
         break;
     }
 #if defined(ADLPLUG_OPL3)
@@ -753,22 +800,73 @@ void AdlplugAudioProcessor::send_program_change_from_selection(unsigned part)
 void AdlplugAudioProcessor::processBlock(AudioBuffer<float> &buffer,
                                          MidiBuffer &midi_messages)
 {
+    // The plugin is a stereo one and says so (isBusesLayoutSupported), but the
+    // buffer is the host's. With no channel at all there is nowhere to play.
+    const int channels = buffer.getNumChannels();
+    if (channels < 1)
+        return;
+
     const auto nframes = static_cast<unsigned>(buffer.getNumSamples());
-    float *outputs[2] = {buffer.getWritePointer(0), buffer.getWritePointer(1)};
 
     Midi_Input_Source::Buffer_Cursor midi_cursor {midi_messages.begin(), midi_messages.end()};
     Midi_Input_Source midi_source(midi_cursor);
 
-    process(outputs, nframes, midi_source);
+    if (channels >= 2) {
+        float *outputs[2] {buffer.getWritePointer(0), buffer.getWritePointer(1)};
+        process(outputs, nframes, midi_source);
+    }
+    else {
+        // One channel: the plugin plays its two, the second into a channel of its
+        // own, and mixes them into the one it was given -- half of each, so that
+        // what was in the middle keeps its loudness. The channel of its own is as
+        // long as the block the host said it would ask for; a host that asks for
+        // more than that gets it in pieces rather than nothing, since growing a
+        // buffer here is not a thing to do while the audio waits.
+        const unsigned piece = static_cast<unsigned>(spare_channel_.size());
+        if (piece == 0) {
+            buffer.clear();
+            return;
+        }
+
+        float *const mono = buffer.getWritePointer(0);
+        for (unsigned at = 0; at < nframes; at += piece) {
+            const unsigned now = std::min(piece, nframes - at);
+            float *outputs[2] {mono + at, spare_channel_.data()};
+            process(outputs, now, midi_source);
+            for (unsigned i = 0; i < now; ++i)
+                mono[at + i] = 0.5f * (mono[at + i] + spare_channel_[i]);
+        }
+    }
+
+    // What the plugin does not play in, it leaves silent: a host asks that of a
+    // plugin for every output channel it hands over.
+    for (int channel = 2; channel < channels; ++channel)
+        buffer.clear(channel, 0, static_cast<int>(nframes));
 }
 
 void AdlplugAudioProcessor::processBlockBypassed(AudioBuffer<float> &buffer, MidiBuffer &midi_messages)
 {
-    std::unique_lock<std::mutex> lock(player_lock_, std::try_to_lock);
-    process_messages(lock.owns_lock());
-    lock.unlock();
+    {
+        // The lock goes when the scope does. Unlocking it by hand would throw
+        // when the try had not got it -- which is whenever another thread holds
+        // the player, as the worker does while it measures an instrument or
+        // changes the chips -- and nothing catches that.
+        const std::unique_lock<std::mutex> lock(player_lock_, std::try_to_lock);
+        process_messages(lock.owns_lock());
+    }
 
     cpu_load_.store(0.0, std::memory_order_relaxed);
+
+    // JUCE's own bypass clears a channel for every output the plugin has, which
+    // is not how many the buffer may hold: a host that hands over fewer would
+    // have it clear a channel that is not there. What the buffer does have is
+    // cleared here instead, since a synthesiser that is bypassed has nothing to
+    // pass through.
+    if (buffer.getNumChannels() < getTotalNumOutputChannels()) {
+        buffer.clear();
+        return;
+    }
+
     AudioProcessor::processBlockBypassed(buffer, midi_messages);
 }
 
@@ -798,6 +896,13 @@ void AdlplugAudioProcessor::getStateInformation(MemoryBlock &data)
 
 void AdlplugAudioProcessor::setStateInformation(const void *data, int size)
 {
+    // What the host hands over is the host's: no state at all is a pair that says
+    // nothing, and a size that promises bytes which are not there is one nothing
+    // can read. JUCE reads the first bytes of a state to see whether it is one,
+    // and that is a read of the pointer.
+    if (data == nullptr || size <= 0)
+        return;
+
     const std::scoped_lock lock(player_lock_);
 
     const std::unique_ptr<XmlElement> root = getXmlFromBinary(data, size);

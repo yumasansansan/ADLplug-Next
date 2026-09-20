@@ -29,10 +29,10 @@
 //   2   load an instrument into a bank and a program (four bytes: the two halves
 //       of the bank's number, the program, and what else the message carries)
 //   3   make an instrument, 4 delete one, 5 delete the bank, 6 rename the bank,
-//       7 rename a program, 8 select a program, 9 set the active part, 10 set
-//       the title of the bank, 11 clear every bank
+//       7 rename a program, 8 select a program, 9 set the active part (a byte),
+//       10 set the title of the bank, 11 clear every bank
 //   12  a measurement as the worker sends one back, of the instrument the plugin
-//       holds or of another, with two times
+//       holds or of another, with the two times it found (two bytes each)
 //   13  the global parameters (two bytes: the volume model, and what else is
 //       global to the chip), 14 prepare the plugin again, 15 the best number of
 //       four-operator channels (OPL3; nothing on OPN2)
@@ -396,7 +396,8 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
         case 2: {
             // Loading an instrument is what a bank file, a project and every knob
             // of the editor end at. The byte after the program says what else the
-            // message carries: the part in its upper half, and in its lower
+            // message carries: the part it is for, which is a number of its own
+            // and need not be one of the sixteen, and in its lowest two bits
             // whether the plugin tells the editor and whether it has the worker
             // measure what it was given.
             const Bank_Id bank = bank_from(input, percussive);
@@ -406,7 +407,7 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
             processor.bank_manager().find_program(bank, program, held);
             const Instrument ins = instrument_from(input, value >> 2, held);
             send<Messages::User::LoadInstrument>(processor, [&](auto &body) {
-                body.part = how >> 4;
+                body.part = how;
                 body.bank = bank;
                 body.program = program;
                 body.instrument = ins;
@@ -483,10 +484,13 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
             });
             break;
         }
-        case 9:
+        case 9: {
+            // The active part is a number of its own as well.
+            const std::uint8_t part = input.byte();
             send<Messages::User::SetActivePart>(processor,
-                [value](auto &body) { body.part = value; });
+                [part](auto &body) { body.part = part; });
             break;
+        }
         case 10: {
             const std::vector<char> title =
                 input.bytes(name_length(value >> 2, sizeof(Messages::User::SetBankTitle::title)));
@@ -503,8 +507,8 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
             // the instrument is still the one that was measured.
             const Bank_Id bank = bank_from(input, percussive);
             const std::uint8_t program = input.byte();
-            const auto kon = static_cast<std::uint16_t>(unsigned{input.byte()} << 8);
-            const auto koff = static_cast<std::uint16_t>(unsigned{input.byte()} << 8);
+            const auto kon = static_cast<std::uint16_t>((unsigned{input.byte()} << 8) | input.byte());
+            const auto koff = static_cast<std::uint16_t>((unsigned{input.byte()} << 8) | input.byte());
             Instrument held;
             processor.bank_manager().find_program(bank, program, held);
             const Instrument ins = instrument_from(input, value >> 2, held);

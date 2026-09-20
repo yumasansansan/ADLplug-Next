@@ -1,0 +1,48 @@
+SPDX-FileCopyrightText: 2010-2014 Joel Yliluoma <bisqwit@iki.fi>
+SPDX-FileCopyrightText: 2017-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-3.0-or-later
+
+The chip type is looked at before it is a family
+
+applySetup() takes the chip type the caller asked for, or the one the bank was
+made for, and casts it to OPNFamily, which has two values. The number comes from
+outside both ways -- opn2_setChipType() takes any int, and a WOPN file names its
+chip in a byte -- so a number that is no family is cast to one, stored, and read
+back as one, which is undefined behaviour. UndefinedBehaviorSanitizer stops the
+program at the read:
+
+  src/opnmidi_opn2.cpp:568:64: runtime error: load of value 79, which is not a
+  valid value for type 'OPNFamily'
+
+The chip the library is named for stands in for a number that is no family, the
+way opn2_setVolumeRangeModel() takes a number that is no model for the automatic
+choice.
+
+This came from a fuzz target of ADLplug-Next that gives the real-time API what a
+host and a saved project can ask of it: the chip type comes out of a project,
+which the plugin does not write itself, and out of a bank file that anyone can
+hand over.
+
+This is ADLplug-Next's own patch, applied to the submodule by
+cmake/Patches.cmake when CMake configures, and it goes away once the change is
+upstream.
+
+diff --git a/src/opnmidi_midiplay.cpp b/src/opnmidi_midiplay.cpp
+index a411d18..2a453e9 100644
+--- a/src/opnmidi_midiplay.cpp
++++ b/src/opnmidi_midiplay.cpp
+@@ -148,6 +148,13 @@ void OPNMIDIplay::applySetup()
+     else
+         chipType = m_setup.chipType;
+ 
++    /* The number comes from outside: opn2_setChipType() takes any int, and a bank
++       file names the chip it was made for in a byte of its own. A number that is
++       no family would be cast to one and read back as one, which is undefined, so
++       the chip the library is named for stands in for it. */
++    if(chipType < 0 || chipType >= OPNChip_Count)
++        chipType = OPNChip_OPN2;
++
+     synth.reset(m_setup.emulator, m_setup.PCM_RATE, static_cast<OPNFamily>(chipType), this);
+     m_chipChannels.clear();
+     m_chipChannels.resize(synth.m_numChannels, OpnChannel());

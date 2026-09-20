@@ -51,6 +51,12 @@ else()
     "${PROJECT_SOURCE_DIR}/thirdparty/OPN2BankEditor/Bank_Examples")
 endif()
 
+# How large the input of the fuzz.<target>.big tests is. Sixty-four mebibytes is
+# a thousand times what a fuzzer would make and small enough for the runners to
+# hold three of them, one after another, with the sanitizers on top; by hand a
+# program takes any size (--made 1G).
+set(ADLplug_FUZZ_BIG_INPUT "64M")
+
 # adlplug_fuzz_target(<name> [JUCE] OWN_SOURCES <file>... OTHER_SOURCES <file>...
 #                     [LIBRARIES <target>...] [DEFINITIONS <name>=<value>...]
 #                     SEEDS <directory>... [DICTIONARY <file>]
@@ -149,6 +155,15 @@ function(adlplug_fuzz_target name)
   if(ADLplug_BUILD_TESTS)
     add_test(NAME "fuzz.${name}" COMMAND "ADLplug_fuzz_${name}_replay" ${inputs})
     set_tests_properties("fuzz.${name}" PROPERTIES TIMEOUT 900 LABELS fuzz)
+
+    # What a target does with an input far larger than a fuzzer makes. libFuzzer
+    # keeps to a few kilobytes, but the size of what comes from outside is not
+    # ours to choose: a bank file is as large as it is, and a host hands over the
+    # state of a project whole. The programs make the input up (replay.cc
+    # --made), so nothing of this size is in the repository.
+    add_test(NAME "fuzz.${name}.big"
+      COMMAND "ADLplug_fuzz_${name}_replay" --made "${ADLplug_FUZZ_BIG_INPUT}")
+    set_tests_properties("fuzz.${name}.big" PROPERTIES TIMEOUT 900 LABELS fuzz)
   endif()
 endfunction()
 

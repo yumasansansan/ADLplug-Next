@@ -31,6 +31,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <vector>
 class Player;
 class Bank_Manager;
 class Simple_Fifo;
@@ -189,6 +190,12 @@ private:
 
     std::unique_ptr<Simple_Fifo> mq_from_worker_;
     std::unique_ptr<Simple_Fifo> mq_to_worker_;
+
+    // The channel a host did not give. The plugin plays in two and says so, but
+    // the buffer is the host's: one that hands over a single channel gets the two
+    // mixed into it, played through this one. Prepared with the block the host
+    // said it would ask for.
+    std::vector<float> spare_channel_;
 
     std::array<Dc_Filter, 2> dc_filter_;
     std::array<Vu_Monitor, 2> vu_monitor_;

@@ -164,6 +164,27 @@ void fuzz_sbi(const std::vector<std::uint8_t> &input)
 }
 #endif
 
+// Nothing at all, which is as much an input as bytes are: the loaders are handed
+// no memory, once with a size that says so and once with a size that says there
+// are bytes to read. A file dialogue can give a plugin an empty file, and a host
+// can hand over a pointer to nothing.
+void fuzz_nothing(std::size_t size)
+{
+    const WOPx::BankFile_Ptr none(WOPx::LoadBankFromMem(nullptr, 0, nullptr));
+    FUZZ_CHECK(!none);
+    const WOPx::BankFile_Ptr lying(WOPx::LoadBankFromMem(nullptr, size, nullptr));
+    FUZZ_CHECK(!lying);
+
+    WOPx::InstrumentFile file {};
+    FUZZ_CHECK(WOPx::LoadInstFromMem(&file, nullptr, 0) != 0);
+    FUZZ_CHECK(WOPx::LoadInstFromMem(&file, nullptr, size) != 0);
+
+#if defined(ADLPLUG_OPL3)
+    FUZZ_CHECK(Instrument::from_sbi(nullptr, 0).blank());
+    FUZZ_CHECK(Instrument::from_sbi(nullptr, size).blank());
+#endif
+}
+
 }  // namespace
 
 int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
@@ -173,6 +194,7 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
     // libFuzzer's own buffer out of reach of any write.
     const std::vector<std::uint8_t> input(data, data + size);
 
+    fuzz_nothing(size);
     fuzz_bank(input);
     fuzz_instrument(input);
 #if defined(ADLPLUG_OPL3)

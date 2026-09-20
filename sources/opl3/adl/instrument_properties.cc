@@ -91,8 +91,12 @@ Instrument Instrument::from_properties(const juce::PropertySet &set)
     ins.midi_velocity_offset = clamp_to<std::int8_t>(set.getIntValue("midi_velocity_offset"));
     ins.second_voice_detune = clamp_to<std::int8_t>(set.getIntValue("second_voice_detune"));
     ins.percussion_key_number = clamp_to<std::uint8_t>(set.getIntValue("percussion_key_number"));
-    // States saved without these read as no rhythm mode and no fixed note.
-    ins.rhythm_mode(std::clamp(set.getIntValue("rhythm_mode"), 0, 5));
+    // States saved without these read as no rhythm mode and no fixed note. A
+    // number that is no mode -- the field holds three bits and the modes are five
+    // -- means none of them, rather than the last of them: a project can hold any
+    // number, and taking it for a drum would put a drum where none was meant.
+    const int rhythm_mode = set.getIntValue("rhythm_mode");
+    ins.rhythm_mode((rhythm_mode >= 0 && rhythm_mode <= 5) ? rhythm_mode : 0);
     ins.fixed_note(set.getBoolValue("fixed_note"));
 
     for (unsigned opnum = 0; opnum < 4; ++opnum) {
