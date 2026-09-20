@@ -22,6 +22,7 @@ SPDX-License-Identifier: BSL-1.0 AND GPL-3.0-or-later
 - [x] 忠実度の高いエミュレーションと，度合いの選択（良好な忠実度で高速か，極めて高い忠実度で低速かを選択できます）
 - [x] 旋律楽器と打楽器の合成
 - [x] 拡張可能な同時発音数
+- [x] 新しい音を鳴らすときに，チップのチャンネルをどう選ぶかの切り替え（すべてのチャンネルが鳴っている場面で，どの音が譲るかが変わります）
 - [x] 同梱の音色コレクション
 - [x] パラメータの動的な変更とオートメーションへの対応
 - [x] MIDI 規格の厳密な実装
@@ -31,6 +32,8 @@ SPDX-License-Identifier: BSL-1.0 AND GPL-3.0-or-later
 
 ADLplug-Next: DyTect（GitHub アカウント: [yumasansansan](https://github.com/yumasansansan)）  
 アップストリーム（改造元）の ADLplug: 作者 [Jean Pierre Cimalando](https://github.com/jpcima)，貢献者 [Olivier Humbert](https://github.com/trebmuh)，[Christopher Arndt](https://github.com/SpotlightKid)，[Bruce Sutherland](https://github.com/bsutherland)，[David Runge](https://github.com/dvzrv)，[Jérémy Frey](https://github.com/jfrey-xx)
+
+新しい音にチャンネルをどう割り当てるかの選択は，[Vitaly Novichkov（Wohlstand）氏](https://github.com/Wohlstand)による ADLplug のフォークから取り込んだものです．libADLMIDI と libOPNMIDI も同氏によるものです．
 
 DyTect は，Yuma Kakei（GitHub では yumasansansan）のアーティスト名・エンジニア名です．Yuma Kakei は本名で，KDE プロジェクトでもこの名前で知られており，ADLplug-Next のコードの著作権表示にもこの名前が記されています．
 

@@ -706,7 +706,7 @@ void Generic_Main_Component<T>::update_emulator_icon()
 }
 
 template <class T>
-void Generic_Main_Component<T>::build_emulator_menu(PopupMenu &menu)
+void Generic_Main_Component<T>::build_chip_menu(PopupMenu &menu)
 {
     const Emulator_Defaults &defaults = get_emulator_defaults();
     const std::vector<Image> &images = emulator_icons_->images;
@@ -719,17 +719,53 @@ void Generic_Main_Component<T>::build_emulator_menu(PopupMenu &menu)
         const auto index = static_cast<std::size_t>(i);
         menu.addItem(i + 1, name, true, false, (index < images.size()) ? images[index] : Image());
     }
+
+    // How a channel of the chip is taken for a new note, which the library chooses
+    // for itself unless it is told (adl/chip_settings.h). It belongs to the chip, as
+    // the emulator does, and it is a choice made once and then left alone, so the
+    // menu of the chip's button is where it is offered. The names are the
+    // parameter's, so that the menu and the host say the same words.
+    const AudioParameterChoice &parameter = *parameter_block_->p_chan_alloc;
+    const int chosen = chip_settings_.chan_alloc + 1;
+    PopupMenu modes;
+    for (int i = 0; i < parameter.choices.size(); ++i)
+        modes.addItem(chan_alloc_first_id + i, parameter.choices[i], true, i == chosen);
+    menu.addSeparator();
+    menu.addSubMenu("Channel allocation", modes);
 }
 
 template <class T>
-void Generic_Main_Component<T>::select_emulator_by_menu(std::function<void(int)> on_selected)
+void Generic_Main_Component<T>::select_chip_setting_by_menu(std::function<void(int)> on_selected)
 {
     PopupMenu menu;
-    build_emulator_menu(menu);
+    build_chip_menu(menu);
     menu.showMenuAsync(PopupMenu::Options()
                        .withParentComponent(this)
                        .withItemThatMustBeVisible(static_cast<int>(chip_settings_.emulator) + 1),
                        std::move(on_selected));
+}
+
+// Nothing was chosen, or the same thing as before, is nothing to send: the
+// processor hears of a parameter only when it changes, and a gesture that changes
+// nothing would still be written into a host's automation.
+template <class T>
+void Generic_Main_Component<T>::apply_chip_menu_choice(int selection)
+{
+    const auto choose = [](AudioParameterChoice &parameter, int index) {
+        parameter.beginChangeGesture();
+        parameter = index;
+        parameter.endChangeGesture();
+    };
+
+    if (selection >= chan_alloc_first_id) {
+        const int mode = selection - chan_alloc_first_id;
+        if (mode != chip_settings_.chan_alloc + 1)
+            choose(*parameter_block_->p_chan_alloc, mode);
+    }
+    else if (selection > 0) {
+        if (static_cast<unsigned>(selection - 1) != chip_settings_.emulator)
+            choose(*parameter_block_->p_emulator, selection - 1);
+    }
 }
 
 template <class T>

@@ -28,6 +28,7 @@ The emulations and the drivers are provided by [libADLMIDI](https://github.com/W
 - [x] high-fidelity emulation, with a choice between good fidelity at high speed and excellent fidelity at low speed
 - [x] synthesis of melodic and percussive instruments
 - [x] extensible polyphony
+- [x] a choice of how a channel of the chip is taken for a new note, which is what decides the note that gives way when every channel is busy
 - [x] bundled collection of instruments
 - [x] support for dynamic parameterization and automation
 - [x] rigorous implementation of the MIDI standard
@@ -37,6 +38,8 @@ The emulations and the drivers are provided by [libADLMIDI](https://github.com/W
 
 ADLplug-Next: DyTect ([yumasansansan](https://github.com/yumasansansan) on GitHub)  
 Upstream ADLplug (the original that ADLplug-Next modifies): [Jean Pierre Cimalando](https://github.com/jpcima), author; contributors [Olivier Humbert](https://github.com/trebmuh), [Christopher Arndt](https://github.com/SpotlightKid), [Bruce Sutherland](https://github.com/bsutherland), [David Runge](https://github.com/dvzrv), [Jérémy Frey](https://github.com/jfrey-xx)
+
+The choice of how a channel is taken for a new note comes from the ADLplug fork of [Vitaly Novichkov (Wohlstand)](https://github.com/Wohlstand), who wrote libADLMIDI and libOPNMIDI as well.
 
 DyTect is the artist and engineer name of Yuma Kakei, who is yumasansansan on
 GitHub. Yuma Kakei is the real name, which the KDE project knows too, and

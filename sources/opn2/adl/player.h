@@ -74,6 +74,10 @@ public:
         { return static_cast<unsigned>(std::max(0, opn2_getNumChipsObtained(player_.get()))); }
     bool set_num_chips(unsigned chips)
         { return opn2_setNumChips(player_.get(), static_cast<int>(chips)) == 0; }
+    int channel_alloc_mode() const
+        { return opn2_getChannelAllocMode(player_.get()); }
+    void set_channel_alloc_mode(int mode)
+        { opn2_setChannelAllocMode(player_.get(), mode); }
     unsigned chip_type() const
         { return static_cast<unsigned>(std::max(0, opn2_getChipType(player_.get()))); }
     void set_chip_type(unsigned type)

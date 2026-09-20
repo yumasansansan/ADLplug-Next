@@ -74,6 +74,10 @@ public:
         { return static_cast<unsigned>(std::max(0, adl_getNumChipsObtained(player_.get()))); }
     bool set_num_chips(unsigned chips)
         { return adl_setNumChips(player_.get(), static_cast<int>(chips)) == 0; }
+    int channel_alloc_mode() const
+        { return adl_getChannelAllocMode(player_.get()); }
+    void set_channel_alloc_mode(int mode)
+        { adl_setChannelAllocMode(player_.get(), mode); }
     unsigned num_4ops() const
         { return static_cast<unsigned>(std::max(0, adl_getNumFourOpsChnObtained(player_.get()))); }
     bool set_num_4ops(unsigned count);

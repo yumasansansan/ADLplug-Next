@@ -18,17 +18,17 @@
 # systems' maths libraries differ. When a change to the sound is meant, update
 # the lines and say why in the commit message.
 
-linux-almalinux-x86_64-avx2 ADLplug-Next 5dab0224c8faf976 173006bc262b405b
-linux-almalinux-x86_64-avx2 OPNplug-Next 591cd96341dd1e20 677fdaba57843064
-linux-almalinux-x86_64-baseline ADLplug-Next 5dab0224c8faf976 173006bc262b405b
-linux-almalinux-x86_64-baseline OPNplug-Next 591cd96341dd1e20 677fdaba57843064
-linux-x86_64-avx2 ADLplug-Next 5dab0224c8faf976 173006bc262b405b
-linux-x86_64-avx2 OPNplug-Next 591cd96341dd1e20 677fdaba57843064
-linux-x86_64-baseline ADLplug-Next 5dab0224c8faf976 173006bc262b405b
-linux-x86_64-baseline OPNplug-Next 591cd96341dd1e20 677fdaba57843064
-macos-arm64 ADLplug-Next 5dab0224c8faf976 173006bc262b405b
-macos-arm64 OPNplug-Next 591cd96341dd1e20 677fdaba57843064
-windows-x86_64-avx2 ADLplug-Next 5dab0224c8faf976 173006bc262b405b
-windows-x86_64-avx2 OPNplug-Next 591cd96341dd1e20 677fdaba57843064
-windows-x86_64-baseline ADLplug-Next 5dab0224c8faf976 173006bc262b405b
-windows-x86_64-baseline OPNplug-Next 591cd96341dd1e20 677fdaba57843064
+linux-almalinux-x86_64-avx2 ADLplug-Next 5dab0224c8faf976 97bba991816eb678
+linux-almalinux-x86_64-avx2 OPNplug-Next 591cd96341dd1e20 889b6c19db53bbef
+linux-almalinux-x86_64-baseline ADLplug-Next 5dab0224c8faf976 97bba991816eb678
+linux-almalinux-x86_64-baseline OPNplug-Next 591cd96341dd1e20 889b6c19db53bbef
+linux-x86_64-avx2 ADLplug-Next 5dab0224c8faf976 97bba991816eb678
+linux-x86_64-avx2 OPNplug-Next 591cd96341dd1e20 889b6c19db53bbef
+linux-x86_64-baseline ADLplug-Next 5dab0224c8faf976 97bba991816eb678
+linux-x86_64-baseline OPNplug-Next 591cd96341dd1e20 889b6c19db53bbef
+macos-arm64 ADLplug-Next 5dab0224c8faf976 97bba991816eb678
+macos-arm64 OPNplug-Next 591cd96341dd1e20 889b6c19db53bbef
+windows-x86_64-avx2 ADLplug-Next 5dab0224c8faf976 97bba991816eb678
+windows-x86_64-avx2 OPNplug-Next 591cd96341dd1e20 889b6c19db53bbef
+windows-x86_64-baseline ADLplug-Next 5dab0224c8faf976 97bba991816eb678
+windows-x86_64-baseline OPNplug-Next 591cd96341dd1e20 889b6c19db53bbef

@@ -110,6 +110,30 @@ ADLPLUG_TEST(sysex_gm_reset)
     CHECK(energy(reset_player) == loud);
 }
 
+// The way the player takes a channel of the chip for a new note: its own choice
+// until it is told, every mode it knows, and its own choice again for a number
+// that is no mode -- which is what the plugin counts on rather than checking the
+// number itself (plugin_state.cc holds a project's number to the modes there are).
+ADLPLUG_TEST(channel_allocation_mode)
+{
+    Player pl;
+    pl.init(44100);
+    CHECK(pl.channel_alloc_mode() == -1);
+
+    // The three ways the libraries know: only a channel whose sounding delay has
+    // expired, the first released channel with the same instrument, and the first
+    // released channel of any.
+    for (int mode = 0; mode <= 2; ++mode) {
+        pl.set_channel_alloc_mode(mode);
+        CHECK(pl.channel_alloc_mode() == mode);
+    }
+
+    pl.set_channel_alloc_mode(3);
+    CHECK(pl.channel_alloc_mode() == -1);
+    pl.set_channel_alloc_mode(-2);
+    CHECK(pl.channel_alloc_mode() == -1);
+}
+
 // The master volume of a System Exclusive message is heard.
 ADLPLUG_TEST(sysex_master_volume)
 {

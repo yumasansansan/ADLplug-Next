@@ -51,6 +51,10 @@ struct Chip_Settings {
     unsigned emulator = 0;
     unsigned chip_count = 2;
     unsigned fourop_count = 0;
+    // How the library takes a channel of the chip for a new note: -1 is the
+    // choice it makes for itself, out of the volume model and the kind of music,
+    // and the modes above it are the ways of making that choice (ADLMIDI_ChanAlloc_*).
+    int chan_alloc = -1;
 
     bool operator==(const Chip_Settings &) const = default;
 

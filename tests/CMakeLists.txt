@@ -26,6 +26,7 @@ endif()
 set(ADLplug_UNIT_TEST_SOURCES
   "unit/main.cc"
   "unit/bank_tests.cc"
+  "unit/chip_settings_tests.cc"
   "unit/fifo_tests.cc"
   "unit/player_tests.cc"
   "unit/text_tests.cc"
@@ -42,6 +43,10 @@ set(ADLplug_UNIT_TESTED_SOURCES
   "${PROJECT_SOURCE_DIR}/sources/messages.cc"
   "${PROJECT_SOURCE_DIR}/sources/utility/pak.cc"
   "${PROJECT_SOURCE_DIR}/sources/utility/simple_fifo.cc"
+  # The chip settings, which a project holds as properties, and the icons of the
+  # emulators that they carry (ui/utility/image.cc).
+  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/chip_settings.cc"
+  "${PROJECT_SOURCE_DIR}/sources/ui/utility/image.cc"
   "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/instrument.cc"
   "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/instrument_properties.cc"
   # The player: it hands the System Exclusive messages to the library and, for

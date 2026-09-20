@@ -21,11 +21,20 @@
 #include "adl/player.h"
 #include <algorithm>
 
+// The modes of channel allocation that the library knows, which are numbered from
+// nought, with its own choice below them at -1.
+#if defined(ADLPLUG_OPL3)
+constexpr int chan_alloc_modes = ADLMIDI_ChanAlloc_Count;
+#elif defined(ADLPLUG_OPN2)
+constexpr int chan_alloc_modes = OPNMIDI_ChanAlloc_Count;
+#endif
+
 Chip_Settings get_player_chip_settings(const Player &pl)
 {
     Chip_Settings cs;
     cs.emulator = pl.emulator();
     cs.chip_count = pl.num_chips();
+    cs.chan_alloc = pl.channel_alloc_mode();
 #if defined(ADLPLUG_OPL3)
     cs.fourop_count = pl.num_4ops();
 #elif defined(ADLPLUG_OPN2)
@@ -60,6 +69,10 @@ Chip_Settings playable_chip_settings(const Chip_Settings &cs)
     // offers; a project can hold any number, and more than they take would have
     // the library refuse the lot and keep what it had.
     playable.chip_count = std::clamp(cs.chip_count, 1u, 100u);
+    // The modes the library knows, and its own choice below them: a project can
+    // hold any number, and one that is no mode would leave the library choosing for
+    // itself without anything saying so.
+    playable.chan_alloc = std::clamp(cs.chan_alloc, -1, chan_alloc_modes - 1);
 #if defined(ADLPLUG_OPL3)
     playable.fourop_count = std::min(cs.fourop_count, 6 * playable.chip_count);
 #elif defined(ADLPLUG_OPN2)
@@ -76,6 +89,7 @@ void set_player_chip_settings(Player &pl, const Chip_Settings &cs)
     const Chip_Settings playable = playable_chip_settings(cs);
     pl.set_emulator(playable.emulator);
     pl.set_num_chips(playable.chip_count);
+    pl.set_channel_alloc_mode(playable.chan_alloc);
 #if defined(ADLPLUG_OPL3)
     pl.set_num_4ops(playable.fourop_count);
 #elif defined(ADLPLUG_OPN2)

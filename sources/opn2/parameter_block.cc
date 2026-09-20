@@ -173,6 +173,15 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
     p_lfoenable = add_parameter<Pt::Bool>(p, Parameter_Tag::global, "lfoenable", "LFO enable", (wopn->lfo_freq & 8) != 0);
     const StringArray lfofreq_choices {"3.98 Hz", "5.56 Hz", "6.02 Hz", "6.37 Hz", "6.88 Hz", "9.63 Hz", "48.1 Hz", "72.2 Hz"};
     p_lfofreq = add_parameter<Pt::Choice>(p, Parameter_Tag::global, "lfofreq", "LFO frequency", lfofreq_choices, wopn->lfo_freq & 7);
+
+    // Added by ADLplug-Next: the ways the library takes a channel of the chip for a
+    // new note, with its own choice first. The parameter counts them from nought and
+    // the library from -1, and it comes last because everything the upstream plugin
+    // had keeps the place it had (tests/render, the upstream parameters).
+    const StringArray chan_alloc_choices { "Automatic", "Off-delay", "Same instrument",
+                                           "Any released" };
+    p_chan_alloc = add_parameter_since<Pt::Choice>(3, p, Parameter_Tag::chip, "chan_alloc",
+        "Channel allocation", chan_alloc_choices, cs.chan_alloc + 1);
 }
 
 // As the parameters hold them, which is how states keep them too; the player
@@ -183,6 +192,7 @@ Chip_Settings Parameter_Block::chip_settings() const
     cs.emulator = static_cast<unsigned>(p_emulator->getIndex());
     cs.chip_count = static_cast<unsigned>(p_nchip->get());
     cs.chip_type = static_cast<unsigned>(p_chiptype->getIndex());
+    cs.chan_alloc = p_chan_alloc->getIndex() - 1;
     return cs;
 }
 
@@ -200,6 +210,7 @@ void Parameter_Block::set_chip_settings(const Chip_Settings &cs)
     *p_emulator = static_cast<int>(cs.emulator);
     *p_nchip = static_cast<int>(cs.chip_count);
     *p_chiptype = static_cast<int>(cs.chip_type);
+    *p_chan_alloc = cs.chan_alloc + 1;
 }
 
 void Parameter_Block::set_global_parameters(const Instrument_Global_Parameters &gp)

@@ -126,6 +126,7 @@ PropertySet Chip_Settings::to_properties() const
     set.setValue("emulator", static_cast<int>(emulator));
     set.setValue("chip_count", static_cast<int>(chip_count));
     set.setValue("4op_count", static_cast<int>(fourop_count));
+    set.setValue("chan_alloc", chan_alloc);
     return set;
 }
 
@@ -135,5 +136,10 @@ Chip_Settings Chip_Settings::from_properties(const PropertySet &set)
     cs.emulator = non_negative(set.getIntValue("emulator"));
     cs.chip_count = non_negative(set.getIntValue("chip_count"));
     cs.fourop_count = non_negative(set.getIntValue("4op_count"));
+    // A project that has none of this is one from before the mode was a setting,
+    // and the library's own choice is what it meant. A number that is no mode is
+    // held to the ones there are where the player is given it
+    // (playable_chip_settings).
+    cs.chan_alloc = set.getIntValue("chan_alloc", -1);
     return cs;
 }

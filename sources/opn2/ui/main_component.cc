@@ -1045,15 +1045,9 @@ void Main_Component::buttonClicked (Button* buttonThatWasClicked)
     {
         //[UserButtonCode_btn_emulator] -- add your button handler code here..
         Component::SafePointer<Main_Component> safe(this);
-        select_emulator_by_menu([safe, &pb](int selection) mutable {
-            if (safe == nullptr || selection == 0)
-                return;
-            if (static_cast<unsigned>(selection - 1) == safe->chip_settings_.emulator)
-                return;
-            AudioParameterChoice &p = *pb.p_emulator;
-            p.beginChangeGesture();
-            p = selection - 1;
-            p.endChangeGesture();
+        select_chip_setting_by_menu([safe](int selection) mutable {
+            if (safe != nullptr)
+                safe->apply_chip_menu_choice(selection);
         });
         //[/UserButtonCode_btn_emulator]
     }

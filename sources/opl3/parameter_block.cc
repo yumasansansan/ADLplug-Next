@@ -172,6 +172,15 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
     p_deepvib = add_parameter<Pt::Bool>(p, Parameter_Tag::global, "deepvib", "Deep vibrato", (wopl->opl_flags & WOPL_FLAG_DEEP_VIBRATO) != 0);
     // Added by ADLplug-Next: the MT-32 defaults flag of WOPL banks.
     p_mt32 = add_parameter_since<Pt::Bool>(2, p, Parameter_Tag::global, "mt32", "MT-32 defaults", (wopl->opl_flags & WOPL_FLAG_MT32) != 0);
+
+    // Added by ADLplug-Next: the ways the library takes a channel of the chip for a
+    // new note, with its own choice first. The parameter counts them from nought and
+    // the library from -1, and it comes last because everything the upstream plugin
+    // had keeps the place it had (tests/render, the upstream parameters).
+    const StringArray chan_alloc_choices { "Automatic", "Off-delay", "Same instrument",
+                                           "Any released" };
+    p_chan_alloc = add_parameter_since<Pt::Choice>(3, p, Parameter_Tag::chip, "chan_alloc",
+        "Channel allocation", chan_alloc_choices, cs.chan_alloc + 1);
 }
 
 // As the parameters hold them, which is how states keep them too; the player
@@ -182,6 +191,7 @@ Chip_Settings Parameter_Block::chip_settings() const
     cs.emulator = static_cast<unsigned>(p_emulator->getIndex());
     cs.chip_count = static_cast<unsigned>(p_nchip->get());
     cs.fourop_count = static_cast<unsigned>(p_n4op->get());
+    cs.chan_alloc = p_chan_alloc->getIndex() - 1;
     return cs;
 }
 
@@ -200,6 +210,7 @@ void Parameter_Block::set_chip_settings(const Chip_Settings &cs)
     *p_emulator = static_cast<int>(cs.emulator);
     *p_nchip = static_cast<int>(cs.chip_count);
     *p_n4op = static_cast<int>(cs.fourop_count);
+    *p_chan_alloc = cs.chan_alloc + 1;
 }
 
 void Parameter_Block::set_global_parameters(const Instrument_Global_Parameters &gp)

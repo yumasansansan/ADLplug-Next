@@ -33,6 +33,7 @@ struct Parameter_Block : Basic_Parameter_Block {
     AudioParameterChoice *p_emulator = nullptr;
     AudioParameterInt *p_nchip = nullptr;
     AudioParameterInt *p_n4op = nullptr;
+    AudioParameterChoice *p_chan_alloc = nullptr;
 
     struct Operator {
         AudioParameterInt *p_attack = nullptr;

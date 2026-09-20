@@ -89,8 +89,12 @@ public:
     void update_master_volume_label();
 
     void update_emulator_icon();
-    void build_emulator_menu(PopupMenu &menu);
-    void select_emulator_by_menu(std::function<void(int)> on_selected);
+    // The menu of the chip's button: the emulators, and the ways of taking a
+    // channel of the chip for a new note. What it answers is applied here rather
+    // than by the caller, since both answers are parameters of this plugin.
+    void build_chip_menu(PopupMenu &menu);
+    void select_chip_setting_by_menu(std::function<void(int)> on_selected);
+    void apply_chip_menu_choice(int selection);
 
     void handle_load_bank(Component *clicked);
     void finish_load_bank(int selection);
@@ -151,6 +155,10 @@ private:
     static constexpr int load_instrument_file_id = 2;
     static constexpr int bank_information_id = 3;
     static constexpr int load_collection_first_id = 4;
+
+    // Ids in the menu of the chip's button: an emulator is its own number and one,
+    // and a way of taking a channel is this and the number the parameter gives it.
+    static constexpr int chan_alloc_first_id = 1000;
 
     struct Pending_Message {
         unsigned tag = 0;
