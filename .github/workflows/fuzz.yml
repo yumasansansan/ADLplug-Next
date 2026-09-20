@@ -19,8 +19,9 @@
 # time to use them; the plugin, which one of those features keeps from being
 # loaded at all, is built and tested by the jobs of every push instead.
 #
-# A run carries on from the corpus that the last decided run (one that passed
-# or failed) grew and kept as an artifact; when that is gone, it starts again
+# A run carries on from the corpus that the last decided run grew and kept as an
+# artifact -- the last one that fuzzed at all, which is one the schedule or a
+# hand started, and that passed or failed; when that is gone, it starts again
 # from the seed inputs. The inputs that failed are kept as well, and the next
 # run replays them before anything else, so that a failure lasts until it is
 # fixed, not until fuzzing happens to miss it. While the last decided run has
@@ -108,9 +109,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p fuzz-run/corpora fuzz-run/earlier
+          # Only a run that fuzzed counts: this workflow is started by the
+          # schedule or by hand, and a run of it on a push is one GitHub writes
+          # down when it cannot read the file itself, which holds no corpus and
+          # has no say in whether fuzzing passed.
           last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow fuzz.yml --branch main \
-            --status completed --limit 20 --json conclusion,databaseId \
-            --jq '[.[] | select(.conclusion == "success" or .conclusion == "failure")][0].databaseId // empty')
+            --status completed --limit 20 --json conclusion,databaseId,event \
+            --jq '[.[] | select(.event == "schedule" or .event == "workflow_dispatch")
+                       | select(.conclusion == "success" or .conclusion == "failure")][0].databaseId // empty')
           if [ -z "$last" ]; then
             echo "No earlier run: the corpus starts from the seed inputs."
             exit 0
@@ -128,8 +134,11 @@ jobs:
           ADLplug_FUZZ_MINUTES: ${{ github.event.inputs.minutes || '20' }}
         run: bash ci/fuzz.sh --with-long "${{ matrix.preset }}" "$((ADLplug_FUZZ_MINUTES * 60))" fuzz-run/corpora fuzz-run/crashes fuzz-run/earlier
 
+      # What a run found is kept whatever became of the job, its own time limit
+      # included: a job that the limit stops counts as cancelled, and that is the
+      # very run whose corpus and failing inputs are worth having.
       - name: Keep the corpus
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: fuzz-corpora-${{ matrix.preset }}
@@ -138,7 +147,7 @@ jobs:
           retention-days: 30
 
       - name: Keep the inputs that failed
-        if: ${{ failure() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: fuzz-crashes-${{ matrix.preset }}

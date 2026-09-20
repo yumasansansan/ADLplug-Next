@@ -10,8 +10,10 @@
 #include "JuceHeader.h"
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <string_view>
+#include <vector>
 
 // The names of banks and instruments are fixed-size fields of UTF-8 text,
 // zero-filled, and terminated only when shorter than the field.
@@ -47,15 +49,36 @@ inline std::string_view name_view(std::span<const char> field) noexcept
 }
 
 // The text of a field, which need not be UTF-8: a bank file names its banks and
-// its instruments in bytes of its own, and a field keeps what it is given.
-// String::fromUTF8 asserts on such bytes and reads past what they mean, so the
-// text is made the way JUCE reads text whose encoding is not known -- UTF-8 when
-// the bytes are UTF-8, Windows-1252 when they are not -- which is text that can
-// be shown, and that the state of a project can keep and bring back.
+// its instruments in bytes of its own, and a field keeps what it is given. The
+// rule is the one JUCE reads text of an unknown encoding by -- UTF-8 when the
+// bytes are UTF-8, Windows-1252 when they are not -- which is text that can be
+// shown, and that the state of a project can keep and bring back.
+//
+// The rule is written out here rather than taken from String::createStringFromData,
+// which reads the bytes of a file: it drops a byte order mark at the front, and
+// reads the bytes after one as UTF-16 when the mark says so. A field is no file.
+// Nothing put those bytes at the front to say an encoding, so a mark there is a
+// character of the name like any other, and a bank file is free to hold one. To
+// read it away would lose what the file holds, and would leave a field whose text
+// is not the text of the field it was written to: the name would lose its first
+// character every time a project was saved and read again. String::fromUTF8 is no
+// answer either, since it asserts on bytes that are not UTF-8 and reads past what
+// they mean.
 inline String name_from_field(std::span<const char> field)
 {
     const std::string_view text = name_view(field);
-    return String::createStringFromData(text.data(), static_cast<int>(text.size()));
+    if (text.empty())
+        return {};
+    if (CharPointer_UTF8::isValidString(text.data(), static_cast<int>(text.size())))
+        return String(CharPointer_UTF8(text.data()), CharPointer_UTF8(text.data() + text.size()));
+
+    // Windows-1252, character by character, as JUCE reads that code page.
+    std::vector<juce_wchar> characters(text.size() + 1, 0);
+    for (std::size_t i = 0; i < text.size(); ++i)
+        characters[i] = CharacterFunctions::getUnicodeCharFromWindows1252Codepage(
+            static_cast<std::uint8_t>(text[i]));
+    return String(CharPointer_UTF32(characters.data()),
+                  CharPointer_UTF32(characters.data() + text.size()));
 }
 
 // Stores a name in a field, leaving out the characters which do not fit whole.

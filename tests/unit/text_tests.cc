@@ -80,6 +80,33 @@ ADLPLUG_TEST(name_field_of_other_bytes)
     CHECK(name_from_field(again) == text);
 }
 
+ADLPLUG_TEST(name_field_keeps_a_mark_as_a_character)
+{
+    // A field is no file. Nothing put its bytes there to say an encoding, so the
+    // three bytes of a byte order mark at the front of one are a character of the
+    // name like any other, which a bank file is free to hold. A field of two of
+    // them is what found this, in the long fuzzing of the readers of small
+    // things: the first reading gave one mark back, and the reading after that
+    // gave none, so the name a project was saved with was not the name it came
+    // back with.
+    const char mark[3] = {'\xef', '\xbb', '\xbf'};
+    CHECK(name_from_field(mark) == String::fromUTF8("\xef\xbb\xbf"));
+
+    const char field[6] = {'\xef', '\xbb', '\xbf', '\xef', '\xbb', '\xbf'};
+    char stored[6] {};
+    copy_name_to_field(stored, name_from_field(field));
+    CHECK(name_view(stored) == std::string_view("\xef\xbb\xbf\xef\xbb\xbf"));
+    char again[6] {};
+    copy_name_to_field(again, name_from_field(stored));
+    CHECK(std::ranges::equal(stored, again));
+
+    // Nor is a field ever UTF-16, whatever it begins with: the two bytes that
+    // would say so are two characters, as every other byte of a field that is
+    // not UTF-8 is one.
+    const char wide[4] = {'\xff', '\xfe', 'A', '\0'};
+    CHECK(name_from_field(wide) == String::fromUTF8("\xc3\xbf\xc3\xbe" "A"));
+}
+
 ADLPLUG_TEST(name_field_holds_its_own_text)
 {
     // The text of bytes that are not UTF-8 is longer than the bytes: every

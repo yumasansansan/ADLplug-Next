@@ -16,8 +16,8 @@
 # fuzzing stops the release while the daily fuzzing fails: the last run of
 # .github/workflows/fuzz.yml on main that passed or failed decides, and a
 # release goes out only when it passed or there has been none. A run that was
-# cancelled or skipped decides nothing. When gh cannot tell, the release waits
-# as well.
+# cancelled or skipped decides nothing, and neither does one that never fuzzed.
+# When gh cannot tell, the release waits as well.
 #
 # assemble merges the packs of both chips that ci/package.sh made into one
 # archive for each system and instruction set, ADLplug-Next-<version>-<system>
@@ -135,9 +135,14 @@ release() {  # assets notes
 
 fuzzing() {
   local last
+  # Only a run that fuzzed has a say. The fuzzing workflow is started by its
+  # schedule or by hand, and a run of it on a push is what GitHub writes down
+  # when it cannot read the workflow file itself: such a run has no jobs, fuzzed
+  # nothing, and would otherwise hold back every Nightly until the next fuzzing.
   last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow fuzz.yml --branch main \
-    --status completed --limit 20 --json conclusion,url \
-    --jq '[.[] | select(.conclusion == "success" or .conclusion == "failure")][0] // empty | "\(.conclusion) \(.url)"')
+    --status completed --limit 20 --json conclusion,event,url \
+    --jq '[.[] | select(.event == "schedule" or .event == "workflow_dispatch")
+               | select(.conclusion == "success" or .conclusion == "failure")][0] // empty | "\(.conclusion) \(.url)"')
   case $last in
     "")
       echo "The daily fuzzing has not finished a run yet."

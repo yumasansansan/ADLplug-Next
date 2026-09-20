@@ -27,7 +27,20 @@
 # fuzzing looks for inputs at random, and a later run need not come upon the
 # same one, so it is replayed until it is fixed. The script fails when any
 # target fails.
+#
+# No run of a target lasts longer than the time it was given and ten minutes
+# more. A target that does not end of its own by then -- one wedged where it
+# cannot say what it found, or one input of which takes forever -- is stopped and
+# counted as a failure, so that the targets after it still run, and the run ends
+# by itself with everything it found kept, instead of standing until the time of
+# the whole job runs out.
 set -euo pipefail
+
+# How the stopping of a target shows: the status timeout keeps for the time
+# running out, and the ones a program ended by a signal leaves behind.
+was_stopped() {  # status
+  [ "$1" -eq 124 ] || [ "$1" -eq 137 ] || [ "$1" -eq 143 ]
+}
 
 # ThreadSanitizer reports a race and carries on by default, and says so only in
 # the exit status at the end, by which time libFuzzer has fuzzed past the input
@@ -48,6 +61,7 @@ seconds=$2
 corpora=$3
 crashes=$4
 earlier=${5:-}
+guard=$((seconds + 600))
 
 shopt -s nullglob
 manifests=("build/$preset/fuzz/"*.args)
@@ -71,8 +85,14 @@ for manifest in "${manifests[@]}"; do
     failed=("$earlier/$target/"*)
     if [ ${#failed[@]} -gt 0 ]; then
       echo "== $target: ${#failed[@]} inputs that failed in an earlier run"
-      if ! "$fuzzer" "${failed[@]}"; then
-        echo "error: $target still fails on an input that failed in an earlier run" >&2
+      code=0
+      timeout --kill-after=60s "$guard" "$fuzzer" "${failed[@]}" || code=$?
+      if [ "$code" -ne 0 ]; then
+        if was_stopped "$code"; then
+          echo "error: $target was still replaying the inputs that failed in an earlier run after $guard seconds, and was stopped" >&2
+        else
+          echo "error: $target still fails on an input that failed in an earlier run" >&2
+        fi
         cp "${failed[@]}" "$crashes/$target/"
         status=1
         continue
@@ -81,9 +101,15 @@ for manifest in "${manifests[@]}"; do
   fi
 
   echo "== $target: fuzzing for $seconds seconds"
-  if ! "$fuzzer" -max_total_time="$seconds" -print_final_stats=1 \
-      -artifact_prefix="$crashes/$target/" "$corpora/$target" "${arguments[@]}"; then
-    echo "error: $target failed; the input is in $crashes/$target/" >&2
+  code=0
+  timeout --kill-after=60s "$guard" "$fuzzer" -max_total_time="$seconds" -print_final_stats=1 \
+      -artifact_prefix="$crashes/$target/" "$corpora/$target" "${arguments[@]}" || code=$?
+  if [ "$code" -ne 0 ]; then
+    if was_stopped "$code"; then
+      echo "error: $target was still running $guard seconds after it began, and was stopped; what it found up to then is in $corpora/$target/" >&2
+    else
+      echo "error: $target failed; the input is in $crashes/$target/" >&2
+    fi
     status=1
   fi
 done

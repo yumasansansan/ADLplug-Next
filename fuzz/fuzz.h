@@ -12,6 +12,17 @@
 // (ADLplug_BUILD_TESTS). The sanitizers catch what goes wrong in memory;
 // FUZZ_CHECK stops the program where a target finds that something it expects
 // of the input does not hold, so that libFuzzer keeps the input.
+//
+// It stops by leaving the program, not by aborting it. An abort reaches libFuzzer
+// as a deadly signal, and what it does then is to print the stack by way of the
+// symbolizer, which allocates and opens a file -- neither of which a signal
+// handler may do. The thread sanitizer says so, and rightly; but the report comes
+// before libFuzzer writes the input out, and the stop that follows it, inside the
+// handler, is where a run of ours was last seen: nothing written, nothing said,
+// and the job of the run left standing until its time ran out. Leaving the
+// program takes libFuzzer's other road, off any signal, which writes the input out
+// and prints the stack all the same. A fault the sanitizers find keeps its own
+// road, which is not this one.
 
 #pragma once
 #include <cstddef>
@@ -26,6 +37,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
         if (!(condition)) {                                                 \
             std::fprintf(stderr, "%s:%d: FUZZ_CHECK(%s) failed\n",          \
                          __FILE__, __LINE__, #condition);                   \
-            std::abort();                                                   \
+            std::fflush(stderr);                                            \
+            std::exit(1);                                                   \
         }                                                                   \
     } while (false)
