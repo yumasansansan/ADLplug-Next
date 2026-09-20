@@ -73,6 +73,10 @@ adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0003-no-bytes-to-zero-is-no-call-to-memset.patch")
 adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0004-a-string-of-no-text-reads-none-of-it.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0005-a-parameter-takes-no-value-that-is-no-number.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0006-the-message-manager-lock-releases-what-it-took.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0001-esfmu-the-rhythm-volume-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libADLMIDI"
@@ -91,6 +95,8 @@ adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0008-nuked-opl3-the-fast-path-silences-a-slot-as-the-other-does.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0009-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0010-nuked-opl3-the-fast-path-shifts-by-less-than-its-width.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-psg-a-noise-table-that-does-not-overflow.patch")
 adlplug_patch("thirdparty/libOPNMIDI"

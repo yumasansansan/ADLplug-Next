@@ -225,7 +225,28 @@ if(ADLplug_BUILD_FUZZERS)
   # time; without it libFuzzer sees only the harness. The plugin of the same
   # build directory links the same library and is instrumented too, which costs
   # it speed it does not need here.
-  target_compile_options(${ADLplug_FUZZ_PLAY_LIBRARY} PRIVATE -fsanitize=fuzzer-no-link)
+  #
+  # The depth of the stack is the one coverage feature left out of it. That one
+  # counts how deep an input went, in a thread-local __sancov_lowest_stack which
+  # only some sanitizer runtimes resolve: a program with the address sanitizer
+  # finds it, one with the thread sanitizer does not. The plugin then cannot be
+  # loaded at all -- not by a host, and not by the program JUCE runs to write the
+  # LV2 manifest, which is where such a build stops (twenty lines reproduce it:
+  # the same shared object loads under -fsanitize=address and not under
+  # -fsanitize=thread). A libFuzzer binary resolves it whichever sanitizer it
+  # has, so a build that makes the fuzz targets and no plugin can keep the
+  # feature: that is ADLplug_FUZZ_FULL_COVERAGE, which the long fuzzing sets
+  # (ci/build.sh --fuzz-only). What libFuzzer steers by -- the counters, the
+  # table of program counters, the comparisons and the indirect calls -- is there
+  # either way.
+  set(ADLplug_FUZZ_LIBRARY_COVERAGE -fsanitize=fuzzer-no-link)
+  if(ADLplug_FUZZ_FULL_COVERAGE)
+    message(STATUS
+      "Fuzzing: the libraries carry the whole coverage, so build the fuzz targets alone")
+  else()
+    list(APPEND ADLplug_FUZZ_LIBRARY_COVERAGE -fno-sanitize-coverage=stack-depth)
+  endif()
+  target_compile_options(${ADLplug_FUZZ_PLAY_LIBRARY} PRIVATE ${ADLplug_FUZZ_LIBRARY_COVERAGE})
 endif()
 
 # The processor itself, for the two targets that read what comes from outside

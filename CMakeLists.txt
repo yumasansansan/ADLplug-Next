@@ -98,6 +98,13 @@ if(ADLplug_BUILD_FUZZERS AND CMAKE_SYSTEM_NAME STREQUAL "Windows")
     "with the static C runtime (/MT) and ADLplug-Next with the dynamic one (/MD). "
     "The fuzz targets still run on their inputs as tests there (ADLplug_BUILD_TESTS).")
 endif()
+option(ADLplug_FUZZ_FULL_COVERAGE
+  "Give the libraries every coverage feature libFuzzer steers by, the stack depth included; the plugin of such a build cannot be loaded, so build the fuzz targets alone (ci/build.sh --fuzz-only)" OFF)
+if(ADLplug_FUZZ_FULL_COVERAGE AND NOT ADLplug_BUILD_FUZZERS)
+  message(FATAL_ERROR
+    "ADLplug_FUZZ_FULL_COVERAGE is about the coverage of the fuzz targets, and this build "
+    "has none: it needs ADLplug_BUILD_FUZZERS.")
+endif()
 option(ADLplug_GREYZONE_BANKS "Include the instrument banks of the grey zone, for which no license or permission of their authors is known" OFF)
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")

@@ -7,12 +7,19 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-#   ci/build.sh <preset> <baseline|avx2|arm64> [<cmake option>...]
+#   ci/build.sh [--fuzz-only] <preset> <baseline|avx2|arm64> [<cmake option>...]
 #
 # Configures a CMake preset, with the developer tools and the tests, for the
 # given instruction set (arm64 stands for the macOS build, which has no choice)
-# and any further options, such as emulator cores to leave out. The
-# configuration checks the toolchain (cmake/LLVMToolchain.cmake), and this
+# and any further options, such as emulator cores to leave out.
+#
+# With --fuzz-only, it configures the fuzz targets with the whole coverage that
+# libFuzzer can steer by and builds those targets and nothing else. A plugin of
+# such a build cannot be loaded (fuzz/CMakeLists.txt says why), and the long
+# fuzzing does not need one; what the plugin needs is checked by the builds of
+# every push.
+#
+# The configuration checks the toolchain (cmake/LLVMToolchain.cmake), and this
 # script shows what it checked, in the log and, in GitHub Actions, in the
 # summary of the job. Before building, it checks the -march flags of the
 # compile commands, and ThinLTO in those of Release builds, whose every compile
@@ -23,11 +30,20 @@
 # it asks of the libraries of the system.
 set -euo pipefail
 
+fuzz_only=0
+if [ "${1:-}" = "--fuzz-only" ]; then
+  fuzz_only=1
+  shift
+fi
+
 preset=$1
 arch=$2
 shift 2
 
 args=(--preset "$preset" -DADLplug_BUILD_TOOLS=ON -DADLplug_BUILD_TESTS=ON)
+if [ "$fuzz_only" -eq 1 ]; then
+  args+=(-DADLplug_BUILD_FUZZERS=ON -DADLplug_FUZZ_FULL_COVERAGE=ON)
+fi
 case $arch in
   baseline | avx2) args+=("-DADLplug_ARCH=$arch") ;;
   arm64) ;;
@@ -108,6 +124,23 @@ esac
 # Ninja shows every command in full, rather than its short description. The
 # VERBOSE variable carries that into the builds that CMake starts within the
 # build, such as the instrumented build of cmake/PGO.cmake.
+if [ "$fuzz_only" -eq 1 ]; then
+  # The targets CMake wrote a manifest for, which is every fuzz target this
+  # build has, and nothing else.
+  shopt -s nullglob
+  fuzz_targets=()
+  for manifest in "build/$preset/fuzz/"*.args; do
+    fuzz_targets+=("$(basename "${manifest%.args}")")
+  done
+  if [ ${#fuzz_targets[@]} -eq 0 ]; then
+    echo "error: build/$preset has no fuzz targets to build" >&2
+    exit 1
+  fi
+  echo "== the fuzz targets, and nothing else: ${fuzz_targets[*]}"
+  VERBOSE=1 cmake --build --preset "$preset" --target "${fuzz_targets[@]}"
+  exit 0
+fi
+
 VERBOSE=1 cmake --build --preset "$preset"
 
 artefacts=build/$preset/ADLplug_artefacts

@@ -1,0 +1,34 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+A parameter takes no value that is no number
+
+NormalisableRange::clampTo0To1() is where a normalised value from a host is held between nought and one, and jlimit is what holds it: a value that is neither below nought nor above one comes back as it is. A value that is no number is neither, because every comparison with it is false, so it comes back as it is -- and the assertion on the next line, which says that a value outside the expected bounds is a fault, is not in the builds that a host loads.
+
+What it reaches is the plugin. AudioParameterFloat::setValue() converts it and stores it, get() hands it back, and a plugin that multiplies its audio by a parameter then writes samples that are no numbers into the host's buffer. AudioParameterInt::get() and AudioParameterChoice::getIndex() convert it to an int, which is undefined for a value that is no number, and that is inside JUCE itself. A host has no business sending one, but a host is where a plugin's values come from, and nothing else on the way looks.
+
+A proportion of nought, the bottom of the range, is the nearest value to it that is a value. The assertion stays where it is and still fires, so a Debug build says what happened as it did before; a release build carries on with a number. Every value that is a number, inside the range or outside it, comes out exactly as it came out before.
+
+A fuzz target of ADLplug-Next found it, the one that does to the plugin what a host does while it is loaded: it writes four bytes of its input into a parameter as the bits of a float, so that a value which is not a number from nought to one is answered for, and then asks for a block of audio. The check that every sample is a finite number failed on the first such value, and the daily fuzzing of 2026-09-20 stopped there. The value was the master volume of the plugin, which every sample is multiplied by.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_core/maths/juce_NormalisableRange.h b/modules/juce_core/maths/juce_NormalisableRange.h
+--- a/modules/juce_core/maths/juce_NormalisableRange.h
++++ b/modules/juce_core/maths/juce_NormalisableRange.h
+@@ -258,7 +258,13 @@ private:
+ 
+     static ValueType clampTo0To1 (ValueType value)
+     {
+-        auto clampedValue = jlimit (static_cast<ValueType> (0), static_cast<ValueType> (1), value);
++        // A value that is no number is not between nought and one either, and
++        // jlimit hands it back: every comparison with it is false. What it
++        // reaches is audio, as a sample that is no number, and the integer
++        // parameters, where converting it to an int is undefined. A proportion
++        // of nought, the bottom of the range, is the nearest value to it.
++        auto clampedValue = std::isnan (value) ? static_cast<ValueType> (0)
++                                              : jlimit (static_cast<ValueType> (0), static_cast<ValueType> (1), value);
+ 
+         // If you hit this assertion then either your normalisation function is not working
+         // correctly or your input is out of the expected bounds.

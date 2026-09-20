@@ -13,6 +13,11 @@
 # have both of. That includes the targets whose every input is heavy, which the
 # short runs of a minute in CI leave out (.github/workflows/ci.yml).
 #
+# The build is the fuzz targets alone, with every coverage feature libFuzzer can
+# steer by (ci/build.sh --fuzz-only). These runs are where the fuzzer has the
+# time to use them; the plugin, which one of those features keeps from being
+# loaded at all, is built and tested by the jobs of every push instead.
+#
 # A run carries on from the corpus that the last decided run (one that passed
 # or failed) grew and kept as an artifact; when that is gone, it starts again
 # from the seed inputs. The inputs that failed are kept as well, and the next
@@ -71,7 +76,7 @@ jobs:
         run: bash ci/setup.sh
 
       - name: Build
-        run: bash ci/build.sh "${{ matrix.preset }}" baseline -DADLplug_BUILD_FUZZERS=ON
+        run: bash ci/build.sh --fuzz-only "${{ matrix.preset }}" baseline
 
       - name: Carry over the corpus and the inputs that failed
         env:

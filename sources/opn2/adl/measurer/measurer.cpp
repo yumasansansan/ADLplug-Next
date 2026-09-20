@@ -33,7 +33,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <memory>
 #include <numbers>
 #include <vector>
@@ -185,10 +184,18 @@ struct TinySynth
     {
         double hertz = 321.88557 * std::exp(0.057762265 * (m_notenum + m_noteOffsets[0]));
         std::uint16_t x2 = 0x0000;
+        // The highest frequency the chip can be told to play: three bits of block
+        // and eleven of F-number, which is where the loop below runs out of
+        // octaves. A note of 117 or above reaches it with no offset at all, and a
+        // note offset, which comes out of a bank file, reaches it from any note;
+        // either way the note is measured at the highest frequency there is.
+        // Nothing is said about it, because there is nothing to do about it and a
+        // plugin does not write to a host's log. The ceiling belongs to the chip:
+        // a core that works in double and is not held to a block and an F-number
+        // would have one of its own, and the measurement would have to follow that
+        // core instead.
         if (hertz < 0 || hertz > 262143)
         {
-            std::fprintf(stderr, "MEASURER WARNING: Why does note %d + note-offset %d produce hertz %g?          \n",
-                         m_notenum, m_noteOffsets[0], hertz);
             hertz = 262143;
         }
 

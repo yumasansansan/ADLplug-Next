@@ -1,0 +1,83 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+The message manager lock releases what it took
+
+MessageManager::Lock gains its entry mutex in exclusiveTryAcquire(), and of that mutex the header says: "If multiple threads call enter() simultaneously, only one will succeed in gaining this mutex. The mutex is released again in exit()." It is not always released there. exit() releases it only when the lock was acquired, and there is one way to succeed without acquiring anything: tryAcquire() returns true straight away when the calling thread already has exclusive access to the MessageManager. Then acquired stays false, exit() returns before it makes the guard that releases the mutex, and the mutex is still held when the Lock is destroyed.
+
+  WARNING: ThreadSanitizer: destroy of a locked mutex
+      #0 pthread_mutex_destroy
+      #1 juce::CriticalSection::~CriticalSection() juce_SharedCode_posix.h:50
+      #2 juce::MessageManager::Lock::~Lock() juce_MessageManager.cpp:280
+      #3 juce::MessageManagerLock::~MessageManagerLock() juce_MessageManager.cpp:449
+      #4 juce::JuceVST3Component::LockedVSTComSmartPtr<juce::JuceAudioProcessor>::~LockedVSTComSmartPtr() juce_audio_plugin_client_VST3.cpp:3831
+      #5 juce::JuceVST3Component::JuceVST3Component(...) juce_audio_plugin_client_VST3.cpp:2573
+
+Destroying a locked mutex is undefined, and pthread_mutex_destroy is allowed to answer EBUSY and leave the mutex as it was, which nothing here looks at. The same invariant is broken the other way round as well: the blocking message can set acquired after tryAcquire() has given up waiting for it, and exit() would then release a mutex this object never gained.
+
+What the entry mutex needs is its own answer to "was it gained", which is not the same question as "was the MessageManager locked". The Lock remembers that it gained the mutex, and releases it on that; acquired keeps its meaning, and the cleanup that belongs to it -- the blocking message, the thread that holds the MessageManager -- is unchanged. Only the thread holding the entry mutex ever touches the new member, so it needs no mutex of its own.
+
+Every VST3 plugin built with JUCE goes through it: JuceVST3Component's constructor makes a LockedVSTComSmartPtr, and that smart pointer's destructor takes a MessageManagerLock on a thread which, in a host, already holds the message manager lock. ADLplug-Next found it with the thread sanitizer, in its own renderer, which loads the VST3 the build has just made; the report is the first thing that happens after the plugin is created.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_events/messages/juce_MessageManager.h b/modules/juce_events/messages/juce_MessageManager.h
+--- a/modules/juce_events/messages/juce_MessageManager.h
++++ b/modules/juce_events/messages/juce_MessageManager.h
+@@ -386,6 +386,12 @@ public:
+         mutable ReferenceCountedObjectPtr<BlockingMessage> blockingMessage;
+         mutable std::condition_variable condvar;
+         mutable bool abortWait = false, acquired = false;
++
++        // Whether the entry mutex above was gained and has still to be released. This
++        // is not the same as acquired: a thread which already has exclusive access to
++        // the MessageManager gains the entry mutex and acquires nothing. Only the
++        // thread holding the entry mutex touches this.
++        mutable bool entryHeld = false;
+     };
+ 
+     //==============================================================================
+diff --git a/modules/juce_events/messages/juce_MessageManager.cpp b/modules/juce_events/messages/juce_MessageManager.cpp
+--- a/modules/juce_events/messages/juce_MessageManager.cpp
++++ b/modules/juce_events/messages/juce_MessageManager.cpp
+@@ -290,7 +290,9 @@ bool MessageManager::Lock::exclusiveTryAcquire (bool lockIsMandatory) const noex
+ 
+     const auto result = tryAcquire (lockIsMandatory);
+ 
+-    if (! result)
++    if (result)
++        entryHeld = true;
++    else
+         entryMutex.exit();
+ 
+     return result;
+@@ -362,18 +364,22 @@ bool MessageManager::Lock::tryAcquire (bool lockIsMandatory) const noexcept
+ 
+ void MessageManager::Lock::exit() const noexcept
+ {
++    // The entry mutex is released whether or not the lock was acquired. A thread
++    // which already had exclusive access to the MessageManager gained the mutex and
++    // acquired nothing, and the mutex would otherwise be held still when this object
++    // is destroyed, which is undefined behaviour.
++    if (! std::exchange (entryHeld, false))
++        return;
++
++    const ScopeGuard unlocker { [&] { entryMutex.exit(); } };
++
+     const auto wasAcquired = [&]
+     {
+         const std::scoped_lock lock { mutex };
+         return acquired;
+     }();
+ 
+-    if (! wasAcquired)
+-        return;
+-
+-    const ScopeGuard unlocker { [&] { entryMutex.exit(); } };
+-
+-    if (blockingMessage == nullptr)
++    if (! wasAcquired || blockingMessage == nullptr)
+         return;
+ 
+     if (auto* mm = MessageManager::instance)

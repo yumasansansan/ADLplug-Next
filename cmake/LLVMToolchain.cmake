@@ -127,30 +127,48 @@ endforeach()
 # the system for it at load time, so its version is a thing to know and to show
 # rather than to require: it decides how old a system the build runs on
 # (ci/build.sh shows what the plugin asks for), and it is the reason a bug in the
-# C++ library is the system's to fix and not a reason to release again. The
-# preprocessor is asked which library and which version the headers on the
-# include path are, because the headers, not the file names, are what the build
-# uses. Then a program that throws is compiled and linked, which is what says
-# that the library is there to link and not only to include.
+# C++ library is the system's to fix and not a reason to release again.
+#
+# One program says all of it. It is compiled and linked as CMake compiles and
+# links anything, so that it is given what this build's compilations are given --
+# the sysroot of the SDK on macOS, where the C++ headers are the SDK's and not the
+# toolchain's, among the rest -- and what it says about itself, it says in a
+# #pragma message, which comes back in the output. Compiling it names the library
+# and the version of the headers on the include path, because the headers, not the
+# file names, are what a build uses; linking it says that the library is there to
+# link and not only to include, which is a thing a system may not have.
 function(adlplug_check_cxx_library)
-  set(source "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/cxx-library.cpp")
-  file(WRITE "${source}"
+  set(check "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/cxx-library")
+  file(WRITE "${check}/main.cpp"
     "#include <version>\n"
+    "#include <stdexcept>\n"
+    "#include <string>\n"
+    "#define ADLplug_TEXT_OF(x) #x\n"
+    "#define ADLplug_TEXT(x) ADLplug_TEXT_OF(x)\n"
     "#if defined(_LIBCPP_VERSION)\n"
-    "ADLplug_CXX_LIBRARY libc++ _LIBCPP_VERSION 0\n"
+    "#  pragma message(\"ADLplug_CXX_LIBRARY libc++ \" ADLplug_TEXT(_LIBCPP_VERSION) \" 0\")\n"
     "#elif defined(__GLIBCXX__)\n"
-    "ADLplug_CXX_LIBRARY libstdc++ _GLIBCXX_RELEASE __GLIBCXX__\n"
+    "#  pragma message(\"ADLplug_CXX_LIBRARY libstdc++ \" ADLplug_TEXT(_GLIBCXX_RELEASE) \" \" ADLplug_TEXT(__GLIBCXX__))\n"
     "#elif defined(_MSVC_STL_UPDATE)\n"
-    "ADLplug_CXX_LIBRARY MSVC-STL _MSVC_STL_VERSION _MSVC_STL_UPDATE\n"
+    "#  pragma message(\"ADLplug_CXX_LIBRARY MSVC-STL \" ADLplug_TEXT(_MSVC_STL_VERSION) \" \" ADLplug_TEXT(_MSVC_STL_UPDATE))\n"
     "#else\n"
-    "ADLplug_CXX_LIBRARY none 0 0\n"
-    "#endif\n")
-  execute_process(COMMAND "${CMAKE_CXX_COMPILER}" -E -P -x c++ "${source}"
-    OUTPUT_VARIABLE preprocessed ERROR_VARIABLE complaint RESULT_VARIABLE failed TIMEOUT 60)
-  if(NOT failed EQUAL 0 OR NOT preprocessed MATCHES
-      "ADLplug_CXX_LIBRARY ([A-Za-z+-]+) ([0-9]+) ([0-9]+)")
+    "#  pragma message(\"ADLplug_CXX_LIBRARY none 0 0\")\n"
+    "#endif\n"
+    "int main() { try { throw std::runtime_error(std::string(\"x\")); }\n"
+    "             catch (const std::exception &e) { return e.what()[0] == 'x' ? 0 : 1; } }\n")
+  try_compile(ADLplug_CXX_LIBRARY_LINKS "${check}/build" SOURCES "${check}/main.cpp"
+    CMAKE_FLAGS "-DCMAKE_CXX_STANDARD=23" "-DCMAKE_LINKER_TYPE=LLD"
+    OUTPUT_VARIABLE output)
+  if(NOT ADLplug_CXX_LIBRARY_LINKS)
     message(FATAL_ERROR
-      "The C++ compiler cannot say which C++ library its headers are:\n${complaint}")
+      "A C++ program cannot be compiled and linked with the C++ library of this toolchain. On "
+      "Ubuntu the library comes with libstdc++-<version>-dev, on AlmaLinux with gcc-c++, and on "
+      "macOS the headers are the SDK's (ci/setup.sh):\n${output}")
+  endif()
+  if(NOT output MATCHES "ADLplug_CXX_LIBRARY ([A-Za-z+-]+) ([0-9]+) ([0-9]+)")
+    message(FATAL_ERROR
+      "A C++ program compiles and links, and the compiler did not say which C++ library its "
+      "headers are:\n${output}")
   endif()
   set(library "${CMAKE_MATCH_1}")
   set(version "${CMAKE_MATCH_2}")
@@ -166,24 +184,6 @@ function(adlplug_check_cxx_library)
   set(named "${library} ${version}")
   if(NOT date EQUAL 0)
     string(APPEND named " (${date})")
-  endif()
-
-  # And it links: a program that throws needs the library itself, not its headers
-  # alone, and on a system where only the headers are installed this is where that
-  # is said. LLD links it, as it links the build.
-  set(check "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/cxx-library-link")
-  file(WRITE "${check}/main.cpp"
-    "#include <stdexcept>\n#include <string>\n"
-    "int main() { try { throw std::runtime_error(std::string(\"x\")); }\n"
-    "             catch (const std::exception &e) { return e.what()[0] == 'x' ? 0 : 1; } }\n")
-  try_compile(ADLplug_CXX_LIBRARY_LINKS "${check}/build" SOURCES "${check}/main.cpp"
-    CMAKE_FLAGS "-DCMAKE_CXX_STANDARD=23" "-DCMAKE_LINKER_TYPE=LLD"
-    OUTPUT_VARIABLE output)
-  if(NOT ADLplug_CXX_LIBRARY_LINKS)
-    message(FATAL_ERROR
-      "A C++ program cannot be linked against ${named}, the C++ library of these headers. On "
-      "Ubuntu that library comes with libstdc++-<version>-dev, on AlmaLinux with gcc-c++:\n"
-      "${output}")
   endif()
 
   message(STATUS "  C++ library: ${named}")

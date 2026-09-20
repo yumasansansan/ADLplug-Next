@@ -276,6 +276,7 @@ An option chooses whether ADLplug-Next or OPNplug-Next is built:
 | -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | Build developer tools (a tool that loads the VST3 plugin and writes out its sound)            |
 | -DADLplug_BUILD_TESTS=ON/OFF    | OFF                                    | Build the tests and register them with CTest (CMake's test runner)                            |
 | -DADLplug_BUILD_FUZZERS=ON/OFF  | OFF                                    | Build the fuzz targets with libFuzzer (Linux only; see Testing)                               |
+| -DADLplug_FUZZ_FULL_COVERAGE=ON/OFF | OFF                                | Give the libraries every coverage feature libFuzzer steers by; build the fuzz targets alone, since the plugin of such a build cannot be loaded |
 | -DADLplug_INSTALL_VST3DIR=<dir> | lib/vst3                               | Install directory of the VST3 plugin (Linux)                                                  |
 | -DADLplug_INSTALL_LV2DIR=<dir>  | lib/lv2                                | Install directory of the LV2 plugin (Linux)                                                   |
 
@@ -432,6 +433,12 @@ cmake --build --preset adl-sanitize --target ADLplug_fuzz_bank_file
 mkdir -p corpus
 build/adl-sanitize/fuzz/ADLplug_fuzz_bank_file -dict=fuzz/dict/wopl.dict corpus thirdparty/libADLMIDI/fm_banks/wopl_files
 ```
+
+A run that goes on for long is worth `-DADLplug_FUZZ_FULL_COVERAGE=ON` as well,
+which gives the libraries every coverage feature libFuzzer steers by. Build the
+fuzz targets alone then: one of those features wants a symbol that only a fuzz
+target has, so the plugin of such a build cannot be loaded. That is how the
+daily fuzzing of this project builds (`ci/build.sh --fuzz-only`).
 
 It runs until it finds an input that fails, or until it is stopped
 (`-max_total_time=<seconds>` sets a limit), and writes a failing input to a

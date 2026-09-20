@@ -177,6 +177,7 @@ cmake --build --preset adl-release     # 上と同様です．
 | -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | 開発者向けのツール（VST3 プラグインを読み込んで，音を書き出すツール）をビルドする |
 | -DADLplug_BUILD_TESTS=ON/OFF    | OFF                                    | テストをビルドし，CTest（CMake のテストを実行するツール）に登録する |
 | -DADLplug_BUILD_FUZZERS=ON/OFF  | OFF                                    | fuzz（自動で作った入力で不具合を探すテスト）の対象を，libFuzzer 付きでビルドする（Linux のみ，後述） |
+| -DADLplug_FUZZ_FULL_COVERAGE=ON/OFF | OFF                                | libFuzzer が探索に使う計測を，ライブラリにすべて付ける（fuzz の対象だけをビルドしてください．このビルドのプラグインは読み込めません） |
 | -DADLplug_INSTALL_VST3DIR=<dir> | lib/vst3                               | VST3 プラグインの，インストール先ディレクトリ（Linux） |
 | -DADLplug_INSTALL_LV2DIR=<dir>  | lib/lv2                                | LV2 プラグインの，インストール先ディレクトリ（Linux） |
 
@@ -236,6 +237,8 @@ cmake --build --preset adl-sanitize --target ADLplug_fuzz_bank_file
 mkdir -p corpus
 build/adl-sanitize/fuzz/ADLplug_fuzz_bank_file -dict=fuzz/dict/wopl.dict corpus thirdparty/libADLMIDI/fm_banks/wopl_files
 ```
+
+長く回すときは `-DADLplug_FUZZ_FULL_COVERAGE=ON` も付けると，libFuzzer が探索に使う計測をライブラリにすべて付けます．そのときは fuzz の対象だけをビルドしてください．この計測の一つが，fuzz の対象にしかない記号を必要とするので，このビルドのプラグインは読み込めません（このプロジェクトの毎日の fuzz は，この形でビルドしています）．
 
 不具合を起こす入力が見つかるか，止められるまで動き続けます（`-max_total_time=<秒数>` で時間を区切れます）．見つかった入力は `crash-<ハッシュ>` という名前のファイルに書き出されます．その入力は，修正と一緒に `fuzz/regressions/opl3/<対象名>`（OPNplug-Next では `opn2`）に加えてください．以後，テストでその入力が再生されます．
 

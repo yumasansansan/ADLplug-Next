@@ -1,0 +1,33 @@
+SPDX-FileCopyrightText: 2013-2020 Nuke.YKT
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+Nuked OPL3: the fast path shifts a phase by less than its own width
+
+The fast waveform generator -- what OPL_FAST_WAVEGEN gives and what libADLMIDI builds by default -- keeps three numbers per slot for the waveform, and one of them is the shift the phase is taken through. For waveform 7 that shift is 32, which the line that sets it calls "no shift (work by mod 32), but flag for non-sin wave": the phase is meant to come through untouched, and the number is there to tell the code below that this is not a sine wave. The phase is a uint16_t, and the shift is applied to it:
+
+  src/chips/nuked/nukedopl3.c:904:11: runtime error: shift exponent 32 is too large for 16-bit type 'uint16_t'
+
+A shift by the width of the value is undefined. The machines this is built for mask the count to five bits, which is the mod 32 the comment counts on, so the value that comes out is the one the author wanted and it is the standard that is not kept. Waveform 6, whose shift is 16, is undefined for a second reason: the phase is promoted to a signed int, and a phase with its top bit set shifts into the sign.
+
+The count says mod 32 now, and the shift is taken in an unsigned value wide enough for it before the phase is narrowed back to the sixteen bits it lives in. Waveform 7 comes through unshifted, waveform 6 comes out as nought, the sine waveforms shift by nought or one: every waveform gives what it gave. Compiled with the optimisation the distributed build uses, and with -O2, the object file is byte for byte the one from before; at -O0 the mask is one instruction, and the value is the same.
+
+A fuzz target of ADLplug-Next found it, one that plays MIDI through the real-time API with the chip settings a saved project can hold. The input is eighteen bytes and asks for the library's own default emulator, which is this one. The daily fuzzing of 2026-09-20 stopped there.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/chips/nuked/nukedopl3.c b/src/chips/nuked/nukedopl3.c
+--- a/src/chips/nuked/nukedopl3.c
++++ b/src/chips/nuked/nukedopl3.c
+@@ -901,7 +901,10 @@ static void OPL3_SlotGenerate(opl3_slot *slot)
+     phaseshift = slot->phaseshift;
+     level = slot->eg_out;
+ 
+-    phase <<= phaseshift;
++    /* The shift is by the width of the value itself for waveform 7, which
++     * means no shift at all; taking it by that width is undefined, so the
++     * count says so and the value is shifted where it is wide enough. */
++    phase = (uint16_t)((uint32_t)phase << (phaseshift & 31));
+     if (phaseshift <= 1)
+     {
+         level += logsinrom[phase & 0x1ff];
