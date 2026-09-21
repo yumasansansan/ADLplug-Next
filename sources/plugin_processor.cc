@@ -723,8 +723,9 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
         // names of banks and programs are (bank_manager.cc, assign_name). The
         // terminator goes after its last byte.
         static_assert(sizeof body.title == bank_title_size_max && sizeof bank_title_ == bank_title_size_max + 1);
-        name_from_field(std::span(body.title, sizeof body.title))
-            .copyToUTF8(bank_title_, bank_title_size_max + 1);
+        copy_name_bytes_to_field(std::span(bank_title_, bank_title_size_max),
+                                 std::span(body.title, sizeof body.title));
+        bank_title_[bank_title_size_max] = 0;
         break;
     }
 #if defined(ADLPLUG_OPL3)

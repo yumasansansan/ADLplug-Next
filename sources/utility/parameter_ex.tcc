@@ -20,21 +20,17 @@
 template <class Parameter>
 void AudioParameterEx<Parameter>::addValueChangedListenerEx(ValueChangedListener *l)
 {
-    const ScopedLock sl(listener_lock_);
     listeners_.addIfNotAlreadyThere(l);
 }
 
-template <class Parameter>
-void AudioParameterEx<Parameter>::removeValueChangedListenerEx(ValueChangedListener *l)
-{
-    const ScopedLock sl(listener_lock_);
-    listeners_.removeFirstMatchingValue(l);
-}
-
+// Called wherever a value changes, which includes the audio thread: a program
+// change has it set every parameter of an instrument. There is no lock, and the
+// header says what makes that sound -- the list is written while the processor is
+// made and read for ever after. There was one, and the realtime sanitizer found
+// the audio thread waiting on it.
 template <class Parameter>
 void AudioParameterEx<Parameter>::invoke_value_changed_listeners()
 {
-    const ScopedLock sl(listener_lock_);
     for (int i = listeners_.size(); i-- > 0;)
         listeners_.getUnchecked(i)->parameterValueChangedEx(tag_);
 }

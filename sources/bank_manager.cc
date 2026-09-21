@@ -48,7 +48,7 @@ namespace {
 bool assign_name(std::span<char, Bank_Manager::name_size> field, const char *name) noexcept
 {
     std::array<char, Bank_Manager::name_size> stored {};
-    copy_name_to_field(stored, name_from_field(std::span(name, utf8_fitting_length(name, stored.size()))));
+    copy_name_bytes_to_field(stored, std::span(name, utf8_fitting_length(name, stored.size())));
     if (std::ranges::equal(field, stored))
         return false;
     std::ranges::copy(stored, field.begin());

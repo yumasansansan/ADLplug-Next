@@ -84,7 +84,43 @@ inline String name_from_field(std::span<const char> field)
     return String(CharPointer_UTF32(characters.data()));
 }
 
+// Stores a name in a field from the bytes of one, without allocating. The audio
+// thread does this -- when the editor asks for a bank or a program to be renamed,
+// and when a bank is loaded -- and nothing it runs may allocate or wait
+// (sources/utility/realtime.h). Reading the bytes into a String first and writing
+// that out is what it used to do, and what the realtime sanitizer found.
+//
+// The rule is name_from_field's, kept byte for byte: bytes that are valid UTF-8 are
+// the name as they stand, and bytes that are not are read as Windows-1252, a
+// character to a byte, and written out as UTF-8. A character that would not fit
+// whole is left out, and the rest of the field is zeroes.
+inline void copy_name_bytes_to_field(std::span<char> field, std::span<const char> name) noexcept
+{
+    std::fill(field.begin(), field.end(), '\0');
+    const std::string_view text = name_view(name);
+    if (text.empty())
+        return;
+    if (CharPointer_UTF8::isValidString(text.data(), static_cast<int>(text.size()))) {
+        std::copy_n(text.data(), utf8_fitting_length(text.data(), field.size()), field.begin());
+        return;
+    }
+
+    std::size_t at = 0;
+    for (const char byte : text) {
+        const juce_wchar character = CharacterFunctions::getUnicodeCharFromWindows1252Codepage(
+            static_cast<std::uint8_t>(byte));
+        const auto needs = static_cast<std::size_t>(CharPointer_UTF8::getBytesRequiredFor(character));
+        if (at + needs > field.size())
+            break;
+        CharPointer_UTF8 writer(field.data() + at);
+        writer.write(character);
+        at += needs;
+    }
+}
+
 // Stores a name in a field, leaving out the characters which do not fit whole.
+// For wherever a String is what there is -- the editor's own text -- and not for
+// the audio thread, since a String has already been allocated by then.
 inline void copy_name_to_field(std::span<char> field, const String &name) noexcept
 {
     const char *utf8 = name.toRawUTF8();
