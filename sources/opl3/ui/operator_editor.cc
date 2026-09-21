@@ -354,8 +354,8 @@ void Operator_Editor::paint (Graphics& g)
     //[/UserPrePaint]
 
     {
-        int x = 25, y = 96, width = 108, height = 24;
-        Colour strokeColour = Colour (0xff8e989b);
+        const int x = 25, y = 96, width = 108, height = 24;
+        const Colour strokeColour = Colour (0xff8e989b);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (strokeColour);
@@ -364,8 +364,8 @@ void Operator_Editor::paint (Graphics& g)
     }
 
     {
-        float x = 0.0f, y = 0.0f, width = 264.0f, height = 128.0f;
-        Colour fillColour = Colour (0x662e4c4d);
+        const float x = 0.0f, y = 0.0f, width = 264.0f, height = 128.0f;
+        const Colour fillColour = Colour (0x662e4c4d);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -390,7 +390,7 @@ void Operator_Editor::buttonClicked (Button* buttonThatWasClicked)
     //[UserbuttonClicked_Pre]
     Parameter_Block &pb = *parameter_block_;
     Parameter_Block::Part &part = pb.part[midichannel_];
-    Parameter_Block::Operator &op = part.nth_operator(operator_id_);
+    const Parameter_Block::Operator &op = part.nth_operator(operator_id_);
     Button *btn = buttonThatWasClicked;
     //[/UserbuttonClicked_Pre]
 
@@ -399,7 +399,7 @@ void Operator_Editor::buttonClicked (Button* buttonThatWasClicked)
         //[UserButtonCode_btn_prev_wave] -- add your button handler code here..
         AudioParameterChoice &p = *op.p_wave;
         p.beginChangeGesture();
-        int wave = std::max(p.getIndex() - 1, 0);
+        const int wave = std::max(p.getIndex() - 1, 0);
         p = wave;
         p.endChangeGesture();
         lbl_wave->set_wave(static_cast<unsigned>(wave), dontSendNotification);
@@ -410,7 +410,7 @@ void Operator_Editor::buttonClicked (Button* buttonThatWasClicked)
         //[UserButtonCode_btn_next_wave] -- add your button handler code here..
         AudioParameterChoice &p = *op.p_wave;
         p.beginChangeGesture();
-        int wave = std::min(p.getIndex() + 1, p.choices.size() - 1);
+        const int wave = std::min(p.getIndex() + 1, p.choices.size() - 1);
         p = wave;
         p.endChangeGesture();
         lbl_wave->set_wave(static_cast<unsigned>(wave), dontSendNotification);
@@ -505,7 +505,7 @@ void Operator_Editor::knob_value_changed(Knob *k)
 {
     Parameter_Block &pb = *parameter_block_;
     Parameter_Block::Part &part = pb.part[midichannel_];
-    Parameter_Block::Operator &op = part.nth_operator(operator_id_);
+    const Parameter_Block::Operator &op = part.nth_operator(operator_id_);
 
     if (k == sl_level.get()) {
         AudioParameterInt &p = *op.p_level;
@@ -543,7 +543,7 @@ void Operator_Editor::knob_drag_started(Knob *k)
 {
     Parameter_Block &pb = *parameter_block_;
     Parameter_Block::Part &part = pb.part[midichannel_];
-    Parameter_Block::Operator &op = part.nth_operator(operator_id_);
+    const Parameter_Block::Operator &op = part.nth_operator(operator_id_);
 
     if (k == sl_level.get()) {
         AudioParameterInt &p = *op.p_level;
@@ -581,7 +581,7 @@ void Operator_Editor::knob_drag_ended(Knob *k)
 {
     Parameter_Block &pb = *parameter_block_;
     Parameter_Block::Part &part = pb.part[midichannel_];
-    Parameter_Block::Operator &op = part.nth_operator(operator_id_);
+    const Parameter_Block::Operator &op = part.nth_operator(operator_id_);
 
     if (k == sl_level.get()) {
         AudioParameterInt &p = *op.p_level;
@@ -618,7 +618,7 @@ void Operator_Editor::knob_drag_ended(Knob *k)
 void Operator_Editor::paintOverChildren(Graphics &g)
 {
     if (!operator_enabled_) {
-        Rectangle<int> bounds = getLocalBounds();
+        const Rectangle<int> bounds = getLocalBounds();
         g.setColour(Colour(0x66777777));
         g.fillRoundedRectangle(bounds.toFloat(), 7.0f);
     }
@@ -629,7 +629,7 @@ bool Operator_Editor::display_info_for_component(Component *c)
     String param;
     int val = 0;
     const char *prefixes[4] = {"Op2 ", "Op1 ", "Op4 ", "Op3 "};
-    String prefix = prefixes[operator_id_];
+    const String prefix = prefixes[operator_id_];
 
     // The value that a knob shows, as the parameter has it.
     const auto value_of = [](const Knob &knob) { return static_cast<int>(std::lround(knob.value())); };

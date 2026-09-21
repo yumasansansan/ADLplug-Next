@@ -28,7 +28,7 @@
 void Player::init(unsigned sample_rate)
 {
     ADL_MIDIPlayer *pl = adl_init(static_cast<long>(sample_rate));
-    if (!pl)
+    if (pl == nullptr)
         throw std::runtime_error("cannot initialize player");
     player_.reset(pl);
 }

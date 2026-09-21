@@ -68,6 +68,20 @@ WOPx::InstrumentFile saved_and_loaded(WOPx::InstrumentFile file, std::uint16_t v
     return reloaded;
 }
 
+// The instrument as the comparison wants it. An instrument file has no place
+// for the mark of a blank instrument, so for OPN2 the mark is cleared on both
+// sides before they are compared; the note at the top of this file says what
+// each format holds. The mark is cleared where the instrument is made, so that
+// what is compared is settled once and does not change afterwards.
+Instrument instrument_to_compare(const WOPx::Instrument &wopl)
+{
+    Instrument ins = Instrument::from_wopl(wopl);
+#if defined(ADLPLUG_OPN2)
+    ins.blank(false);
+#endif
+    return ins;
+}
+
 void check_as_instrument_file(const WOPx::Instrument &inst, bool is_drum)
 {
     WOPx::InstrumentFile file {};
@@ -75,16 +89,17 @@ void check_as_instrument_file(const WOPx::Instrument &inst, bool is_drum)
     file.inst = inst;
     const WOPx::InstrumentFile reloaded = saved_and_loaded(file, 0);
 
-    Instrument before = Instrument::from_wopl(file.inst);
-    Instrument after = Instrument::from_wopl(reloaded.inst);
-#if defined(ADLPLUG_OPN2)
-    before.blank(false);
-    after.blank(false);
-#endif
+    const Instrument before = instrument_to_compare(file.inst);
+    const Instrument after = instrument_to_compare(reloaded.inst);
     FUZZ_CHECK(before.equal_instrument_except_delays(after));
 }
 
 #if defined(ADLPLUG_OPN2)
+// The instruments are reached through the pointers the file holds, so the
+// reference itself is never written through and the check offers to make it const.
+// Clearing the marks is what this function is for; a file it says it does not
+// change is not what it is given.
+// NOLINTNEXTLINE(misc-const-correctness)
 void clear_blank_marks(WOPx::BankFile &file)
 {
     for (unsigned b = 0; b < file.banks_count_melodic; ++b) {

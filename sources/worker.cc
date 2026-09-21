@@ -82,14 +82,14 @@ void Worker::stop_worker()
 
 void Worker::run()
 {
-    AdlplugAudioProcessor &proc = proc_;
+    const AdlplugAudioProcessor &proc = proc_;
     Semaphore &sem = sem_;
 
     Simple_Fifo &mq_recv = proc.message_queue_to_worker();
     Simple_Fifo &mq_send = proc.message_queue_for_worker();
 
     const auto receive_one = [&] {
-        Buffered_Message msg = Messages::read(mq_recv);
+        const Buffered_Message msg = Messages::read(mq_recv);
         assert(msg);
         handle_message(msg);
         Messages::finish_read(mq_recv, msg);
@@ -133,7 +133,7 @@ void Worker::run()
             if (quit)
                 break;
 
-            auto it = measure_requests_.begin();
+            const auto it = measure_requests_.begin();
             Messages::Worker::MeasurementResult result;
             measure(it->first, it->second, result);
             Messages::set_body(msg, result);

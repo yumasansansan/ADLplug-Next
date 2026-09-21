@@ -55,12 +55,6 @@
 #     nothing, written (), is an error there. Nothing else can say so -- Clang under
 #     -std=c23 says nothing about f() even with -Weverything, and the tree it builds
 #     gives both forms the same type, int (void), so only the text tells them apart.
-#   misc-const-correctness is right that a local which is never written could say
-#     so, and there are some fifty of them here. Its own fix writes "double const
-#     x" where this project writes "const double x", and it reaches into the
-#     signatures of functions, which belong to their headers as well; so the const
-#     of every local is a pass of its own to make and to read, not a thing to do
-#     while putting up the gate.
 #   readability-make-member-function-const looks at the members a method writes,
 #     which says nothing about a class that holds a chip behind a pointer: the
 #     methods of the measurer's chip write registers, and calling them const would
@@ -80,12 +74,40 @@
 #     whether there is something to tell the editor, and whether telling it
 #     worked -- which is a line that reads as neither.
 #
-# Some of what is here the compiler says as well, and saying it twice costs
-# nothing: -Wold-style-cast for the C-style casts, -Wsuggest-override for the
-# overrides. modernize-use-nullptr is the one place where saying it twice is
-# saying it once more than the compiler does: clang's
-# -Wzero-as-null-pointer-constant is a warning of C++ and is silent in C, where
-# C23 has nullptr all the same.
+# Several of the checks here are not about faults but about saying what the code
+# means, which is this project's rule for its own writing:
+#
+#   readability-implicit-bool-conversion has a pointer compared with nullptr and
+#     a number with nought, rather than standing in for a truth of its own.
+#   misc-const-correctness has a local that is never written say const, so that
+#     the names a piece of code can still change are the ones it does not mark.
+#     The const goes in front of the type, where this project writes it, rather
+#     than after it, where the check's own fix puts it. Where the check offers a
+#     pointee that is const it is offering a different type, and three of those
+#     it offers are wrong: the pointee is written through a copy of the pointer,
+#     which it does not see. Each is answered where it is.
+#   cppcoreguidelines-init-variables has a local hold a value from the line it is
+#     declared on. Its own fix would put nought there, which says the value is
+#     nought when it is not; every one of these instead works the value out where
+#     the name appears, which makes the local const as well.
+#   readability-named-parameter has every parameter say what it is, in the
+#     declaration as well as the definition. A name a function does not use is a
+#     warning of its own (-Wunused-parameter), so those names are in comments.
+#   cppcoreguidelines-narrowing-conversions, google-explicit-constructor,
+#     readability-qualified-auto and readability-static-accessed-through-instance
+#     say nothing about this project today: a narrowing conversion is written out
+#     as a cast, a constructor of one argument is explicit, an auto that is a
+#     pointer is written auto *, and a static member is reached through its class.
+#     -Wconversion says the first of those as well. They are here so that the next
+#     line which does otherwise is answered when it is written, not found later.
+#
+# Some of what is here the compiler says as well, and saying it twice is wanted:
+# a check that repeats a warning costs nothing and holds where the warning might
+# not reach. -Wold-style-cast says what cppcoreguidelines-pro-type-cstyle-cast
+# says, -Wsuggest-override what modernize-use-override says. modernize-use-nullptr
+# says more than the compiler: -Wzero-as-null-pointer-constant is asked of both
+# languages (CMakeLists.txt) and clang answers for the C++ alone, while the C of
+# this project is C23 and has nullptr all the same.
 #
 # A check that is right about a place where the code is deliberately unusual is
 # answered there with a NOLINT and the reason, not turned off here.
@@ -99,6 +121,8 @@ Checks: >
   -clang-analyzer-security.ArrayBound,
   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
   concurrency-*,
+  cppcoreguidelines-init-variables,
+  cppcoreguidelines-narrowing-conversions,
   cppcoreguidelines-pro-type-cstyle-cast,
   cppcoreguidelines-pro-type-member-init,
   cppcoreguidelines-pro-type-reinterpret-cast,
@@ -106,8 +130,8 @@ Checks: >
   cppcoreguidelines-pro-type-union-access,
   cppcoreguidelines-slicing,
   cppcoreguidelines-virtual-class-destructor,
+  google-explicit-constructor,
   misc-*,
-  -misc-const-correctness,
   -misc-include-cleaner,
   -misc-multiple-inheritance,
   -misc-non-private-member-variables-in-classes,
@@ -122,9 +146,13 @@ Checks: >
   modernize-use-starts-ends-with,
   performance-*,
   -performance-enum-size,
+  readability-implicit-bool-conversion,
   readability-misleading-indentation,
+  readability-named-parameter,
   readability-non-const-parameter,
-  readability-redundant-declaration
+  readability-qualified-auto,
+  readability-redundant-declaration,
+  readability-static-accessed-through-instance
 
 # What a check needs told about this project.
 CheckOptions:

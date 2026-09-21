@@ -34,16 +34,16 @@ double SSGEG_Waves::compute_wave(unsigned wave, double phase) const
     period = (period < num_periods) ? period : (num_periods - 1);
     phase -= period;
 
-    bool att = (wave & 4) != 0;
-    bool alt = (wave & 2) != 0;
-    bool hold = (wave & 1) != 0;
+    const bool att = (wave & 4) != 0;
+    const bool alt = (wave & 2) != 0;
+    const bool hold = (wave & 1) != 0;
 
     if (period > 0 && hold)  // Hold
-        return (att ^ alt) ? 1.0 : -1.0;
+        return ((att ^ alt) != 0) ? 1.0 : -1.0;
 
     int dir = att ? +1 : -1;
     dir = (alt && (period & 1) != 0) ? -dir : dir;
 
-    double d = phase * 2 - 1;
+    const double d = phase * 2 - 1;
     return (dir == +1) ? +d : -d;
 }

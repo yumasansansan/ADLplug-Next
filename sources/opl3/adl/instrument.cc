@@ -19,6 +19,7 @@
 #include <adlmidi.h>
 #include <bit>
 #include <cstring>
+#include <optional>
 
 #define EACH_INS_FIELD(F)                                               \
     F(note_offset1) F(note_offset2)                                     \
@@ -100,27 +101,25 @@ Instrument Instrument::from_sbi(const std::uint8_t *data, std::size_t length) no
     length -= 4;
 
     enum class Kind { Dos, Unix2op, Unix4op, Other };
+    struct Front { Kind kind; std::size_t minsize; };
 
-    Kind kind;
-    std::size_t minsize;
-    if (std::memcmp(magic, "SBI\x1a", 4) == 0) {
-        kind = Kind::Dos;
-        minsize = 11;
-    }
-    else if (std::memcmp(magic, "2OP\x1a", 4) == 0) {
-        kind = Kind::Unix2op;
-        minsize = 11;
-    }
-    else if (std::memcmp(magic, "4OP\x1a", 4) == 0) {
-        kind = Kind::Unix4op;
-        minsize = 22;
-    }
-    else if (std::memcmp(magic, "SBI", 3) == 0) {
-        kind = Kind::Other;
-        minsize = 11;
-    }
-    else
+    // What the bytes at the front say the file is, and the least the rest of it
+    // must hold besides the name. A front that says none of these is not one.
+    const std::optional<Front> front = [magic]() -> std::optional<Front> {
+        if (std::memcmp(magic, "SBI\x1a", 4) == 0)
+            return Front {.kind = Kind::Dos, .minsize = 11};
+        if (std::memcmp(magic, "2OP\x1a", 4) == 0)
+            return Front {.kind = Kind::Unix2op, .minsize = 11};
+        if (std::memcmp(magic, "4OP\x1a", 4) == 0)
+            return Front {.kind = Kind::Unix4op, .minsize = 22};
+        if (std::memcmp(magic, "SBI", 3) == 0)
+            return Front {.kind = Kind::Other, .minsize = 11};
+        return std::nullopt;
+    }();
+    if (!front.has_value())
         return ins;
+    const Kind kind = front->kind;
+    const std::size_t minsize = front->minsize;
 
     const bool unix_format = kind == Kind::Unix2op || kind == Kind::Unix4op;
     // The length check above leaves the 32 bytes of the name.
@@ -191,9 +190,9 @@ void Instrument::describe(std::FILE *out) const noexcept
                  " - Velocity offset %d\n"
                  " - Second voice fine tune %d\n"
                  " - Percussion note %d\n",
-                 four_op(), pseudo_four_op(), blank(),
-                 fb12(), con12(), note_offset1,
-                 fb34(), con34(), note_offset2,
+                 static_cast<int>(four_op()), static_cast<int>(pseudo_four_op()), static_cast<int>(blank()),
+                 fb12(), static_cast<int>(con12()), note_offset1,
+                 fb34(), static_cast<int>(con34()), note_offset2,
                  midi_velocity_offset, second_voice_detune, percussion_key_number);
     for (unsigned op = 0; op < 4; ++op)
         describe_operator(op, out, "    ");
@@ -218,7 +217,7 @@ void Instrument::describe_operator(unsigned op, std::FILE *out, const char *inde
                  indent, op, text,
                  indent, attack(op), decay(op), sustain(op), release(op),
                  indent, level(op), fmul(op), ksl(op),
-                 indent, trem(op), vib(op), sus(op), env(op),
+                 indent, static_cast<int>(trem(op)), static_cast<int>(vib(op)), static_cast<int>(sus(op)), static_cast<int>(env(op)),
                  indent, wave(op));
 }
 

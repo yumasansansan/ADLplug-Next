@@ -141,7 +141,7 @@ Program_Name_Editor::Program_Name_Editor ()
     edt_bank_id->setJustification(Justification::centred);
     edt_pgm_id->setJustification(Justification::centred);
 
-    Colour label_color = findColour(TextEditor::backgroundColourId).contrasting(0.5f);
+    const Colour label_color = findColour(TextEditor::backgroundColourId).contrasting(0.5f);
     edt_bank_name->setTextToShowWhenEmpty("<Untitled bank>", label_color);
     edt_pgm_name->setTextToShowWhenEmpty("<Untitled program>", label_color);
     //[/UserPreSize]
@@ -233,15 +233,15 @@ void Program_Name_Editor::set_program(
     pgm_ = pgm;
 
     edt_bank_id->setText(std::format("{:03d}:{:03d}", bank.msb, bank.lsb));
-    edt_pgm_id->setText(std::format("{:c}{:03d}", bank.percussive ? 'P' : 'M', pgm));
+    edt_pgm_id->setText(std::format("{:c}{:03d}", (bank.percussive != 0u) ? 'P' : 'M', pgm));
     edt_bank_name->setText(bank_name);
     edt_pgm_name->setText(pgm_name);
 
     const Midi_Db &db = midi_db();
-    const Midi_Program_Ex *ex = db.find_ex(bank.msb, bank.lsb, pgm + (bank.percussive ? 128 : 0));
-    const char *name = ex ? ex->name : bank.percussive ? db.perc(pgm).name : db.inst(pgm);
+    const Midi_Program_Ex *ex = db.find_ex(bank.msb, bank.lsb, pgm + ((bank.percussive != 0u) ? 128 : 0));
+    const char *name = (ex != nullptr) ? ex->name : (bank.percussive != 0u) ? db.perc(pgm).name : db.inst(pgm);
 
-    Colour label_color = findColour(TextEditor::backgroundColourId).contrasting(0.5f);
+    const Colour label_color = findColour(TextEditor::backgroundColourId).contrasting(0.5f);
     edt_pgm_name->setTextToShowWhenEmpty(name, label_color);
 }
 //[/MiscUserCode]

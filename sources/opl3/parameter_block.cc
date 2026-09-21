@@ -263,8 +263,8 @@ void Parameter_Block::Part::set_instrument(const Instrument &ins)
     *p_is4op = ins.four_op();
     *p_ps4op = ins.pseudo_four_op();
     *p_blank = ins.blank();
-    *p_con12 = ins.con12();
-    *p_con34 = ins.con34();
+    *p_con12 = static_cast<int>(ins.con12());
+    *p_con34 = static_cast<int>(ins.con34());
     *p_tune12 = ins.note_offset1;
     *p_tune34 = ins.note_offset2;
     *p_fb12 = ins.fb12();
@@ -274,7 +274,7 @@ void Parameter_Block::Part::set_instrument(const Instrument &ins)
     *p_drumnote = ins.percussion_key_number;
 
     for (unsigned opnum = 0; opnum < 4; ++opnum) {
-        Operator &op = nth_operator(opnum);
+        const Operator &op = nth_operator(opnum);
         *op.p_attack = ins.attack(opnum);
         *op.p_decay = ins.decay(opnum);
         *op.p_sustain = ins.sustain(opnum);

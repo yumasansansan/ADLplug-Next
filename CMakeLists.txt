@@ -120,6 +120,15 @@ function(adlplug_set_language_standard target)
     CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
 endfunction()
 
+# No file of this project is a C++ module, and none imports one. Left alone,
+# CMake scans every C++23 source for modules and compiles it with a mapping file
+# it generates from what the scan found: work for a build to do and nothing for
+# it to find. The mapping file is also named in the compile commands, so a reader
+# of the code (ci/tidy.sh) could not parse a single file until the build had
+# generated one for it. JUCE turns the scanning off for the targets it makes; this
+# turns it off for the rest.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 set(CMAKE_C_VISIBILITY_PRESET "hidden")
 set(CMAKE_CXX_VISIBILITY_PRESET "hidden")
 set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
@@ -860,8 +869,14 @@ if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
       -Wmissing-variable-declarations -Wdeprecated -Wmultichar
       -Wfour-char-constants -Wextra-semi -Wextra-semi-stmt -Wnewline-eof
       -Wreserved-identifier
+      # Asked of the C as well as the C++. C23 has nullptr, so nought standing in
+      # for it is as much a thing this project does not write there; clang has
+      # nothing to say about it in C today, and clang-tidy's modernize-use-nullptr
+      # is what catches it there (.clang-tidy). Asking for it of both languages
+      # costs nothing and is what the project means, whichever of them clang comes
+      # to say it in.
+      -Wzero-as-null-pointer-constant
       $<$<COMPILE_LANGUAGE:CXX>:-Wold-style-cast>
-      $<$<COMPILE_LANGUAGE:CXX>:-Wzero-as-null-pointer-constant>
       $<$<COMPILE_LANGUAGE:CXX>:-Wnon-virtual-dtor>
       $<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>
       $<$<COMPILE_LANGUAGE:CXX>:-Wsuggest-override>

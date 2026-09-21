@@ -28,15 +28,15 @@ void Algorithm_Component::scale(double s)
 
 void Algorithm_Component::paint(Graphics &g)
 {
-    if (!algorithm_)
+    if (algorithm_ == nullptr)
         return;
 
     const double scale = scale_;
     unsigned row = 0;
     unsigned col = 0;
 
-    Colour pen_color(0xf0, 0xf8, 0xff);
-    Colour fill_color(0x42, 0xa2, 0xc8);
+    const Colour pen_color(0xf0, 0xf8, 0xff);
+    const Colour fill_color(0x42, 0xa2, 0xc8);
 
     g.setColour(pen_color);
     g.drawRect(getLocalBounds());

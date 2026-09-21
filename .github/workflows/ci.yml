@@ -213,12 +213,12 @@ jobs:
 
       # clang-tidy reads each file with the options the build compiles it with, so
       # what the build generates -- the JUCE headers and the pack of banks -- has to
-      # be there first; nothing else does, and nothing is linked. That is what lets
-      # the fuzz targets be configured here, so that their sources are looked at
-      # too: their coverage instrumentation reaches the libraries, and a plugin of
-      # such a build would ask for a runtime that only a sanitizer brings.
+      # be there first; nothing else does, and nothing of the code is compiled or
+      # linked. The fuzz sources are read here as well without asking for the fuzz
+      # targets: a build with the tests carries the program that replays a saved
+      # input through each of them, which compiles every one of those sources.
       - name: What the build generates
-        run: bash ci/build.sh --generated-only "${{ matrix.preset }}" baseline -DADLplug_BUILD_FUZZERS=ON
+        run: bash ci/build.sh --generated-only "${{ matrix.preset }}" baseline
 
       - name: Look at every file of ours
         run: bash ci/tidy.sh "${{ matrix.preset }}"

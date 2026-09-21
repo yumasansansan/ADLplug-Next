@@ -86,7 +86,7 @@ void Instrument::describe(std::FILE *out) const noexcept
                  " - AM sensitivity %d FM sensitivity %d\n"
                  " - Velocity offset %d\n"
                  " - Percussion note %d\n",
-                 blank(),
+                 static_cast<int>(blank()),
                  feedback(), algorithm(), note_offset,
                  ams(), fms(),
                  midi_velocity_offset, percussion_key_number);
@@ -103,8 +103,8 @@ void Instrument::describe_operator(unsigned op, std::FILE *out, const char *inde
                  "%s - SSG-EG Enable %d Wave %d\n",
                  indent, op,
                  indent, attack(op), decay2(op), decay1(op), sustain(op), release(op),
-                 indent, am(op), level(op), ratescale(op), detune(op), fmul(op),
-                 indent, ssgenable(op), ssgwave(op));
+                 indent, static_cast<int>(am(op)), level(op), ratescale(op), detune(op), fmul(op),
+                 indent, static_cast<int>(ssgenable(op)), ssgwave(op));
 }
 
 // Compares field by field. The structs have padding, so memcmp could tell

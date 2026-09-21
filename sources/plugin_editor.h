@@ -30,11 +30,11 @@ class Configuration;
  */
 class AdlplugAudioProcessorEditor : public AudioProcessorEditor {
 public:
-    AdlplugAudioProcessorEditor(AdlplugAudioProcessor &, Parameter_Block &);
+    AdlplugAudioProcessorEditor(AdlplugAudioProcessor &p, Parameter_Block &pb);
     ~AdlplugAudioProcessorEditor() override;
 
     //==========================================================================
-    void paint(Graphics &) override;
+    void paint(Graphics &g) override;
     void resized() override;
 
 private:

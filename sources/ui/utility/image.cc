@@ -51,14 +51,14 @@ Rectangle<int> get_image_solid_area(const Image &img)
 {
     Rectangle<int> bounds = img.getBounds();
 
-    auto col_transparent =
+    const auto col_transparent =
         [&](int c) -> bool {
             for (int r = 0, h = img.getHeight(); r < h; ++r)
                 if (img.getPixelAt(c, r).getAlpha() > 0)
                     return false;
             return true;
         };
-    auto row_transparent =
+    const auto row_transparent =
         [&](int r) -> bool {
             for (int c = 0, w = img.getWidth(); c < w; ++c)
                 if (img.getPixelAt(c, r).getAlpha() > 0)

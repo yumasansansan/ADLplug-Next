@@ -12,6 +12,10 @@
 
 namespace {
 
+// The parameters are Xlib's: XSetErrorHandler takes a function of exactly this
+// type. The event is only read here, and a pointee that is const would be a
+// different type and no longer that function.
+// NOLINTNEXTLINE(misc-const-correctness)
 int print_x_error(Display *display, XErrorEvent *event)
 {
     char text[128];

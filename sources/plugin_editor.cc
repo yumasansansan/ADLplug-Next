@@ -60,7 +60,7 @@ AdlplugAudioProcessorEditor::~AdlplugAudioProcessorEditor()
 //==============================================================================
 void AdlplugAudioProcessorEditor::paint(Graphics &g)
 {
-    LookAndFeel &lnf = getLookAndFeel();
+    const LookAndFeel &lnf = getLookAndFeel();
 
     // (Our component is opaque, so we must completely fill the background with a
     // solid colour)
@@ -74,7 +74,7 @@ void AdlplugAudioProcessorEditor::resized()
 
 void AdlplugAudioProcessorEditor::process_notifications()
 {
-    AdlplugAudioProcessor &proc = proc_;
+    const AdlplugAudioProcessor &proc = proc_;
     Main_Component &main = *main_;
     const std::shared_ptr<Simple_Fifo> queue = proc.message_queue_to_ui();
 

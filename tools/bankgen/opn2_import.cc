@@ -76,7 +76,7 @@ bool import_gyb(std::span<const std::uint8_t> data, Imported_Bank &bank, std::st
     };
 
     const std::uint8_t *header = take(5);
-    if (!header || header[0] != 26 || header[1] != 12)
+    if ((header == nullptr) || header[0] != 26 || header[1] != 12)
         return fail("not a GYB bank");
     const unsigned version = header[2];
     if (version != 1 && version != 2)
@@ -88,7 +88,7 @@ bool import_gyb(std::span<const std::uint8_t> data, Imported_Bank &bank, std::st
 
     // For each GM program and drum, the index of the instrument that plays it.
     const std::uint8_t *map = take(256);
-    if (!map)
+    if (map == nullptr)
         return fail("truncated");
 
     WOPNFile_Ptr file = blank_file(1, 1);
@@ -96,7 +96,7 @@ bool import_gyb(std::span<const std::uint8_t> data, Imported_Bank &bank, std::st
         return fail("out of memory");
     if (version == 2) {
         const std::uint8_t *lfo = take(1);
-        if (!lfo)
+        if (lfo == nullptr)
             return fail("truncated");
         file->lfo_freq = *lfo & 0x0f;
     }
@@ -125,7 +125,7 @@ bool import_gyb(std::span<const std::uint8_t> data, Imported_Bank &bank, std::st
     unsigned panned = 0;
     for (unsigned index = 0; index < total; ++index) {
         const std::uint8_t *r = take(record_size);
-        if (!r)
+        if (r == nullptr)
             return fail("truncated");
         const std::optional<unsigned> slot = slot_of(index);
         if (!slot) {
@@ -155,8 +155,8 @@ bool import_gyb(std::span<const std::uint8_t> data, Imported_Bank &bank, std::st
 
     for (unsigned index = 0; index < total; ++index) {
         const std::uint8_t *length = take(1);
-        const std::uint8_t *text = length ? take(*length) : nullptr;
-        if (!text)
+        const std::uint8_t *text = (length != nullptr) ? take(*length) : nullptr;
+        if (text == nullptr)
             return fail("truncated");
         if (const std::optional<unsigned> slot = slot_of(index)) {
             WOPNInstrument &ins = instrument_at(index, *slot);

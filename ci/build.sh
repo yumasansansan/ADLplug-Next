@@ -20,13 +20,11 @@
 # fuzzing does not need one; what the plugin needs is checked by the builds of
 # every push.
 #
-# With --generated-only, it builds what the build generates and nothing that is
-# compiled or linked: the JUCE header of every target that has one, and the pack
-# of banks that a source of the plugin embeds. That is all a reader of the code
-# needs to parse every file the way the build compiles it (ci/tidy.sh), and it is
-# what lets the static analysis look at a build whose libraries carry the fuzz
-# coverage: nothing is linked there, so nothing asks for the runtime that resolves
-# it, which only a sanitizer or libFuzzer itself brings.
+# With --generated-only, it builds what the build generates rather than what it
+# compiles: the JUCE header of every target that has one, and the pack of banks
+# that a source of the plugin embeds -- for which the tool that writes the pack is
+# built and run, since nothing else can write it. That is all a reader of the code
+# needs to parse every file the way the build compiles it (ci/tidy.sh).
 #
 # The configuration checks the toolchain (cmake/LLVMToolchain.cmake), and this
 # script shows what it checked, in the log and, in GitHub Actions, in the

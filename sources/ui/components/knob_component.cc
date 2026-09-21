@@ -86,14 +86,14 @@ void Knob::handleAsyncUpdate()
 {
     cancelPendingUpdate();
 
-    Component::BailOutChecker checker(this);
+    const Component::BailOutChecker checker(this);
     listeners_.callChecked(checker, [this](Knob::Listener &l) { l.knob_value_changed(this); });
 }
 
 void Knob::paint(Graphics &g)
 {
     const Km_Skin *skin = skin_.get();
-    if (!skin || !*skin)
+    if ((skin == nullptr) || !*skin)
         return;
 
     const std::vector<Image> &frames = skin->frames;
@@ -114,7 +114,7 @@ void Knob::mouseWheelMove(const MouseEvent &event, const MouseWheelDetails &whee
     if (!frame_bounds.contains(event.getPosition()))
         return;
 
-    Component::BailOutChecker checker(this);
+    const Component::BailOutChecker checker(this);
     listeners_.callChecked(checker, [this](Knob::Listener &l) { l.knob_drag_started(this); });
     if (checker.shouldBailOut())
         return;
@@ -140,7 +140,7 @@ void Knob::mouseDown(const MouseEvent &event)
         return;
 
     in_drag_ = true;
-    Component::BailOutChecker checker(this);
+    const Component::BailOutChecker checker(this);
     listeners_.callChecked(checker, [this](Knob::Listener &l) { l.knob_drag_started(this); });
     if (checker.shouldBailOut())
         return;
@@ -154,7 +154,7 @@ void Knob::mouseUp([[maybe_unused]] const MouseEvent &event)
         return;
 
     in_drag_ = false;
-    Component::BailOutChecker checker(this);
+    const Component::BailOutChecker checker(this);
     listeners_.callChecked(checker, [this](Knob::Listener &l) { l.knob_drag_ended(this); });
 }
 
@@ -169,7 +169,7 @@ void Knob::mouseDrag(const MouseEvent &event)
 void Knob::handle_drag(const MouseEvent &event)
 {
     const Km_Skin *skin = skin_.get();
-    if (!skin)
+    if (skin == nullptr)
         return;
 
     const Rectangle<double> bounds = get_frame_bounds().toDouble();
@@ -198,7 +198,7 @@ void Knob::handle_drag(const MouseEvent &event)
 Rectangle<float> Knob::get_frame_bounds() const
 {
     const Km_Skin *skin = skin_.get();
-    if (!skin || !*skin)
+    if ((skin == nullptr) || !*skin)
         return {};
 
     const Rectangle<int> frame = skin->frames[0].getBounds();

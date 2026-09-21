@@ -270,7 +270,7 @@ void Parameter_Block::Part::set_instrument(const Instrument &ins)
     *p_drumnote = ins.percussion_key_number;
 
     for (unsigned opnum = 0; opnum < 4; ++opnum) {
-        Operator &op = nth_operator(opnum);
+        const Operator &op = nth_operator(opnum);
         *op.p_detune = ins.detune(opnum);
         *op.p_fmul = ins.fmul(opnum);
         *op.p_level = ins.level(opnum);

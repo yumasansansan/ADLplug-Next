@@ -91,7 +91,7 @@ Algorithm_Help::Algorithm_Help ()
 
 
     //[UserPreSize]
-    double s = 18.0;
+    const double s = 18.0;
     component->scale(s);
     component2->scale(s);
     component3->scale(s);
@@ -135,9 +135,9 @@ void Algorithm_Help::paint (Graphics& g)
     //[/UserPrePaint]
 
     {
-        int x = 16, y = 4, width = 120, height = 30;
-        String text (TRANS("Algorithm 1"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 16, y = 4, width = 120, height = 30;
+        const String text (TRANS("Algorithm 1"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -147,9 +147,9 @@ void Algorithm_Help::paint (Graphics& g)
     }
 
     {
-        int x = 168, y = 4, width = 120, height = 30;
-        String text (TRANS("Algorithm 2"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 168, y = 4, width = 120, height = 30;
+        const String text (TRANS("Algorithm 2"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -159,9 +159,9 @@ void Algorithm_Help::paint (Graphics& g)
     }
 
     {
-        int x = 16, y = 188, width = 120, height = 30;
-        String text (TRANS("Algorithm 5"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 16, y = 188, width = 120, height = 30;
+        const String text (TRANS("Algorithm 5"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -171,9 +171,9 @@ void Algorithm_Help::paint (Graphics& g)
     }
 
     {
-        int x = 168, y = 188, width = 120, height = 30;
-        String text (TRANS("Algorithm 6"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 168, y = 188, width = 120, height = 30;
+        const String text (TRANS("Algorithm 6"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -183,9 +183,9 @@ void Algorithm_Help::paint (Graphics& g)
     }
 
     {
-        int x = 320, y = 188, width = 120, height = 30;
-        String text (TRANS("Algorithm 7"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 320, y = 188, width = 120, height = 30;
+        const String text (TRANS("Algorithm 7"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -195,9 +195,9 @@ void Algorithm_Help::paint (Graphics& g)
     }
 
     {
-        int x = 472, y = 188, width = 160, height = 30;
-        String text (TRANS("Algorithm 8"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 472, y = 188, width = 160, height = 30;
+        const String text (TRANS("Algorithm 8"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -207,9 +207,9 @@ void Algorithm_Help::paint (Graphics& g)
     }
 
     {
-        int x = 320, y = 4, width = 120, height = 30;
-        String text (TRANS("Algorithm 3"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 320, y = 4, width = 120, height = 30;
+        const String text (TRANS("Algorithm 3"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -219,9 +219,9 @@ void Algorithm_Help::paint (Graphics& g)
     }
 
     {
-        int x = 472, y = 4, width = 120, height = 30;
-        String text (TRANS("Algorithm 4"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 472, y = 4, width = 120, height = 30;
+        const String text (TRANS("Algorithm 4"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);

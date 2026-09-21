@@ -33,7 +33,7 @@ extern const std::array<const char *, 3> key_layout_names;
 String default_key_map(Key_Layout layout);
 
 Key_Layout set_key_layout(Midi_Keyboard_Ex &kb, Key_Layout layout, Configuration &conf);
-Key_Layout load_key_configuration(Midi_Keyboard_Ex &kb, Configuration &conf);
+Key_Layout load_key_configuration(Midi_Keyboard_Ex &kb, const Configuration &conf);
 void build_key_layout_menu(PopupMenu &menu, Key_Layout current);
 
 const char *name_of_key_layout(Key_Layout layout);

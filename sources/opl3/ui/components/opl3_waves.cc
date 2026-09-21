@@ -85,10 +85,10 @@ static std::int16_t calcsin0(std::uint16_t phase, std::uint16_t envelope)
     phase &= 0x3ff;
     std::uint16_t out = 0;
     std::uint16_t neg = 0;
-    if (phase & 0x200) {
+    if ((phase & 0x200) != 0) {
         neg = 0xffff;
     }
-    if (phase & 0x100) {
+    if ((phase & 0x100) != 0) {
         out = logsinrom[(phase & 0xff) ^ 0xff];
     }
     else {
@@ -101,10 +101,10 @@ static std::int16_t calcsin1(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
     std::uint16_t out = 0;
-    if (phase & 0x200) {
+    if ((phase & 0x200) != 0) {
         out = 0x1000;
     }
-    else if (phase & 0x100) {
+    else if ((phase & 0x100) != 0) {
         out = logsinrom[(phase & 0xff) ^ 0xff];
     }
     else {
@@ -117,7 +117,7 @@ static std::int16_t calcsin2(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
     std::uint16_t out = 0;
-    if (phase & 0x100) {
+    if ((phase & 0x100) != 0) {
         out = logsinrom[(phase & 0xff) ^ 0xff];
     }
     else {
@@ -130,7 +130,7 @@ static std::int16_t calcsin3(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
     std::uint16_t out = 0;
-    if (phase & 0x100) {
+    if ((phase & 0x100) != 0) {
         out = 0x1000;
     }
     else {
@@ -147,10 +147,10 @@ static std::int16_t calcsin4(std::uint16_t phase, std::uint16_t envelope)
     if ((phase & 0x300) == 0x100) {
         neg = 0xffff;
     }
-    if (phase & 0x200) {
+    if ((phase & 0x200) != 0) {
         out = 0x1000;
     }
-    else if (phase & 0x80) {
+    else if ((phase & 0x80) != 0) {
         out = logsinrom[((phase ^ 0xff) << 1) & 0xff];
     }
     else {
@@ -163,10 +163,10 @@ static std::int16_t calcsin5(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
     std::uint16_t out = 0;
-    if (phase & 0x200) {
+    if ((phase & 0x200) != 0) {
         out = 0x1000;
     }
-    else if (phase & 0x80) {
+    else if ((phase & 0x80) != 0) {
         out = logsinrom[((phase ^ 0xff) << 1) & 0xff];
     }
     else {
@@ -179,7 +179,7 @@ static std::int16_t calcsin6(std::uint16_t phase, std::uint16_t envelope)
 {
     phase &= 0x3ff;
     std::uint16_t neg = 0;
-    if (phase & 0x200) {
+    if ((phase & 0x200) != 0) {
         neg = 0xffff;
     }
     return static_cast<std::int16_t>(calcexp(static_cast<std::uint32_t>(envelope << 3)) ^ neg);
@@ -190,7 +190,7 @@ static std::int16_t calcsin7(std::uint16_t phase, std::uint16_t envelope)
     phase &= 0x3ff;
     std::uint16_t out = 0;
     std::uint16_t neg = 0;
-    if (phase & 0x200) {
+    if ((phase & 0x200) != 0) {
         neg = 0xffff;
         phase = (phase & 0x1ff) ^ 0x1ff;
     }

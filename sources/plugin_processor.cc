@@ -574,7 +574,7 @@ bool AdlplugAudioProcessor::handle_midi(const std::uint8_t *data, unsigned len)
         if (!is_drum) {
             Selection &sel = selection_[channel];
             sel.program = static_cast<std::uint8_t>(data[1] & 0x7f);
-            sel.bank.percussive = false;
+            sel.bank.percussive = 0u;
             sel.bank.msb = midi_bank_msb_[channel];
             sel.bank.lsb = midi_bank_lsb_[channel];
         }
@@ -728,7 +728,7 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
     }
 #if defined(ADLPLUG_OPL3)
     case std::to_underlying(User_Message::SelectOptimal4Ops): {
-        Parameter_Block &pb = *parameter_block_;
+        const Parameter_Block &pb = *parameter_block_;
         pl.panic();
         pl.set_num_4ops(~0u);
         *pb.p_n4op = static_cast<int>(pl.num_4ops());

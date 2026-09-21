@@ -24,7 +24,7 @@ namespace AudioParametersEx {
     class ValueChangedListener {
     public:
         virtual ~ValueChangedListener() = default;
-        virtual void parameterValueChangedEx(std::uint32_t) {}
+        virtual void parameterValueChangedEx(std::uint32_t /*tag*/) {}
     };
 }
 
@@ -58,7 +58,7 @@ class AudioParameterExBool : public AudioParameterEx<AudioParameterBool> {
 public:
     using AudioParameterEx::AudioParameterEx;
 protected:
-    void valueChanged(bool) override
+    void valueChanged(bool /*new_value*/) override
         { invoke_value_changed_listeners(); }
 };
 
@@ -66,7 +66,7 @@ class AudioParameterExChoice : public AudioParameterEx<AudioParameterChoice> {
 public:
     using AudioParameterEx::AudioParameterEx;
 protected:
-    void valueChanged(int) override
+    void valueChanged(int /*new_value*/) override
         { invoke_value_changed_listeners(); }
 };
 
@@ -74,7 +74,7 @@ class AudioParameterExFloat : public AudioParameterEx<AudioParameterFloat> {
 public:
     using AudioParameterEx::AudioParameterEx;
 protected:
-    void valueChanged(float) override
+    void valueChanged(float /*new_value*/) override
         { invoke_value_changed_listeners(); }
 };
 
@@ -82,7 +82,7 @@ class AudioParameterExInt : public AudioParameterEx<AudioParameterInt> {
 public:
     using AudioParameterEx::AudioParameterEx;
 protected:
-    void valueChanged(int) override
+    void valueChanged(int /*new_value*/) override
         { invoke_value_changed_listeners(); }
 };
 

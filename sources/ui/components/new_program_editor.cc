@@ -277,7 +277,7 @@ void New_Program_Editor::comboBoxChanged (ComboBox* comboBoxThatHasChanged)
 //[MiscUserCode] You can add your own definitions of your custom methods or any other code here...
 void New_Program_Editor::set_current(const Bank_Id &id, unsigned pgm)
 {
-    cb_pgm_kind->setSelectedId(id.percussive ? 2 : 1);
+    cb_pgm_kind->setSelectedId((id.percussive != 0u) ? 2 : 1);
     edt_pgm_num->setText(std::format("{:03d}", pgm));
     edt_bank_msb->setText(std::format("{:03d}", id.msb));
     edt_bank_lsb->setText(std::format("{:03d}", id.lsb));

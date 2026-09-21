@@ -63,8 +63,8 @@ public:
 
     bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
 
-    void processBlock(AudioBuffer<float> &, MidiBuffer &) override;
-    void processBlockBypassed(AudioBuffer<float> &, MidiBuffer &) override;
+    void processBlock(AudioBuffer<float> &buffer, MidiBuffer &midi_messages) override;
+    void processBlockBypassed(AudioBuffer<float> &buffer, MidiBuffer &midi_messages) override;
 
     void process(float *outputs[], unsigned nframes, Midi_Input_Source &midi);
 

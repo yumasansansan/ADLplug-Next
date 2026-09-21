@@ -150,7 +150,9 @@ void pump_messages(int milliseconds)
 
 void print_line(const std::string &text)
 {
-    std::cout << text << std::endl;
+    // The line is flushed as it is written: what this tool says is read while it
+    // renders, and a run that is stopped part way must have said what it said.
+    std::cout << text << '\n' << std::flush;
 }
 
 constexpr std::uint64_t fnv1a64_basis = 14695981039346656037ull;
@@ -226,7 +228,7 @@ bool set_emulator_in_state(juce::MemoryBlock &state, int emulator)
             continue;
         const std::unique_ptr<juce::XmlElement> own =
             juce::AudioProcessor::getXmlFromBinary(stream.getData(), static_cast<int>(stream.getSize()));
-        juce::XmlElement *const chip = (own != nullptr) ? own->getChildByName("chip") : nullptr;
+        const juce::XmlElement *const chip = (own != nullptr) ? own->getChildByName("chip") : nullptr;
         juce::XmlElement *const value = (chip != nullptr) ? chip->getChildByAttribute("name", "emulator") : nullptr;
         if (value == nullptr)
             continue;
@@ -339,7 +341,10 @@ std::vector<Scheduled_Event> make_sequence(double seconds)
 
     // Channel 1: overlapping random chords -- more voices than the chips have
     // channels, so the voice allocator has to steal.
-    for (double t = 0.0; at(t) < end_of_notes; t += 0.25) {
+    // The time of a step is worked out from the number of the step, so that how
+    // many steps there are is not a matter of what a sum of doubles comes to.
+    for (int step = 0; at(0.25 * step) < end_of_notes; ++step) {
+        const double t = 0.25 * step;
         const int voices = 3 + rng.below(3);
         for (int v = 0; v < voices; ++v) {
             const int note = 40 + rng.below(40);
@@ -356,7 +361,8 @@ std::vector<Scheduled_Event> make_sequence(double seconds)
 
     // Channels 2-4: a line each, with pitch bend, modulation, volume and pan.
     for (int ch = 2; ch <= 4; ++ch) {
-        for (double t = 0.1 * ch; at(t) < end_of_notes; t += 0.5) {
+        for (int step = 0; at(0.1 * ch + 0.5 * step) < end_of_notes; ++step) {
+            const double t = 0.1 * ch + 0.5 * step;
             const int note = 48 + rng.below(30);
             const int on = at(t);
             add(on, juce::MidiMessage::noteOn(ch, note, velocity(60 + rng.below(60))));
@@ -369,7 +375,8 @@ std::vector<Scheduled_Event> make_sequence(double seconds)
     }
 
     // Channel 10: drums.
-    for (double t = 0.0; at(t) < end_of_notes; t += 0.125) {
+    for (int step = 0; at(0.125 * step) < end_of_notes; ++step) {
+        const double t = 0.125 * step;
         const int note = 35 + rng.below(47);
         add(at(t), juce::MidiMessage::noteOn(10, note, velocity(40 + rng.below(88))));
         add(at(t) + at(0.1), juce::MidiMessage::noteOff(10, note));
@@ -501,7 +508,7 @@ int main(int argc, char *argv[])
     report_x_errors();
    #endif
     {
-        juce::ScopedJuceInitialiser_GUI juce_init;
+        const juce::ScopedJuceInitialiser_GUI juce_init;
         juce::AudioPluginFormatManager formats;
         formats.addFormat(std::make_unique<juce::VST3PluginFormat>());
 
@@ -623,7 +630,7 @@ int main(int argc, char *argv[])
         }
 
         std::string emulator = "?";
-        for (auto *parameter : plugin->getParameters())
+        for (const auto *parameter : plugin->getParameters())
             if (parameter->getName(64) == "Emulator")
                 emulator = parameter->getCurrentValueAsText().toStdString();
 
@@ -702,7 +709,7 @@ int main(int argc, char *argv[])
         if (!required_emulator.empty() && emulator != required_emulator)
             failures.push_back("emulator '" + emulator + "', expected '" + required_emulator + "'");
         if (require_sound && (peak <= 0.0f || nonfinite != 0))
-            failures.push_back("the output is silent or has samples that are not finite");
+            failures.emplace_back("the output is silent or has samples that are not finite");
         if (prepare_again) {
             plugin->releaseResources();
             const juce::Array<juce::AudioProcessorParameter *> &parameters = plugin->getParameters();
@@ -710,7 +717,7 @@ int main(int argc, char *argv[])
             for (juce::AudioProcessorParameter *parameter : parameters)
                 parameter->setValueNotifyingHost(static_cast<float>(rng.below(1001)) / 1000.0f);
             std::vector<float> given;
-            for (juce::AudioProcessorParameter *parameter : parameters)
+            for (const juce::AudioProcessorParameter *parameter : parameters)
                 given.push_back(parameter->getValue());
             // Saving the state also hands the new values over to the plug-in.
             const std::uint64_t released_state = state_hash(*plugin);
@@ -729,7 +736,7 @@ int main(int argc, char *argv[])
             if (changed > listed)
                 failures.push_back(std::to_string(changed - listed) + " more parameters changed when prepared again");
             if (state_hash(*plugin) != released_state)
-                failures.push_back("the state changed when the plug-in was prepared again");
+                failures.emplace_back("the state changed when the plug-in was prepared again");
             milestone("released, " + std::to_string(parameters.size()) + " parameters set, prepared again");
         }
         for (const std::string &failure : failures)

@@ -36,6 +36,7 @@
 #include <memory>
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
 #include <cmath>
 #include <cassert>
 //[/Headers]
@@ -902,8 +903,8 @@ void Main_Component::paint (Graphics& g)
     g.fillAll (Colour (0xff323e44));
 
     {
-        int x = 0, y = 0, width = 800, height = 600;
-        Colour fillColour1 = Colour (0xff3f6a8b), fillColour2 = Colour (0xff274c70);
+        const int x = 0, y = 0, width = 800, height = 600;
+        const Colour fillColour1 = Colour (0xff3f6a8b), fillColour2 = Colour (0xff274c70);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setGradientFill (ColourGradient (fillColour1,
@@ -917,9 +918,9 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        int x = 16, y = 288, width = 264, height = 30;
-        String text (TRANS("Operator 3"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 16, y = 288, width = 264, height = 30;
+        const String text (TRANS("Operator 3"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -929,9 +930,9 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        int x = 16, y = 132, width = 264, height = 30;
-        String text (TRANS("Operator 1"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 16, y = 132, width = 264, height = 30;
+        const String text (TRANS("Operator 1"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -941,9 +942,9 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        int x = 300, y = 132, width = 264, height = 30;
-        String text (TRANS("Operator 2"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 300, y = 132, width = 264, height = 30;
+        const String text (TRANS("Operator 2"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -953,9 +954,9 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        int x = 300, y = 288, width = 264, height = 30;
-        String text (TRANS("Operator 4"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 300, y = 288, width = 264, height = 30;
+        const String text (TRANS("Operator 4"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -965,8 +966,8 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        int x = 578, y = 8, width = 92, height = 12;
-        Colour strokeColour = Colour (0xff8e989b);
+        const int x = 578, y = 8, width = 92, height = 12;
+        const Colour strokeColour = Colour (0xff8e989b);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (strokeColour);
@@ -975,8 +976,8 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        int x = 578, y = 24, width = 92, height = 12;
-        Colour strokeColour = Colour (0xff8e989b);
+        const int x = 578, y = 24, width = 92, height = 12;
+        const Colour strokeColour = Colour (0xff8e989b);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (strokeColour);
@@ -985,9 +986,9 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        int x = 586, y = 132, width = 188, height = 30;
-        String text (TRANS("Algorithm"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 586, y = 132, width = 188, height = 30;
+        const String text (TRANS("Algorithm"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -997,9 +998,9 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        int x = 586, y = 288, width = 188, height = 30;
-        String text (TRANS("Tuning"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 586, y = 288, width = 188, height = 30;
+        const String text (TRANS("Tuning"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -1009,9 +1010,9 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        int x = 300, y = 444, width = 188, height = 30;
-        String text (TRANS("Misc"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 300, y = 444, width = 188, height = 30;
+        const String text (TRANS("Misc"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -1021,9 +1022,9 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        int x = 504, y = 422, width = 270, height = 30;
-        String text (TRANS("Global"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 504, y = 422, width = 270, height = 30;
+        const String text (TRANS("Global"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -1033,8 +1034,8 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        float x = 16.0f, y = 474.0f, width = 264.0f, height = 36.0f;
-        Colour fillColour = Colour (0xff3c485f);
+        const float x = 16.0f, y = 474.0f, width = 264.0f, height = 36.0f;
+        const Colour fillColour = Colour (0xff3c485f);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -1042,8 +1043,8 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        float x = 300.0f, y = 474.0f, width = 188.0f, height = 36.0f;
-        Colour fillColour = Colour (0x662e4c4d);
+        const float x = 300.0f, y = 474.0f, width = 188.0f, height = 36.0f;
+        const Colour fillColour = Colour (0x662e4c4d);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -1051,8 +1052,8 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        float x = 504.0f, y = 450.0f, width = 270.0f, height = 60.0f;
-        Colour fillColour = Colour (0x662e4c4d);
+        const float x = 504.0f, y = 450.0f, width = 270.0f, height = 60.0f;
+        const Colour fillColour = Colour (0x662e4c4d);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -1060,8 +1061,8 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        float x = 586.0f, y = 316.0f, width = 188.0f, height = 106.0f;
-        Colour fillColour = Colour (0x662e4c4d);
+        const float x = 586.0f, y = 316.0f, width = 188.0f, height = 106.0f;
+        const Colour fillColour = Colour (0x662e4c4d);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -1069,8 +1070,8 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        float x = 586.0f, y = 160.0f, width = 188.0f, height = 128.0f;
-        Colour fillColour = Colour (0x662e4c4d);
+        const float x = 586.0f, y = 160.0f, width = 188.0f, height = 128.0f;
+        const Colour fillColour = Colour (0x662e4c4d);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -1078,8 +1079,8 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        float x = 606.0f, y = 52.0f, width = 168.0f, height = 80.0f;
-        Colour fillColour = Colour (0x662e4c4d);
+        const float x = 606.0f, y = 52.0f, width = 168.0f, height = 80.0f;
+        const Colour fillColour = Colour (0x662e4c4d);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -1087,8 +1088,8 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        float x = 460.0f, y = 72.0f, width = 102.0f, height = 60.0f;
-        Colour fillColour = Colour (0x662e4c4d);
+        const float x = 460.0f, y = 72.0f, width = 102.0f, height = 60.0f;
+        const Colour fillColour = Colour (0x662e4c4d);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -1096,8 +1097,8 @@ void Main_Component::paint (Graphics& g)
     }
 
     {
-        float x = 300.0f, y = 72.0f, width = 146.0f, height = 60.0f;
-        Colour fillColour = Colour (0x662e4c4d);
+        const float x = 300.0f, y = 72.0f, width = 146.0f, height = 60.0f;
+        const Colour fillColour = Colour (0x662e4c4d);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -1120,8 +1121,8 @@ void Main_Component::resized()
 void Main_Component::buttonClicked (Button* buttonThatWasClicked)
 {
     //[UserbuttonClicked_Pre]
-    Parameter_Block &pb = *parameter_block_;
-    Parameter_Block::Part &part = pb.part[midichannel_];
+    const Parameter_Block &pb = *parameter_block_;
+    const Parameter_Block::Part &part = pb.part[midichannel_];
     Button *btn = buttonThatWasClicked;
     //[/UserbuttonClicked_Pre]
 
@@ -1224,7 +1225,7 @@ void Main_Component::buttonClicked (Button* buttonThatWasClicked)
     {
         //[UserButtonCode_btn_panic] -- add your button handler code here..
         AdlplugAudioProcessor &proc = *proc_;
-        std::unique_lock<std::mutex> lock = proc.acquire_player_nonrt();
+        const std::unique_lock<std::mutex> lock = proc.acquire_player_nonrt();
         if (proc.is_playback_ready())
             proc.panic_nonrt();
         //[/UserButtonCode_btn_panic]
@@ -1244,7 +1245,7 @@ void Main_Component::buttonClicked (Button* buttonThatWasClicked)
     else if (buttonThatWasClicked == btn_emulator.get())
     {
         //[UserButtonCode_btn_emulator] -- add your button handler code here..
-        Component::SafePointer<Main_Component> safe(this);
+        const Component::SafePointer<Main_Component> safe(this);
         select_chip_setting_by_menu([safe](int selection) mutable {
             if (safe != nullptr)
                 safe->apply_chip_menu_choice(selection);
@@ -1330,8 +1331,8 @@ void Main_Component::buttonClicked (Button* buttonThatWasClicked)
 void Main_Component::sliderValueChanged (Slider* sliderThatWasMoved)
 {
     //[UsersliderValueChanged_Pre]
-    Parameter_Block &pb = *parameter_block_;
-    Parameter_Block::Part &part = pb.part[midichannel_];
+    const Parameter_Block &pb = *parameter_block_;
+    const Parameter_Block::Part &part = pb.part[midichannel_];
     Slider *sl = sliderThatWasMoved;
     //[/UsersliderValueChanged_Pre]
 
@@ -1367,17 +1368,13 @@ void Main_Component::sliderValueChanged (Slider* sliderThatWasMoved)
     {
         //[UserSliderCode_sl_finetune34] -- add your slider handling code here..
         AudioParameterInt &p = *part.p_voice2ft;
-        double finetune34 = sl->getValue();
-        int value;
-        if(finetune34 > 0 && finetune34 <= 0.000025)
-            value = +1;
-        else if(finetune34 < 0 && finetune34 >= -0.000025)
-            value = -1;
-        else {
-            value = static_cast<int>(std::lround(finetune34 * (1000.0 / 15.625)));
-            value = (value < -127) ? -127 : value;
-            value = (value > +127) ? +127 : value;
-        }
+        const double finetune34 = sl->getValue();
+        // Either of the two smallest steps, or the slider in units of 15.625
+        // cents held to what the parameter takes.
+        const int value =
+            (finetune34 > 0 && finetune34 <= 0.000025) ? +1 :
+            (finetune34 < 0 && finetune34 >= -0.000025) ? -1 :
+            std::clamp(static_cast<int>(std::lround(finetune34 * (1000.0 / 15.625))), -127, +127);
         p = value;
         //[/UserSliderCode_sl_finetune34]
     }
@@ -1405,15 +1402,15 @@ void Main_Component::sliderValueChanged (Slider* sliderThatWasMoved)
 void Main_Component::comboBoxChanged (ComboBox* comboBoxThatHasChanged)
 {
     //[UsercomboBoxChanged_Pre]
-    ComboBox *cb = comboBoxThatHasChanged;
-    Parameter_Block &pb = *parameter_block_;
-    Parameter_Block::Part &part = pb.part[midichannel_];
+    const ComboBox *cb = comboBoxThatHasChanged;
+    const Parameter_Block &pb = *parameter_block_;
+    const Parameter_Block::Part &part = pb.part[midichannel_];
     //[/UsercomboBoxChanged_Pre]
 
     if (comboBoxThatHasChanged == cb_program.get())
     {
         //[UserComboBoxCode_cb_program] -- add your combo box handling code here..
-        int selection = comboBoxThatHasChanged->getSelectedId();
+        const int selection = comboBoxThatHasChanged->getSelectedId();
         handle_selected_program(selection);
         //[/UserComboBoxCode_cb_program]
     }
@@ -1445,8 +1442,8 @@ void Main_Component::comboBoxChanged (ComboBox* comboBoxThatHasChanged)
 //[MiscUserCode] You can add your own definitions of your custom methods or any other code here...
 void Main_Component::sliderDragStarted(Slider *slider)
 {
-    Parameter_Block &pb = *parameter_block_;
-    Parameter_Block::Part &part = pb.part[midichannel_];
+    const Parameter_Block &pb = *parameter_block_;
+    const Parameter_Block::Part &part = pb.part[midichannel_];
 
     if (slider == sl_tune12.get()) {
         AudioParameterInt &p = *part.p_tune12;
@@ -1470,8 +1467,8 @@ void Main_Component::sliderDragStarted(Slider *slider)
 
 void Main_Component::sliderDragEnded(Slider *slider)
 {
-    Parameter_Block &pb = *parameter_block_;
-    Parameter_Block::Part &part = pb.part[midichannel_];
+    const Parameter_Block &pb = *parameter_block_;
+    const Parameter_Block::Part &part = pb.part[midichannel_];
 
     if (slider == sl_tune12.get()) {
         AudioParameterInt &p = *part.p_tune12;
@@ -1495,8 +1492,8 @@ void Main_Component::sliderDragEnded(Slider *slider)
 
 void Main_Component::knob_value_changed(Knob *k)
 {
-    Parameter_Block &pb = *parameter_block_;
-    Parameter_Block::Part &part = pb.part[midichannel_];
+    const Parameter_Block &pb = *parameter_block_;
+    const Parameter_Block::Part &part = pb.part[midichannel_];
 
     if (k == kn_mastervol.get()) {
         AudioParameterFloat &p = *pb.p_mastervol;
@@ -1517,8 +1514,8 @@ void Main_Component::knob_value_changed(Knob *k)
 
 void Main_Component::knob_drag_started(Knob *k)
 {
-    Parameter_Block &pb = *parameter_block_;
-    Parameter_Block::Part &part = pb.part[midichannel_];
+    const Parameter_Block &pb = *parameter_block_;
+    const Parameter_Block::Part &part = pb.part[midichannel_];
 
     if (k == kn_mastervol.get()) {
         AudioParameterFloat &p = *pb.p_mastervol;
@@ -1538,8 +1535,8 @@ void Main_Component::knob_drag_started(Knob *k)
 
 void Main_Component::knob_drag_ended(Knob *k)
 {
-    Parameter_Block &pb = *parameter_block_;
-    Parameter_Block::Part &part = pb.part[midichannel_];
+    const Parameter_Block &pb = *parameter_block_;
+    const Parameter_Block::Part &part = pb.part[midichannel_];
 
     if (k == kn_mastervol.get()) {
         AudioParameterFloat &p = *pb.p_mastervol;
@@ -1561,6 +1558,10 @@ void Main_Component::set_instrument_parameters(const Instrument &ins, Notificati
 {
     trace("Update instrument parameters on display");
 
+    // The editors are set through these pointers, by the loop at the end of this
+    // method. The check looks for a write through the array itself, finds none,
+    // and offers a pointee that is const.
+    // NOLINTNEXTLINE(misc-const-correctness)
     Operator_Editor *op_editors[4] =
         { ed_op2.get(), ed_op1.get(), ed_op4.get(), ed_op3.get() };
 
@@ -1576,15 +1577,9 @@ void Main_Component::set_instrument_parameters(const Instrument &ins, Notificati
    sl_tune12->setValue(ins.note_offset1, ntf);
    sl_tune34->setValue(ins.note_offset2, ntf);
 
-   double finetune34;
-   switch (ins.second_voice_detune) {
-   case -1:
-       finetune34 = -0.000025; break;
-   case +1:
-       finetune34 = +0.000025; break;
-   default:
-       finetune34 = ins.second_voice_detune * (15.625 / 1000.0); break;
-   }
+   const double finetune34 = (ins.second_voice_detune == -1) ? -0.000025 :
+                             (ins.second_voice_detune == +1) ? +0.000025 :
+                             ins.second_voice_detune * (15.625 / 1000.0);
    sl_finetune34->setValue(finetune34, ntf);
 
    cb_percussion_key->setSelectedId(ins.percussion_key_number + 1, ntf);
@@ -1594,7 +1589,7 @@ void Main_Component::set_instrument_parameters(const Instrument &ins, Notificati
    for (unsigned op = 0; op < 4; ++op) {
        Operator_Editor *oped = op_editors[op];
        oped->set_operator_parameters(ins, op, ntf);
-       oped->set_operator_enabled(op < 2 || (ins.inst_flags & ADLMIDI_Ins_4op));
+       oped->set_operator_enabled(op < 2 || ((ins.inst_flags & ADLMIDI_Ins_4op) != 0));
    }
 }
 
@@ -1620,7 +1615,7 @@ void Main_Component::on_change_midi_channel(unsigned channel)
     if (channel > 15)
         return;
 
-    unsigned old_channel = midichannel_;
+    const unsigned old_channel = midichannel_;
     if (channel == old_channel)
         return;
 
@@ -1645,7 +1640,7 @@ void Main_Component::on_change_midi_channel(unsigned channel)
 
 void Main_Component::popup_about_dialog()
 {
-    if (dlg_about_)
+    if (dlg_about_ != nullptr)
         return;
 
     DialogWindow::LaunchOptions dlgopts;

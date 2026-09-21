@@ -166,7 +166,7 @@ struct TinySynth
 
         for (unsigned op = 0; op < 4; ++op) {
             std::uint8_t *data = rawData[(op < 2) ? 0 : 1];
-            data += (op & 1) ? 0 : 1;
+            data += ((op & 1) != 0u) ? 0 : 1;
             data[0] = in.operators[op].avekf_20 & 0x3F; //For clearer measurement, disable tremolo and vibrato
             data[2] = in.operators[op].atdec_60;
             data[4] = in.operators[op].susrel_80;

@@ -112,9 +112,9 @@ void Algorithm_Help::paint (Graphics& g)
     //[/UserPrePaint]
 
     {
-        int x = 16, y = 4, width = 120, height = 30;
-        String text (TRANS("FM"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 16, y = 4, width = 120, height = 30;
+        const String text (TRANS("FM"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -124,9 +124,9 @@ void Algorithm_Help::paint (Graphics& g)
     }
 
     {
-        int x = 168, y = 4, width = 120, height = 30;
-        String text (TRANS("AM"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 168, y = 4, width = 120, height = 30;
+        const String text (TRANS("AM"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -136,9 +136,9 @@ void Algorithm_Help::paint (Graphics& g)
     }
 
     {
-        int x = 16, y = 140, width = 120, height = 30;
-        String text (TRANS("FM-FM"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 16, y = 140, width = 120, height = 30;
+        const String text (TRANS("FM-FM"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -148,9 +148,9 @@ void Algorithm_Help::paint (Graphics& g)
     }
 
     {
-        int x = 168, y = 140, width = 120, height = 30;
-        String text (TRANS("AM-FM"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 168, y = 140, width = 120, height = 30;
+        const String text (TRANS("AM-FM"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -160,9 +160,9 @@ void Algorithm_Help::paint (Graphics& g)
     }
 
     {
-        int x = 320, y = 140, width = 120, height = 30;
-        String text (TRANS("FM-AM"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 320, y = 140, width = 120, height = 30;
+        const String text (TRANS("FM-AM"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
@@ -172,9 +172,9 @@ void Algorithm_Help::paint (Graphics& g)
     }
 
     {
-        int x = 472, y = 140, width = 160, height = 30;
-        String text (TRANS("AM-AM"));
-        Colour fillColour = Colours::aliceblue;
+        const int x = 472, y = 140, width = 160, height = 30;
+        const String text (TRANS("AM-AM"));
+        const Colour fillColour = Colours::aliceblue;
         //[UserPaintCustomArguments] Customize the painting arguments here..
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);

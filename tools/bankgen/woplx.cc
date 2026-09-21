@@ -212,7 +212,7 @@ bool Reader::read(const std::string &text, Woplx_Bank &out, std::string &error)
     const auto melodic_count = static_cast<std::uint16_t>(melodic_.size());
     const auto percussion_count = static_cast<std::uint16_t>(percussion_.size());
     WOPLFile_Ptr file(WOPL_Init(melodic_count, percussion_count));
-    if (!file || !file->banks_melodic || !file->banks_percussive)
+    if (!file || (file->banks_melodic == nullptr) || (file->banks_percussive == nullptr))
         return fail("out of memory");
     file->version = 3;
     file->opl_flags = flags_;

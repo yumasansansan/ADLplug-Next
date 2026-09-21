@@ -24,11 +24,11 @@ Buffered_Message read(Simple_Fifo &fifo) noexcept
     Buffered_Message msg;
     unsigned offset = 0;
     const std::uint8_t *header = fifo.read(sizeof msg.header, offset);
-    if (!header)
+    if (header == nullptr)
         return {};
     std::memcpy(&msg.header, header, sizeof msg.header);
     std::uint8_t *body = fifo.read(msg.header.size, offset);
-    if (!body)
+    if (body == nullptr)
         return {};
     msg.body = {body, msg.header.size};
     msg.length = offset;
@@ -47,11 +47,11 @@ Buffered_Message write(Simple_Fifo &fifo, unsigned tag, unsigned size) noexcept
     msg.header = Message_Header{tag, size};
     unsigned offset = 0;
     std::uint8_t *header = fifo.write(sizeof msg.header, offset);
-    if (!header)
+    if (header == nullptr)
         return {};
     std::memcpy(header, &msg.header, sizeof msg.header);
     std::uint8_t *body = fifo.write(size, offset);
-    if (!body)
+    if (body == nullptr)
         return {};
     msg.body = {body, size};
     msg.length = offset;

@@ -46,7 +46,7 @@ void Indicator_NxM::paint(Graphics &g)
     if (rows == 0 || columns == 0)
         return;
 
-    LookAndFeel &lnf = getLookAndFeel();
+    const LookAndFeel &lnf = getLookAndFeel();
     const Colour colour_on = Colour::fromRGBA(0xdf, 0xf0, 0xff, 0xff);
     const Colour colour_off = lnf.findColour(Label::backgroundColourId);
     const Colour colour_outline = Colour::fromRGBA(0x8e, 0x98, 0x9b, 0xff);

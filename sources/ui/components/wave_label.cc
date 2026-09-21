@@ -58,7 +58,7 @@ void Wave_Label::handleAsyncUpdate()
 {
     cancelPendingUpdate();
 
-    Component::BailOutChecker checker(this);
+    const Component::BailOutChecker checker(this);
     listeners_.callChecked(checker, [this](Wave_Label::Listener &l) { l.wave_changed(this); });
 }
 

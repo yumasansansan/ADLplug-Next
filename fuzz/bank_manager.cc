@@ -227,7 +227,7 @@ Instrument instrument_from(Input &input, unsigned choice, const Instrument &held
 
 // The bookkeeping of the banks, on its own: what the plugin holds has to hold
 // together whether or not anybody is told about it.
-void check_slots(AdlplugAudioProcessor &processor, unsigned &lookups_left)
+void check_slots(const AdlplugAudioProcessor &processor, unsigned &lookups_left)
 {
     Bank_Manager &bm = processor.bank_manager();
     const std::array<Bank_Manager::Bank_Info, bank_reserve_size> &infos = bm.bank_infos();
@@ -270,7 +270,7 @@ void check_slots(AdlplugAudioProcessor &processor, unsigned &lookups_left)
 // What the plugin tells the editor has to be what the plugin holds. The
 // notifications go out at the end of the block that handles the messages, so
 // this reads them against the state the same block left behind.
-void check_notification(AdlplugAudioProcessor &processor, const Buffered_Message &msg)
+void check_notification(const AdlplugAudioProcessor &processor, const Buffered_Message &msg)
 {
     Bank_Manager &bm = processor.bank_manager();
     const std::array<Bank_Manager::Bank_Info, bank_reserve_size> &infos = bm.bank_infos();
@@ -326,6 +326,11 @@ void play_block(AdlplugAudioProcessor &processor, unsigned frames, bool check)
 {
     std::array<float, block_size> left {};
     std::array<float, block_size> right {};
+    // The samples are written through this, by the processor the buffer is handed
+    // to. The check looks for a write through the array itself, finds none, and
+    // offers a pointee that is const -- which the buffer could not be given
+    // either, since it refers to the samples to write them.
+    // NOLINTNEXTLINE(misc-const-correctness)
     float *channels[2] {left.data(), right.data()};
     juce::MidiBuffer midi;
     juce::AudioBuffer<float> buffer(channels, 2, static_cast<int>(frames));

@@ -147,7 +147,7 @@ bool Pak_File_Reader::read_dictionary()
             return false;
 
         const auto *name_end = static_cast<const std::uint8_t *>(std::memchr(ptr, 0, left));
-        if (!name_end)
+        if (name_end == nullptr)
             return false;
         const auto name_length = static_cast<std::size_t>(name_end - ptr);
         ent.name.assign(ptr, name_end);

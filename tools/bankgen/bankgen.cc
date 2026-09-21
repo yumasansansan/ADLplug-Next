@@ -115,7 +115,7 @@ class Inputs {
 public:
     std::string read(const fs::path &path)
     {
-        std::ifstream stream(path, std::ios::binary);
+        const std::ifstream stream(path, std::ios::binary);
         if (!stream)
             throw Error(std::format("cannot open {}", path.generic_string()));
         std::ostringstream buffer;
@@ -373,7 +373,7 @@ std::uint16_t milliseconds(std::uint64_t ms)
 // instruments that it edits (Worker::measure()). WOPN banks keep these
 // durations, and take an instrument without any for a blank one. Returns the
 // number of instruments that make no sound.
-unsigned measure(WOPNFile &file)
+unsigned measure(const WOPNFile &file)
 {
     unsigned silent = 0;
     const auto measure_bank = [&silent](WOPNBank &bank) {

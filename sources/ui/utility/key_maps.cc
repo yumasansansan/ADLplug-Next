@@ -62,7 +62,7 @@ Key_Layout set_key_layout(Midi_Keyboard_Ex &kb, Key_Layout layout, Configuration
     return layout;
 }
 
-Key_Layout load_key_configuration(Midi_Keyboard_Ex &kb, Configuration &conf)
+Key_Layout load_key_configuration(Midi_Keyboard_Ex &kb, const Configuration &conf)
 {
     const Key_Layout layout = key_layout_of_name(conf.get_string("piano", "layout", key_layout_names[0]));
     const std::string keymap_key = std::string("keymap:") + name_of_key_layout(layout);
@@ -97,7 +97,7 @@ const char *name_of_key_layout(Key_Layout layout)
 
 Key_Layout key_layout_of_name(const char *name)
 {
-    for (std::size_t i = 0; name && i < key_layout_names.size(); ++i) {
+    for (std::size_t i = 0; (name != nullptr) && i < key_layout_names.size(); ++i) {
         if (std::strcmp(name, key_layout_names[i]) == 0)
             return static_cast<Key_Layout>(i);
     }

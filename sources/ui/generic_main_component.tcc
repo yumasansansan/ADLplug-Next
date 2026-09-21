@@ -81,6 +81,12 @@ template <class T>
 Generic_Main_Component<T>::~Generic_Main_Component()
 {
     // The dialogs act on this component; do not leave them behind.
+    //
+    // Each is deleted through this pointer. The language allows deleting through
+    // a pointer to const, and the check counts it as no write and offers a
+    // pointee that is const; ending an object is the largest change there is, so
+    // the pointee is not const here.
+    // NOLINTNEXTLINE(misc-const-correctness)
     for (DialogWindow *dialog : {dlg_new_program_.getComponent(), dlg_edit_program_.getComponent(),
                                  dlg_about_.getComponent(), dlg_bank_information_.getComponent()})
         delete dialog;
@@ -93,7 +99,7 @@ Generic_Main_Component<T>::~Generic_Main_Component()
 template <class T>
 void Generic_Main_Component<T>::setup_generic_components()
 {
-    Configuration &conf = *conf_;
+    const Configuration &conf = *conf_;
     const Parameter_Block &pb = *parameter_block_;
 
     set_default_info(self()->lbl_info->getText());
@@ -331,7 +337,7 @@ void Generic_Main_Component<T>::receive_instrument(Bank_Id bank, unsigned pgm, c
 {
     assert(pgm < 128);
 
-    const unsigned insno = (pgm & 127) + (bank.percussive ? 128 : 0);
+    const unsigned insno = (pgm & 127) + ((bank.percussive != 0u) ? 128 : 0);
     const std::uint32_t psid = bank.pseudo_id();
 
     trace("Receive instrument %u:%u:%u", bank.msb, bank.lsb, insno);
@@ -381,7 +387,7 @@ void Generic_Main_Component<T>::receive_selection(unsigned part, Bank_Id bank, s
     if (part >= midiprogram_.size())
         return;
 
-    const std::uint32_t selection = (bank.pseudo_id() << 8) | (pgm & 127u) | (bank.percussive ? 128u : 0u);
+    const std::uint32_t selection = (bank.pseudo_id() << 8) | (pgm & 127u) | ((bank.percussive != 0u) ? 128u : 0u);
     midiprogram_[part] = selection;
 
     if (part == midichannel_) {
@@ -424,7 +430,7 @@ void Generic_Main_Component<T>::update_instrument_choices()
                 ins_sid = std::format("{:c}{:03d} {}", kind, i & 127, name_view(ins.name));
             else {
                 const Midi_Program_Ex *ex = db.find_ex(msb, lsb, i);
-                const char *name = ex ? ex->name : (i < 128) ? db.inst(i) : db.perc(i & 127).name;
+                const char *name = (ex != nullptr) ? ex->name : (i < 128) ? db.inst(i) : db.perc(i & 127).name;
                 ins_sid = std::format("{:c}{:03d} {}", kind, i & 127, name);
             }
 
@@ -479,7 +485,7 @@ void Generic_Main_Component<T>::handle_selected_program(int selection)
 template <class T>
 void Generic_Main_Component<T>::handle_edit_program()
 {
-    if (dlg_edit_program_)
+    if (dlg_edit_program_ != nullptr)
         return;
 
     const std::uint32_t program = midiprogram_[midichannel_];
@@ -553,7 +559,7 @@ void Generic_Main_Component<T>::finish_add_program(int selection)
 
     switch (selection) {
     case 1: {
-        if (dlg_new_program_)
+        if (dlg_new_program_ != nullptr)
             return;
 
         auto editor = std::make_unique<New_Program_Editor>();
@@ -850,10 +856,10 @@ void Generic_Main_Component<T>::finish_load_bank(int selection)
             if (safe == nullptr || file == File())
                 return;
             safe->change_bank_directory(file.getParentDirectory());
-            int format = 0;
 #if defined(ADLPLUG_OPL3)
-            if (file.hasFileExtension(".sbi"))
-                format = 1;
+            const int format = file.hasFileExtension(".sbi") ? 1 : 0;
+#else
+            const int format = 0;
 #endif
             safe->load_single_instrument(static_cast<std::uint32_t>(program_selection - 1), file, format);
         });
@@ -1311,13 +1317,13 @@ void Generic_Main_Component<T>::textEditorTextChanged(TextEditor &editor)
 }
 
 template <class T>
-void Generic_Main_Component<T>::handleNoteOn(MidiKeyboardState *, int channel, int note, float velocity)
+void Generic_Main_Component<T>::handleNoteOn(MidiKeyboardState * /*state*/, int channel, int note, float velocity)
 {
     write_midi_to_processor(MidiMessage::noteOn(channel, note, velocity));
 }
 
 template <class T>
-void Generic_Main_Component<T>::handleNoteOff(MidiKeyboardState *, int channel, int note, float velocity)
+void Generic_Main_Component<T>::handleNoteOff(MidiKeyboardState * /*state*/, int channel, int note, float velocity)
 {
     write_midi_to_processor(MidiMessage::noteOff(channel, note, velocity));
 }
@@ -1332,7 +1338,7 @@ void Generic_Main_Component<T>::focusGained([[maybe_unused]] FocusChangeType cau
 template <class T>
 void Generic_Main_Component<T>::globalFocusChanged(Component *component)
 {
-    if (ComponentPeer *peer = getPeer(); peer && component == &peer->getComponent())
+    if (ComponentPeer *peer = getPeer(); (peer != nullptr) && component == &peer->getComponent())
         grabKeyboardFocus();
 }
 

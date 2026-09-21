@@ -135,8 +135,8 @@ public:
 
     void textEditorTextChanged(TextEditor &editor) override;
 
-    void handleNoteOn(MidiKeyboardState *, int channel, int note, float velocity) override;
-    void handleNoteOff(MidiKeyboardState *, int channel, int note, float velocity) override;
+    void handleNoteOn(MidiKeyboardState * /*state*/, int channel, int note, float velocity) override;
+    void handleNoteOff(MidiKeyboardState * /*state*/, int channel, int note, float velocity) override;
 
     void focusGained(FocusChangeType cause) override;
     void globalFocusChanged(Component *component) override;

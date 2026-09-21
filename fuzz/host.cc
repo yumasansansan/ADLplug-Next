@@ -144,6 +144,11 @@ void play_block(AdlplugAudioProcessor &processor, std::vector<float> &left,
 {
     std::fill_n(left.begin(), frames, 0.0f);
     std::fill_n(right.begin(), frames, 0.0f);
+    // The samples are written through this, by the processor the buffer is handed
+    // to. The check looks for a write through the array itself, finds none, and
+    // offers a pointee that is const -- which the buffer could not be given
+    // either, since it refers to the samples to write them.
+    // NOLINTNEXTLINE(misc-const-correctness)
     float *channels[2] {left.data(), right.data()};
     juce::AudioBuffer<float> buffer(channels, 2, static_cast<int>(frames));
 
@@ -179,6 +184,11 @@ void play_block_of_channels(AdlplugAudioProcessor &processor, std::vector<float>
     std::fill_n(left.begin(), frames, untouched);
     std::fill_n(right.begin(), frames, untouched);
 
+    // The samples are written through this, by the processor the buffer is handed
+    // to. The check looks for a write through the array itself, finds none, and
+    // offers a pointee that is const -- which the buffer could not be given
+    // either, since it refers to the samples to write them.
+    // NOLINTNEXTLINE(misc-const-correctness)
     float *pointers[2] {nowhere ? nullptr : left.data(), nowhere ? nullptr : right.data()};
     juce::AudioBuffer<float> buffer(pointers, static_cast<int>(channels), static_cast<int>(frames));
     processor.processBlock(buffer, midi);

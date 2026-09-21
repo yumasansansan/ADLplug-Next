@@ -29,13 +29,9 @@ inline void Vu_Monitor::release(double t)
 
 inline double Vu_Monitor::process(double x)
 {
-    double y;
-    double ax = fabs(x);
-    double p = p_;
-    if (ax > mem_)
-        y = ax;
-    else
-        y = p * mem_ + (1.0 - p) * ax;
+    const double ax = fabs(x);
+    const double p = p_;
+    const double y = (ax > mem_) ? ax : p * mem_ + (1.0 - p) * ax;
     mem_ = y;
     return y;
 }

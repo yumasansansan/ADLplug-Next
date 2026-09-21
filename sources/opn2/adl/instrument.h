@@ -107,7 +107,7 @@ struct Bank_Id : OPN2_BankId
     constexpr Bank_Id() noexcept
         : OPN2_BankId{0, 0xff, 0xff} {}
     constexpr Bank_Id(std::uint8_t bank_msb, std::uint8_t bank_lsb, bool is_percussive) noexcept
-        : OPN2_BankId{is_percussive, bank_msb, bank_lsb} {}
+        : OPN2_BankId{static_cast<OPN2_UInt8>(is_percussive), bank_msb, bank_lsb} {}
     // A bank the library can hold: it numbers one with two seven-bit halves and
     // refuses anything else, so a number out of that range is no bank -- the id
     // of an empty slot, which fills both halves, among them. The numbers come

@@ -29,15 +29,15 @@ struct Dc_Filter {
 
 inline void Dc_Filter::cutoff(double f)
 {
-    double wn = std::numbers::pi_v<double> * f;
-    double b0 = b0_ = 1.0 / (1.0 + wn);
+    const double wn = std::numbers::pi_v<double> * f;
+    const double b0 = b0_ = 1.0 / (1.0 + wn);
     p_ = (1.0 - wn) * b0;
 }
 
 inline double Dc_Filter::process(double in)
 {
     in *= b0_;
-    double out = (in - last_in_) + p_ * last_out_;
+    const double out = (in - last_in_) + p_ * last_out_;
     last_in_ = in;
     last_out_ = out;
     return out;
