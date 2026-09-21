@@ -15,9 +15,13 @@
 #include "resources.h"
 #include "utility/pak.h"
 // Two of the library's emulator cores, to play a rhythm-mode drum on directly:
-// there is no bank of one here, and the registers say it in five writes.
+// there is no bank of one here, and the registers say it in five writes. The
+// DOSBox core is in every build (cmake/ADLMIDI.cmake), and the Nuked one is
+// there when the build has it (tests/CMakeLists.txt).
 #include "chips/dosbox_opl3.h"
+#if defined(ADLPLUG_TESTS_HAVE_NUKED_OPL3)
 #include "chips/nuked_opl3.h"
+#endif
 #include "JuceHeader.h"
 #include <algorithm>
 #include <cstddef>
@@ -180,6 +184,8 @@ ADLPLUG_TEST(rhythm_mode_drums_are_panned)
     // the chip does.
     DosBoxOPL3 dosbox;
     check_rhythm_panning(dosbox);
+#if defined(ADLPLUG_TESTS_HAVE_NUKED_OPL3)
     NukedOPL3 nuked;
     check_rhythm_panning(nuked);
+#endif
 }

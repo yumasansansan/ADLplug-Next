@@ -12,6 +12,8 @@ The measurement, a rhythm-mode bass drum, snare drum and tom-tom keyed on one at
 
 The drums are summed by the channel whose operators make them now -- the bass drum on this channel, the hi-hat and the snare drum on the next, the tom-tom and the top cymbal on the one after, which is where the chip has them -- and each sum leaves through that channel's panning. The same measurement after: 5758 and 5758, 5758 and 0, 8144 and 0, which is Nuked OPL3's pattern to the sample the two cores differ by. OPL2 mode is untouched: there is no panning there, and the sum goes out as it did. The note at the top of the file goes with the fault it named.
 
+The three sums are doubled by multiplying rather than by shifting left. The one sum this replaced was doubled with a shift, and shifting a negative value left is undefined -- which a sum of operator outputs is as often as not. Nothing reached it before, rhythm mode having had no test; the test this patch brings does, and the undefined-behaviour sanitizer reports it on the first drum. It is the same fault, and takes the same fix, as the ones already patched in this library's other cores.
+
 This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
 
 diff --git a/src/chips/dosbox/dbopl.cpp b/src/chips/dosbox/dbopl.cpp
@@ -34,7 +36,7 @@ diff --git a/src/chips/dosbox/dbopl.cpp b/src/chips/dosbox/dbopl.cpp
  	Bit32s mod = (Bit32u)((old[0] + old[1])) >> feedback;
  	old[0] = old[1];
  	old[1] = static_cast<Bit32u>(Op(0)->GetSample( mod ));
-@@ -881,34 +880,46 @@ INLINE void Channel::GeneratePercussion( Chip* chip, Bit32s* output ) {
+@@ -881,34 +880,48 @@ INLINE void Channel::GeneratePercussion( Chip* chip, Bit32s* output ) {
  	Bit32u c5 = static_cast<Bit32u>(Op(5)->ForwardWave());
  	Bit32u phaseBit = (((c2 & 0x88) ^ ((c2<<5) & 0x80)) | ((c5 ^ (c5<<2)) & 0x20)) ? 0x02 : 0x00;
  
@@ -66,17 +68,21 @@ diff --git a/src/chips/dosbox/dbopl.cpp b/src/chips/dosbox/dbopl.cpp
  	if ( !ENV_SILENT( tcVol ) ) {
  		Bit32u tcIndex = (1 + phaseBit) << 8;
 -		sample += static_cast<Bit32u>(Op(5)->GetWave( tcIndex, tcVol ));
-+		sampleLast += static_cast<Bit32u>(Op(5)->GetWave( tcIndex, tcVol ));
- 	}
- 	sample <<= 1;
+-	}
+-	sample <<= 1;
 -	// if ( opl3Mode ) {
 -	output[0] += sample;
 -	output[1] += sample;
 -	// } else {
 -	// 	output[0] += sample;
 -	// }
-+	sampleNext <<= 1;
-+	sampleLast <<= 1;
++		sampleLast += static_cast<Bit32u>(Op(5)->GetWave( tcIndex, tcVol ));
++	}
++	//Twice as loud, by multiplying: the sum is a signed value that can be
++	//negative, and shifting one of those left is undefined.
++	sample *= 2;
++	sampleNext *= 2;
++	sampleLast *= 2;
 +	if ( opl3Mode ) {
 +		//Each drum is panned by the channel whose operators make it, the way
 +		//every other sound of the chip is panned by its own channel.

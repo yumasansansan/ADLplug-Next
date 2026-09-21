@@ -119,6 +119,12 @@ target_compile_definitions(ADLplug_unit_tests PRIVATE
 if(ADLplug_CHIP STREQUAL "OPL3")
   target_link_libraries(ADLplug_unit_tests PRIVATE wopl ADLMIDI_static)
   target_include_directories(ADLplug_unit_tests SYSTEM PRIVATE "${PROJECT_SOURCE_DIR}/thirdparty/libADLMIDI/src")
+  # The test of rhythm-mode panning plays on the emulator cores themselves. The
+  # DOSBox core is in every build and the Nuked one is what a build may leave
+  # out (cmake/Cores.cmake), so the test is told whether it is there.
+  if(USE_NUKED_EMULATOR)
+    target_compile_definitions(ADLplug_unit_tests PRIVATE ADLPLUG_TESTS_HAVE_NUKED_OPL3)
+  endif()
 else()
   target_link_libraries(ADLplug_unit_tests PRIVATE wopn OPNMIDI_static)
 endif()
