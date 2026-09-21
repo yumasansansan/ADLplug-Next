@@ -14,9 +14,16 @@
 #include "adl/wopx_file.h"
 #include "resources.h"
 #include "utility/pak.h"
+// Two of the library's emulator cores, to play a rhythm-mode drum on directly:
+// there is no bank of one here, and the registers say it in five writes.
+#include "chips/dosbox_opl3.h"
+#include "chips/nuked_opl3.h"
 #include "JuceHeader.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -94,4 +101,85 @@ ADLPLUG_TEST(mt32_defaults_in_state)
     PropertySet old = gp.to_properties();
     old.removeValue("mt32_defaults");
     CHECK(!Instrument_Global_Parameters::from_properties(old).mt32_defaults);
+}
+
+namespace {
+
+struct Peaks { int left; int right; };
+
+// Keys the given rhythm-mode drum on, with the panning bits of every rhythm
+// channel set to `bits` and the soft panning of the library to `soft_pan`, and
+// returns the peak of each output.
+Peaks rhythm_peaks(OPLChipBase &chip, unsigned key, unsigned bits, unsigned soft_pan)
+{
+    chip.setRate(44100);
+    chip.reset();
+    chip.writeReg(0x105, 0x01);  // OPL3 mode, which is where the panning is
+    chip.writeReg(0x01, 0x20);
+    // The operators of channels 6, 7 and 8, which are the ones rhythm mode plays.
+    for (const unsigned op : {0x12u, 0x15u, 0x13u, 0x16u, 0x14u, 0x17u}) {
+        chip.writeReg(static_cast<std::uint16_t>(0x20 + op), 0x21);  // sustaining, multiple one
+        chip.writeReg(static_cast<std::uint16_t>(0x40 + op), 0x00);  // full level
+        chip.writeReg(static_cast<std::uint16_t>(0x60 + op), 0xf0);  // fastest attack, slowest decay
+        chip.writeReg(static_cast<std::uint16_t>(0x80 + op), 0x00);  // full sustain
+        chip.writeReg(static_cast<std::uint16_t>(0xe0 + op), 0x00);  // sine
+    }
+    for (unsigned channel = 6; channel <= 8; ++channel) {
+        chip.writeReg(static_cast<std::uint16_t>(0xa0 + channel), 0x40);
+        chip.writeReg(static_cast<std::uint16_t>(0xb0 + channel), 0x0d);  // block three, no key on
+        chip.writeReg(static_cast<std::uint16_t>(0xc0 + channel), static_cast<std::uint8_t>(bits));
+        chip.writePan(static_cast<std::uint16_t>(0xc0 + channel), static_cast<std::uint8_t>(soft_pan));
+    }
+    chip.writeReg(0xbd, 0x20);  // rhythm mode, and then the drum keyed on: a
+    chip.writeReg(0xbd, static_cast<std::uint8_t>(0x20 | key));  // rhythm key is here, not in 0xb0
+
+    constexpr std::size_t frames = 2048;
+    std::vector<std::int16_t> out(2 * frames, 0);
+    chip.generate(out.data(), frames);
+
+    Peaks peaks {0, 0};
+    for (std::size_t i = 0; i < frames; ++i) {
+        peaks.left = std::max(peaks.left, std::abs(static_cast<int>(out[2 * i])));
+        peaks.right = std::max(peaks.right, std::abs(static_cast<int>(out[2 * i + 1])));
+    }
+    return peaks;
+}
+
+void check_rhythm_panning(OPLChipBase &chip)
+{
+    // The bass drum is made by the operators of channel 6, the snare drum by one
+    // of channel 7's, and the tom-tom by one of channel 8's.
+    for (const unsigned key : {0x10u, 0x08u, 0x04u}) {
+        const Peaks both = rhythm_peaks(chip, key, 0x30, 64);
+        const Peaks left_bit = rhythm_peaks(chip, key, 0x10, 64);
+        const Peaks hard_left = rhythm_peaks(chip, key, 0x30, 0);
+
+        // Heard from both outputs, equally, when both bits say so.
+        CHECK(both.left > 0);
+        CHECK(both.left == both.right);
+        // The right output silent when the right bit is clear, the left one as
+        // loud as it was.
+        CHECK(left_bit.left == both.left);
+        CHECK(left_bit.right == 0);
+        // Panning hard left is the library's own, and it takes the whole of the
+        // sound to the left output: the pan law takes a part of it away at centre.
+        CHECK(hard_left.right == 0);
+        CHECK(hard_left.left > both.left);
+    }
+}
+
+}  // namespace
+
+ADLPLUG_TEST(rhythm_mode_drums_are_panned)
+{
+    // A drum of rhythm mode is heard from the output its channel says, as every
+    // other sound of the chip is. The DOSBox core summed the five drums into both
+    // outputs whatever their channels said, which is what
+    // patches/libADLMIDI/0014-dosbox-a-rhythm-mode-drum-is-panned-by-its-own-channel.patch
+    // fixes; the Nuked core, written from a die scan of the chip, is here as what
+    // the chip does.
+    DosBoxOPL3 dosbox;
+    check_rhythm_panning(dosbox);
+    NukedOPL3 nuked;
+    check_rhythm_panning(nuked);
 }

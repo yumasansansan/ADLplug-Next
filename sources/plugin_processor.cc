@@ -571,19 +571,44 @@ bool AdlplugAudioProcessor::handle_midi(const std::uint8_t *data, unsigned len)
     case 0xc0: {
         if (len < 2)
             break;
+        // The selection of a part is the program the editor shows and the
+        // parameters hold. The sound has already followed the program change --
+        // the player was given the message above -- so what is kept here is the
+        // plugin's own record of it, and it is kept the way the library reads the
+        // message.
+        //
+        // A melodic part is numbered as the message reads: the program is the
+        // program, in the bank the channel's bank select named.
+        //
+        // A drum part is numbered the other way about. The library takes the
+        // program number for the kit, which is a percussive bank of its own, and
+        // the key of each note for the program in that bank; the bank select of
+        // the channel it does not read at all. So the program number goes to the
+        // bank here, and the program stays what it was: on a percussive bank it
+        // is the key being edited, and no program change says anything about
+        // which key that is. That is the same numbering the other way round,
+        // where a drum part tells the library its selection by sending the bank
+        // of it as a program number (send_program_change_from_selection).
+        //
+        // In XG mode the library reads the number as the SFX kit instead, 128
+        // banks further on, when the bank select MSB of the channel is 0x7e. No
+        // bank id can say that: a bank is numbered by two seven-bit halves, and
+        // the library refuses an id outside them, so the SFX kits a bank file
+        // holds are past what any id of the library's own reaches. Neither is the
+        // plugin told which reset the library last acted on. A part on an SFX kit
+        // therefore shows the drum kit of the same number.
+        Selection &sel = selection_[channel];
         const bool is_drum = channel == 9;
         if (!is_drum) {
-            Selection &sel = selection_[channel];
             sel.program = static_cast<std::uint8_t>(data[1] & 0x7f);
             sel.bank.percussive = 0u;
             sel.bank.msb = midi_bank_msb_[channel];
             sel.bank.lsb = midi_bank_lsb_[channel];
         }
         else {
-            //--- TODO percussion banks/XG banks?
-            // selection_[channel].bank.percussive = true;
-            // selection_[channel].bank.msb = 0;
-            // selection_[channel].bank.lsb = data[1];
+            sel.bank.percussive = 1u;
+            sel.bank.msb = 0u;
+            sel.bank.lsb = static_cast<std::uint8_t>(data[1] & 0x7f);
         }
         mark_for_notification(Cb_Selection1 + channel);
         set_instrument_parameters_notifying_host(channel);

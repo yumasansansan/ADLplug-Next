@@ -688,7 +688,7 @@ the binaries cannot be described as "GPLv3 only".
 | `thirdparty/OPN2BankEditor`                | GNU GPL v3+ (only example banks are taken from it)         |
 | `sources/opl3/adl/measurer`                | GNU GPL v3+                                                |
 | `sources/opn2/adl/measurer`                | GNU GPL v3+                                                |
-| `patches/libADLMIDI`, `patches/libOPNMIDI` | GNU GPL v3 or later                                        |
+| `patches/libADLMIDI`, `patches/libOPNMIDI` | As the code each one changes, which the patch itself names |
 | `patches/JUCE`                             | GNU AGPL v3, as the code they change                       |
 | `sources/opl3/ui/components/opl3_waves.cc` | GNU LGPL v2.1+                                             |
 | `resources/opn2/LICENSE-DMXOPN2.txt`       | MIT (the license of the DMXOPN2 bank)                      |

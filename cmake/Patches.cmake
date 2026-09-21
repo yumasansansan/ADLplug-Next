@@ -105,6 +105,8 @@ adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0012-a-number-of-chips-the-library-refuses-is-not-one-it-keeps.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0013-a-note-with-one-chip-channel-has-no-second-one-to-read.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0014-dosbox-a-rhythm-mode-drum-is-panned-by-its-own-channel.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-psg-a-noise-table-that-does-not-overflow.patch")
 adlplug_patch("thirdparty/libOPNMIDI"

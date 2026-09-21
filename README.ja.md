@@ -412,7 +412,7 @@ GPLv3 の第 13 条は，GPLv3 の著作物と AGPLv3 の著作物を組み合�
 | `thirdparty/OPN2BankEditor` | GNU GPL v3+（サンプルのバンクだけを取り込んでいます） |
 | `sources/opl3/adl/measurer` | GNU GPL v3+ |
 | `sources/opn2/adl/measurer` | GNU GPL v3+ |
-| `patches/libADLMIDI`，`patches/libOPNMIDI` | GNU GPL v3 以降 |
+| `patches/libADLMIDI`，`patches/libOPNMIDI` | それぞれが変更するコードと同じライセンス（各パッチの先頭に書いてあります） |
 | `patches/JUCE` | 変更する側のコードと同じ GNU AGPL v3 |
 | `sources/opl3/ui/components/opl3_waves.cc` | GNU LGPL v2.1+ |
 | `resources/opn2/LICENSE-DMXOPN2.txt` | MIT（DMXOPN2 バンクのライセンス） |
