@@ -1,0 +1,54 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+Asking which thread this is takes no lock
+
+MessageManager::isThisTheMessageThread() took a std::mutex to compare the calling thread with the one the messages belong to. The question is asked on the audio thread: the VST3 wrapper asks it in JuceVST3EditController::paramChanged() to decide whether it may tell the host of a parameter change straight away or has to leave the value for the next block, and a parameter change is told from the audio callback -- which the documentation of AudioProcessorParameter::Listener says plainly, that many processors change their parameters during their audio callback and a handler must avoid blocking. The thread that is setting the message thread holds that mutex, so the audio thread waits for it.
+
+The id is a std::atomic<Thread::ThreadID> now, as threadWithLock beside it already was, and the asking reads it without a lock. The mutex stays in the one that sets it, where it keeps the platform's part of that work -- the message window on Windows -- apart when two threads do it at once. The noexcept on the asking is honest for the first time: locking a std::mutex can throw, and that function was declared not to.
+
+Two other readers were already reading the id without the mutex, currentThreadHasLockedMessageManager() and getCurrentMessageThread(), so what they were racing against is gone with the same change.
+
+What found it is the realtime sanitizer, in ADLplug-Next's render test, which loads the plugin as a VST3 and sends it a program change: the plugin sets every parameter of a part from the audio callback, the wrapper is told of each, and it asks this question of each.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_events/messages/juce_MessageManager.cpp b/modules/juce_events/messages/juce_MessageManager.cpp
+--- a/modules/juce_events/messages/juce_MessageManager.cpp
++++ b/modules/juce_events/messages/juce_MessageManager.cpp
+@@ -190,8 +190,6 @@ void MessageManager::deregisterBroadcastListener (ActionListener* const listener
+ //==============================================================================
+ bool MessageManager::isThisTheMessageThread() const noexcept
+ {
+-    const std::lock_guard<std::mutex> lock { messageThreadIdMutex };
+-
+     return Thread::getCurrentThreadId() == messageThreadId;
+ }
+ 
+@@ -201,7 +199,7 @@ void MessageManager::setCurrentThreadAsMessageThread()
+ 
+     const std::lock_guard<std::mutex> lock { messageThreadIdMutex };
+ 
+-    if (std::exchange (messageThreadId, thisThread) != thisThread)
++    if (messageThreadId.exchange (thisThread) != thisThread)
+     {
+        #if JUCE_WINDOWS
+         // This is needed on windows to make sure the message window is created by this thread
+diff --git a/modules/juce_events/messages/juce_MessageManager.h b/modules/juce_events/messages/juce_MessageManager.h
+--- a/modules/juce_events/messages/juce_MessageManager.h
++++ b/modules/juce_events/messages/juce_MessageManager.h
+@@ -414,7 +414,12 @@ private:
+ 
+     std::unique_ptr<ActionBroadcaster> broadcaster;
+     std::atomic<bool> quitMessagePosted { false }, quitMessageReceived { false };
+-    Thread::ThreadID messageThreadId;
++    // Which thread the messages belong to. isThisTheMessageThread() is asked
++    // wherever a parameter change is passed on, which JUCE says is done on the
++    // audio thread, so the asking reads this and takes no lock. The mutex below
++    // is held by the one that changes it, and keeps the platform's part of that
++    // work apart when two threads do it at once.
++    std::atomic<Thread::ThreadID> messageThreadId;
+     std::atomic<Thread::ThreadID> threadWithLock;
+     mutable std::mutex messageThreadIdMutex;
+ 

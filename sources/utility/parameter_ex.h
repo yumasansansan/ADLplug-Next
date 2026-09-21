@@ -43,11 +43,11 @@ public:
     // realtime sanitizer said of it (sources/utility/realtime.h).
     void addValueChangedListenerEx(ValueChangedListener *l);
 
-    std::uint32_t getTagEx() const noexcept;
+    [[nodiscard]] std::uint32_t getTagEx() const noexcept;
     void setTagEx(std::uint32_t tag) noexcept;
 
     void setAutomatable(bool automatable);
-    bool isAutomatable() const override;
+    [[nodiscard]] bool isAutomatable() const override;
 
 protected:
     void invoke_value_changed_listeners();

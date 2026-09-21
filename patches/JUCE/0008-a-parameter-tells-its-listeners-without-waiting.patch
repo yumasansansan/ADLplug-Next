@@ -1,0 +1,194 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+A parameter tells its listeners without waiting
+
+AudioProcessorParameter::sendValueChangedMessageToListeners() takes a CriticalSection and holds it while it calls every listener. The documentation of the listener it calls says where the call comes from: "This will be called synchronously when a parameter changes, and many audio processors will change their parameter during their audio callback. This means that not only has your handler code got to be completely thread-safe, but it's also got to be VERY fast, and avoid blocking." The lock asks of the audio thread the one thing that note asks a listener not to do. Whichever thread adds or removes a listener holds that lock, so the audio thread waits for it; and because the callbacks run under the lock, that thread waits for the audio thread in turn. The two gesture notifications take the same lock in the same way.
+
+What found it is the realtime sanitizer, in the tests and the fuzz targets of ADLplug-Next, where a program change sets every parameter of a part from the audio callback: pthread_mutex_lock under GenericScopedLock<CriticalSection>, under sendValueChangedMessageToListeners(), under setValueNotifyingHost().
+
+The list of listeners is not changed in place any more. Adding or removing one makes a new list and publishes it, so a notification always reads a list that nobody is changing, and takes no lock to do it. The lists left behind are freed once no notification is in flight, and the thread that added or removed waits for that before it returns -- which is what keeps the guarantee the lock gave, that a listener is not called after it has been removed and is safe to destroy. A listener that adds or removes one from its own callback would be waiting for itself, and does not wait: no list is ever changed in place, so the one it is reading stands, and nothing is freed while any notification is in flight. Adding and removing still take the lock, against each other.
+
+The counter of notifications in flight and the pointer to the published list are both sequentially consistent, which is what makes the waiting sound: in the one order those operations have, either the change sees the notification's count and waits for it, or that notification reads the pointer after the change published it. A notification can never be left reading a list the change is about to free.
+
+Measured: the same publishing and reclaiming, hammered by twenty thousand add-and-remove rounds against a thread notifying without pause, is clean under the thread sanitizer and under the address sanitizer, and the address sanitizer aborts on a use after free when the waiting is taken out. The realtime sanitizer reports nothing where it reported this.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_audio_processors_headless/processors/juce_AudioProcessorParameter.cpp b/modules/juce_audio_processors_headless/processors/juce_AudioProcessorParameter.cpp
+--- a/modules/juce_audio_processors_headless/processors/juce_AudioProcessorParameter.cpp
++++ b/modules/juce_audio_processors_headless/processors/juce_AudioProcessorParameter.cpp
+@@ -35,6 +35,35 @@
+ namespace juce
+ {
+ 
++namespace
++{
++    // How many notifications this thread is inside, of any parameter. A listener
++    // that adds or removes one from its own callback would be waiting for itself,
++    // so it does not wait: the list it is reading is left alone either way, since
++    // no list is ever changed in place, and is freed once nothing reads any of
++    // them.
++    thread_local int notificationsOnThisThread = 0;
++
++    struct ScopedNotification
++    {
++        explicit ScopedNotification (std::atomic<int>& c) : count (c)
++        {
++            count.fetch_add (1);
++            ++notificationsOnThisThread;
++        }
++
++        ~ScopedNotification()
++        {
++            --notificationsOnThisThread;
++            count.fetch_sub (1);
++        }
++
++        std::atomic<int>& count;
++
++        JUCE_DECLARE_NON_COPYABLE (ScopedNotification)
++    };
++}
++
+ AudioProcessorParameter::~AudioProcessorParameter()
+ {
+    #if JUCE_DEBUG && ! JUCE_DISABLE_AUDIOPROCESSOR_BEGIN_END_GESTURE_CHECKING
+@@ -42,6 +71,23 @@ AudioProcessorParameter::~AudioProcessorParameter()
+     // a corresponding call to endChangeGesture...
+     jassert (! isPerformingGesture);
+    #endif
++
++    delete currentListeners.load();
++}
++
++void AudioProcessorParameter::publishListeners (ListenerArray updated)
++{
++    auto next = std::make_unique<const ListenerArray> (std::move (updated));
++
++    if (auto* previous = currentListeners.exchange (next.release()))
++        retiredListeners.emplace_back (previous);
++
++    if (notificationsOnThisThread == 0)
++        while (notificationsInFlight.load() != 0)
++            Thread::yield();
++
++    if (notificationsInFlight.load() == 0)
++        retiredListeners.clear();
+ }
+ 
+ void AudioProcessorParameter::setParameterIndex (int index) noexcept
+@@ -75,11 +121,12 @@ void AudioProcessorParameter::beginChangeGesture()
+     isPerformingGesture = true;
+    #endif
+ 
+-    ScopedLock lock (listenerLock);
++    const ScopedNotification notification (notificationsInFlight);
+ 
+-    for (int i = listeners.size(); --i >= 0;)
+-        if (auto* l = listeners[i])
+-            l->parameterGestureChanged (getParameterIndex(), true);
++    if (auto* current = currentListeners.load())
++        for (int i = current->size(); --i >= 0;)
++            if (auto* l = current->getUnchecked (i))
++                l->parameterGestureChanged (getParameterIndex(), true);
+ 
+     if (finalListener != nullptr)
+         finalListener->parameterGestureChanged (getParameterIndex(), true);
+@@ -98,11 +145,12 @@ void AudioProcessorParameter::endChangeGesture()
+     isPerformingGesture = false;
+    #endif
+ 
+-    ScopedLock lock (listenerLock);
++    const ScopedNotification notification (notificationsInFlight);
+ 
+-    for (int i = listeners.size(); --i >= 0;)
+-        if (auto* l = listeners[i])
+-            l->parameterGestureChanged (getParameterIndex(), false);
++    if (auto* current = currentListeners.load())
++        for (int i = current->size(); --i >= 0;)
++            if (auto* l = current->getUnchecked (i))
++                l->parameterGestureChanged (getParameterIndex(), false);
+ 
+     if (finalListener != nullptr)
+         finalListener->parameterGestureChanged (getParameterIndex(), false);
+@@ -110,11 +158,12 @@ void AudioProcessorParameter::endChangeGesture()
+ 
+ void AudioProcessorParameter::sendValueChangedMessageToListeners (float newValue)
+ {
+-    ScopedLock lock (listenerLock);
++    const ScopedNotification notification (notificationsInFlight);
+ 
+-    for (int i = listeners.size(); --i >= 0;)
+-        if (auto* l = listeners [i])
+-            l->parameterValueChanged (getParameterIndex(), newValue);
++    if (auto* current = currentListeners.load())
++        for (int i = current->size(); --i >= 0;)
++            if (auto* l = current->getUnchecked (i))
++                l->parameterValueChanged (getParameterIndex(), newValue);
+ 
+     if (finalListener != nullptr)
+         finalListener->parameterValueChanged (getParameterIndex(), newValue);
+@@ -154,13 +203,28 @@ StringArray AudioProcessorParameter::getAllValueStrings() const
+ void AudioProcessorParameter::addListener (AudioProcessorParameter::Listener* newListener)
+ {
+     const ScopedLock sl (listenerLock);
+-    listeners.addIfNotAlreadyThere (newListener);
++
++    ListenerArray updated;
++
++    if (auto* current = currentListeners.load())
++        updated = *current;
++
++    updated.addIfNotAlreadyThere (newListener);
++    publishListeners (std::move (updated));
+ }
+ 
+ void AudioProcessorParameter::removeListener (AudioProcessorParameter::Listener* listenerToRemove)
+ {
+     const ScopedLock sl (listenerLock);
+-    listeners.removeFirstMatchingValue (listenerToRemove);
++
++    auto* current = currentListeners.load();
++
++    if (current == nullptr)
++        return;
++
++    ListenerArray updated (*current);
++    updated.removeFirstMatchingValue (listenerToRemove);
++    publishListeners (std::move (updated));
+ }
+ 
+ int AudioProcessorParameter::getDefaultNumParameterSteps() noexcept
+diff --git a/modules/juce_audio_processors_headless/processors/juce_AudioProcessorParameter.h b/modules/juce_audio_processors_headless/processors/juce_AudioProcessorParameter.h
+--- a/modules/juce_audio_processors_headless/processors/juce_AudioProcessorParameter.h
++++ b/modules/juce_audio_processors_headless/processors/juce_AudioProcessorParameter.h
+@@ -370,10 +370,26 @@ public:
+ 
+ private:
+     //==============================================================================
++    // The listeners are read without taking a lock. A parameter is changed on the
++    // audio thread -- Listener::parameterValueChanged says as much, and asks of a
++    // listener that it be quick and avoid blocking -- and a lock here is a wait
++    // for whichever thread is adding or removing one. So the list is never
++    // changed in place: adding or removing makes a new one and publishes it, a
++    // notification reads the one it finds, and the lists left behind are freed
++    // once no notification is in flight. Waiting for that is done by the thread
++    // that added or removed, which is what keeps a listener from being called
++    // after it has been removed.
++    using ListenerArray = Array<Listener*>;
++
++    /** Publishes a new list of listeners. Called with listenerLock held. */
++    void publishListeners (ListenerArray updated);
++
+     int parameterIndex = -1;
+     int version = 0;
+     CriticalSection listenerLock;
+-    Array<Listener*> listeners;
++    std::atomic<const ListenerArray*> currentListeners { nullptr };
++    std::vector<std::unique_ptr<const ListenerArray>> retiredListeners;
++    std::atomic<int> notificationsInFlight { 0 };
+     Listener* finalListener = nullptr;
+     mutable StringArray valueStrings;
+ 

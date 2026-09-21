@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
+#include <span>
 #include <string_view>
 
 ADLPLUG_TEST(utf8_fitting_length)
@@ -40,6 +41,13 @@ ADLPLUG_TEST(utf8_fitting_length)
     // Stray continuation bytes are not a character to keep whole.
     const char stray[4] = {'\x80', '\x80', '\x80', '\x80'};
     CHECK(utf8_fitting_length(stray, 4) == 4);
+
+    // Text whose end is its own, rather than a terminator's: what is past it is
+    // no part of it, however much room the limit leaves.
+    CHECK(utf8_fitting_length(std::string_view(full, 3), 32) == 3);
+    CHECK(utf8_fitting_length(std::string_view(full, 3), 2) == 2);
+    CHECK(utf8_fitting_length(std::string_view(three), 3) == 1);
+    CHECK(utf8_fitting_length(std::string_view(three), 4) == 4);
 }
 
 ADLPLUG_TEST(name_field)
@@ -105,6 +113,40 @@ ADLPLUG_TEST(name_field_keeps_a_mark_as_a_character)
     // not UTF-8 is one.
     const char wide[4] = {'\xff', '\xfe', 'A', '\0'};
     CHECK(name_from_field(wide) == String::fromUTF8("\xc3\xbf\xc3\xbe" "A"));
+}
+
+ADLPLUG_TEST(name_field_from_bytes)
+{
+    // The audio thread puts a name in a field without a String in between, and
+    // the rule is the one text is read by: UTF-8 as it stands, anything else as
+    // Windows-1252, a character to a byte. Both ways of filling a field agree.
+    const char utf8[] = "ab\xc3\xa9";
+    char from_bytes[8] {};
+    char from_text[8] {};
+    copy_name_bytes_to_field(from_bytes, std::span(utf8, 4));
+    copy_name_to_field(from_text, name_from_field(utf8));
+    CHECK(std::ranges::equal(from_bytes, from_text));
+
+    const char other[] = "ab\xe9";  // the same letter, in Windows-1252
+    char other_bytes[8] {};
+    char other_text[8] {};
+    copy_name_bytes_to_field(other_bytes, std::span(other, 3));
+    copy_name_to_field(other_text, name_from_field(other));
+    CHECK(std::ranges::equal(other_bytes, other_text));
+
+    // What is past a name is not the name. A name of three bytes, in a buffer
+    // that goes on without a terminator, fills a larger field with those three
+    // and with nothing that follows them.
+    const char buffer[8] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'};
+    char field[8] {};
+    copy_name_bytes_to_field(field, std::span(buffer, 3));
+    CHECK(name_view(field) == "abc");
+
+    // A character the field would cut is left out here as well.
+    const char wide[] = "ab\xe3\x81\x82";
+    char small[4] {};
+    copy_name_bytes_to_field(small, std::span(wide, 5));
+    CHECK(name_view(small) == "ab");
 }
 
 ADLPLUG_TEST(name_field_holds_its_own_text)

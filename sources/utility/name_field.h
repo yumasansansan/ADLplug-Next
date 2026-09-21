@@ -18,6 +18,23 @@
 // The names of banks and instruments are fixed-size fields of UTF-8 text,
 // zero-filled, and terminated only when shorter than the field.
 
+// The length of text that was cut to where it ends, less a character the cut
+// would split. Reads only the bytes of `text`.
+inline std::size_t length_without_a_cut_character(std::string_view text) noexcept
+{
+    const std::size_t length = text.size();
+
+    // Go back to the first byte of the last character, and see if it is whole.
+    std::size_t start = length;
+    while (start > 0 && length - start < 3 && (static_cast<unsigned char>(text[start - 1]) & 0xc0) == 0x80)
+        --start;
+    if (start == 0)
+        return length;
+    const auto lead = static_cast<unsigned char>(text[start - 1]);
+    const std::size_t size = (lead >= 0xf0) ? 4 : (lead >= 0xe0) ? 3 : (lead >= 0xc0) ? 2 : 1;
+    return (start - 1 + size > length) ? start - 1 : length;
+}
+
 // The length of the text in the first `max` bytes of a UTF-8 string, less a
 // character which the limit would cut. Reads no further than `max` bytes, and
 // no further than the terminator of a shorter string: nothing is computed past
@@ -29,16 +46,18 @@ inline std::size_t utf8_fitting_length(const char *text, std::size_t max) noexce
         ++length;
     if (length < max)
         return length;
+    return length_without_a_cut_character(std::string_view(text, length));
+}
 
-    // Go back to the first byte of the last character, and see if it is whole.
-    std::size_t start = length;
-    while (start > 0 && length - start < 3 && (static_cast<unsigned char>(text[start - 1]) & 0xc0) == 0x80)
-        --start;
-    if (start == 0)
-        return length;
-    const auto lead = static_cast<unsigned char>(text[start - 1]);
-    const std::size_t size = (lead >= 0xf0) ? 4 : (lead >= 0xe0) ? 3 : (lead >= 0xc0) ? 2 : 1;
-    return (start - 1 + size > length) ? start - 1 : length;
+// The same for text whose end is its own rather than a terminator's. What is
+// past a name is not the name: bytes that were cut from it are still there to
+// read, and reading `max` of them would take a character's remains back in --
+// which is what the cutting was for.
+inline std::size_t utf8_fitting_length(std::string_view text, std::size_t max) noexcept
+{
+    if (text.size() <= max)
+        return text.size();
+    return length_without_a_cut_character(text.substr(0, max));
 }
 
 // The text of a field.
@@ -101,7 +120,7 @@ inline void copy_name_bytes_to_field(std::span<char> field, std::span<const char
     if (text.empty())
         return;
     if (CharPointer_UTF8::isValidString(text.data(), static_cast<int>(text.size()))) {
-        std::copy_n(text.data(), utf8_fitting_length(text.data(), field.size()), field.begin());
+        std::copy_n(text.begin(), utf8_fitting_length(text, field.size()), field.begin());
         return;
     }
 
