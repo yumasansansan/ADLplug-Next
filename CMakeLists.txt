@@ -109,7 +109,8 @@ option(ADLplug_GREYZONE_BANKS "Include the instrument banks of the grey zone, fo
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
 set(ADLplug_ARCH "baseline" CACHE STRING "Instruction set of x86-64 builds (baseline, avx2)")
-set(ADLplug_SANITIZERS "" CACHE STRING "Sanitizers to build with, comma-separated (address, undefined, vptr, thread)")
+set(ADLplug_SANITIZERS "" CACHE STRING "Sanitizers to build with, comma-separated (address, undefined, vptr, thread, memory)")
+set(ADLplug_MSAN_LIBRARIES "" CACHE PATH "Prefix of the libraries a memory-sanitizer build needs and no system ships: a C++ standard library built with that sanitizer, and a libFuzzer built against it (ci/msan-libraries.sh writes them)")
 
 # Applied per-target rather than globally: these variables are inherited by
 # add_subdirectory() dependencies, and libADLMIDI/libOPNMIDI build their own
@@ -241,7 +242,7 @@ endif()
 # Sanitizers
 #
 # ADLplug_SANITIZERS names the sanitizers of a build, comma-separated (address,
-# undefined, vptr, thread), and gives them to every target: ADLplug-Next's own
+# undefined, vptr, thread, memory), and gives them to every target: ADLplug-Next's own
 # code, JUCE, libADLMIDI and libOPNMIDI. The emulator cores are part of what
 # the plugins ship, so a mistake of memory or an undefined operation in them is
 # the plugin's. Undefined behaviour stops the program
@@ -305,9 +306,10 @@ if(ADLplug_SANITIZERS)
   endif()
   string(REPLACE "," ";" ADLplug_SANITIZER_LIST "${ADLplug_SANITIZERS}")
   foreach(sanitizer IN LISTS ADLplug_SANITIZER_LIST)
-    if(NOT sanitizer MATCHES "^(address|undefined|vptr|thread)$")
+    if(NOT sanitizer MATCHES "^(address|undefined|vptr|thread|memory)$")
       message(FATAL_ERROR
-        "ADLplug_SANITIZERS names '${sanitizer}', which is not one of address, undefined, vptr, thread.")
+        "ADLplug_SANITIZERS names '${sanitizer}', which is not one of address, undefined, vptr, "
+        "thread, memory.")
     endif()
   endforeach()
   if("address" IN_LIST ADLplug_SANITIZER_LIST AND "thread" IN_LIST ADLplug_SANITIZER_LIST)
@@ -340,6 +342,92 @@ if(ADLplug_SANITIZERS)
     if(NOT ADLplug_SANITIZER_LIST)
       message(FATAL_ERROR "ADLplug_SANITIZERS names no sanitizer that this build can have besides vptr.")
     endif()
+  endif()
+  # memory reads what the others cannot: a value that was never written. It sees
+  # only the code it has instrumented, and memory written by code it has not seen
+  # is memory it believes was never written, so every read of that is reported.
+  # That makes the C++ standard library part of what has to be instrumented, and
+  # no system ships one that is: ADLplug_MSAN_LIBRARIES names a prefix holding
+  # libc++ built with the sanitizer, which ci/msan-libraries.sh writes, and the
+  # build compiles and links against that in place of the system's library. The
+  # same prefix holds a libFuzzer built against it, which the fuzz targets link in
+  # place of the compiler's own (fuzz/CMakeLists.txt says why).
+  #
+  # Those two libraries are linked statically, which is the one place this project
+  # links a standard library that way -- and the reason is not size. A shared
+  # instrumented libc++ makes the sanitizer's own report walk the stack into
+  # itself until the stack runs out, so that a real finding is answered with
+  # "stack-overflow ... nested bug in the same thread, aborting" and never named
+  # (measured, with the static library and with fast_unwind_on_fatal=1 as the two
+  # ways round it). Nothing of such a build is shipped or installed, so what the
+  # system's library gains later reaches nothing that leaves here.
+  #
+  # Origins are tracked to the fullest, so a report says where the value it read
+  # was made and through which stores it travelled. Without that it names the read
+  # alone, which is where the value arrived rather than where it came from.
+  if("memory" IN_LIST ADLplug_SANITIZER_LIST)
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+      message(FATAL_ERROR
+        "ADLplug_SANITIZERS names memory, which Clang has a memory sanitizer for on Linux alone. "
+        "The *-msan presets are for Linux.")
+    endif()
+    foreach(other IN ITEMS address thread)
+      if("${other}" IN_LIST ADLplug_SANITIZER_LIST)
+        message(FATAL_ERROR
+          "ADLplug_SANITIZERS names both memory and ${other}, which cannot be built together: "
+          "each keeps a shadow of all of memory in its own way.")
+      endif()
+    endforeach()
+    if(NOT ADLplug_MSAN_LIBRARIES)
+      message(FATAL_ERROR
+        "ADLplug_SANITIZERS names memory, which needs a C++ standard library built with it: "
+        "reads of what the system's library wrote would be reported as reads of what was never "
+        "written. Give ADLplug_MSAN_LIBRARIES the prefix of one, which ci/msan-libraries.sh "
+        "writes.")
+    endif()
+    foreach(part IN ITEMS lib/libc++.a lib/libc++abi.a lib/libFuzzer.a include/c++/v1/version
+                          llvm.txt)
+      if(NOT EXISTS "${ADLplug_MSAN_LIBRARIES}/${part}")
+        message(FATAL_ERROR
+          "ADLplug_MSAN_LIBRARIES is '${ADLplug_MSAN_LIBRARIES}', which holds no ${part}. "
+          "ci/msan-libraries.sh writes a prefix that holds all of them.")
+      endif()
+    endforeach()
+    # And they have to be this compiler's. A standard library of a different LLVM
+    # than the compiler that reads its headers is a thing to find out here rather
+    # than in whatever it makes of a template: llvm.txt says which compiler built
+    # them and from which sources, both asked of that compiler.
+    file(STRINGS "${ADLplug_MSAN_LIBRARIES}/llvm.txt" ADLplug_MSAN_BUILT_BY LIMIT_COUNT 1)
+    string(REGEX MATCH "^[^ ]+" ADLplug_MSAN_LIBRARY_VERSION "${ADLplug_MSAN_BUILT_BY}")
+    string(REGEX REPLACE "^[^ ]+ " "" ADLplug_MSAN_LIBRARY_SOURCES "${ADLplug_MSAN_BUILT_BY}")
+    string(REGEX MATCH "^[0-9]+" ADLplug_MSAN_LIBRARY_MAJOR "${ADLplug_MSAN_LIBRARY_VERSION}")
+    string(REGEX MATCH "^[0-9]+" ADLplug_MSAN_COMPILER_MAJOR "${CMAKE_CXX_COMPILER_VERSION}")
+    if(NOT ADLplug_MSAN_LIBRARY_MAJOR STREQUAL ADLplug_MSAN_COMPILER_MAJOR)
+      message(FATAL_ERROR
+        "ADLplug_MSAN_LIBRARIES holds libraries built by Clang ${ADLplug_MSAN_LIBRARY_VERSION}, "
+        "and this build's compiler is ${CMAKE_CXX_COMPILER_VERSION} (${CMAKE_CXX_COMPILER}). "
+        "Run ci/msan-libraries.sh with the compiler this build uses first on PATH.")
+    endif()
+    # Written where every other part of the toolchain is written, so that the log
+    # and the summary of a job name these two as they name the compiler and the
+    # linker (ci/build.sh). The C++ library the check above found is the system's,
+    # which a build with this sanitizer is the one kind that does not use it.
+    message(STATUS
+      "Sanitizers: the C++ standard library is libc++ ${ADLplug_MSAN_LIBRARY_VERSION} built with "
+      "the sanitizer, from ${ADLplug_MSAN_LIBRARY_SOURCES}")
+    file(APPEND "${ADLplug_LLVM_TOOLCHAIN_FILE}"
+      "C++ library (sanitized)\t${ADLplug_MSAN_LIBRARY_VERSION}\tlibc++ ${ADLplug_MSAN_LIBRARIES}/lib/libc++.a (${ADLplug_MSAN_LIBRARY_SOURCES})\n"
+      "libFuzzer (sanitized)\t${ADLplug_MSAN_LIBRARY_VERSION}\t${ADLplug_MSAN_LIBRARIES}/lib/libFuzzer.a\n")
+    add_compile_options(-fsanitize-memory-track-origins=2
+      "$<$<COMPILE_LANGUAGE:CXX>:-nostdinc++>"
+      "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-isystem ${ADLplug_MSAN_LIBRARIES}/include/c++/v1>")
+    add_link_options(-nostdlib++)
+    # The standard library goes at the very end of every link line, which is where
+    # a static one has to be, and the two archives refer to one another, so the
+    # linker is told to read them until nothing more is needed.
+    string(APPEND CMAKE_CXX_STANDARD_LIBRARIES
+      " -Wl,--start-group ${ADLplug_MSAN_LIBRARIES}/lib/libc++.a"
+      " ${ADLplug_MSAN_LIBRARIES}/lib/libc++abi.a -Wl,--end-group")
   endif()
   list(JOIN ADLplug_SANITIZER_LIST "," ADLplug_SANITIZER_OPTION)
   message(STATUS "Sanitizers: ${ADLplug_SANITIZER_OPTION}")

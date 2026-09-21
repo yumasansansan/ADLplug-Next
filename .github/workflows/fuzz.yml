@@ -83,7 +83,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        preset: [adl-sanitize, opn-sanitize, adl-tsan, opn-tsan]
+        preset: [adl-sanitize, opn-sanitize, adl-tsan, opn-tsan, adl-msan, opn-msan]
 
     steps:
       - name: Check out

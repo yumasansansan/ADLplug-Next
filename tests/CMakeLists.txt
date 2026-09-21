@@ -59,6 +59,9 @@ set(ADLplug_UNIT_TESTED_SOURCES
 # programs below leak and race on purpose, and each test passes only when that
 # is reported. Leaks: on Linux with the address sanitizer only, where leak
 # detection is asked for. Races: wherever the thread sanitizer is built with.
+# Values never written: wherever the memory sanitizer is, which is a build of the
+# fuzz targets alone, so that one is run by the job that builds them rather than
+# by a whole ctest (.github/workflows/ci.yml).
 if(ADLplug_SANITIZERS)
   cmake_language(DEFER CALL adlplug_sanitizer_test_environment)
 
@@ -78,6 +81,15 @@ if(ADLplug_SANITIZERS)
     add_test(NAME sanitizer.race_detection COMMAND ADLplug_race_canary)
     set_tests_properties(sanitizer.race_detection PROPERTIES
       PASS_REGULAR_EXPRESSION "WARNING: ThreadSanitizer: data race")
+  endif()
+
+  if(ADLplug_SANITIZERS MATCHES "(^|,)memory(,|$)")
+    add_executable(ADLplug_memory_canary sanitizers/memory_canary.c)
+    adlplug_set_language_standard(ADLplug_memory_canary)
+    adlplug_own_sources(sanitizers/memory_canary.c)
+    add_test(NAME sanitizer.memory_detection COMMAND ADLplug_memory_canary)
+    set_tests_properties(sanitizer.memory_detection PROPERTIES
+      PASS_REGULAR_EXPRESSION "WARNING: MemorySanitizer: use-of-uninitialized-value")
   endif()
 endif()
 

@@ -78,6 +78,14 @@
         "ADLplug_SANITIZERS": "thread,undefined"
       }
     },
+    {
+      "name": "sanitize-memory",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "ADLplug_SANITIZERS": "memory,undefined"
+      }
+    },
 
     {
       "name": "adl-debug",
@@ -105,6 +113,11 @@
       "inherits": ["base", "adl", "sanitize-thread"]
     },
     {
+      "name": "adl-msan",
+      "displayName": "ADLplug (OPL3) — RelWithDebInfo with the memory and undefined sanitizers (needs ADLplug_MSAN_LIBCXX)",
+      "inherits": ["base", "adl", "sanitize-memory"]
+    },
+    {
       "name": "opn-debug",
       "displayName": "OPNplug (OPN2) — Debug",
       "inherits": ["base", "opn", "debug"]
@@ -128,6 +141,11 @@
       "name": "opn-tsan",
       "displayName": "OPNplug (OPN2) — RelWithDebInfo with the thread and undefined sanitizers",
       "inherits": ["base", "opn", "sanitize-thread"]
+    },
+    {
+      "name": "opn-msan",
+      "displayName": "OPNplug (OPN2) — RelWithDebInfo with the memory and undefined sanitizers (needs ADLplug_MSAN_LIBCXX)",
+      "inherits": ["base", "opn", "sanitize-memory"]
     }
   ],
 
@@ -137,11 +155,13 @@
     { "name": "adl-release",        "configurePreset": "adl-release" },
     { "name": "adl-sanitize",       "configurePreset": "adl-sanitize",       "environment": { "ASAN_OPTIONS": "detect_leaks=0" } },
     { "name": "adl-tsan",           "configurePreset": "adl-tsan" },
+    { "name": "adl-msan",           "configurePreset": "adl-msan" },
     { "name": "opn-debug",          "configurePreset": "opn-debug" },
     { "name": "opn-relwithdebinfo", "configurePreset": "opn-relwithdebinfo" },
     { "name": "opn-release",        "configurePreset": "opn-release" },
     { "name": "opn-sanitize",       "configurePreset": "opn-sanitize",       "environment": { "ASAN_OPTIONS": "detect_leaks=0" } },
-    { "name": "opn-tsan",           "configurePreset": "opn-tsan" }
+    { "name": "opn-tsan",           "configurePreset": "opn-tsan" },
+    { "name": "opn-msan",           "configurePreset": "opn-msan" }
   ],
 
   "testPresets": [
@@ -158,12 +178,16 @@
       "output": { "outputOnFailure": true, "verbosity": "verbose" } },
     { "name": "adl-tsan",           "configurePreset": "adl-tsan",           "inherits": "base",
       "output": { "outputOnFailure": true, "verbosity": "verbose" } },
+    { "name": "adl-msan",           "configurePreset": "adl-msan",           "inherits": "base",
+      "output": { "outputOnFailure": true, "verbosity": "verbose" } },
     { "name": "opn-debug",          "configurePreset": "opn-debug",          "inherits": "base" },
     { "name": "opn-relwithdebinfo", "configurePreset": "opn-relwithdebinfo", "inherits": "base" },
     { "name": "opn-release",        "configurePreset": "opn-release",        "inherits": "base" },
     { "name": "opn-sanitize",       "configurePreset": "opn-sanitize",       "inherits": "base",
       "output": { "outputOnFailure": true, "verbosity": "verbose" } },
     { "name": "opn-tsan",           "configurePreset": "opn-tsan",           "inherits": "base",
+      "output": { "outputOnFailure": true, "verbosity": "verbose" } },
+    { "name": "opn-msan",           "configurePreset": "opn-msan",           "inherits": "base",
       "output": { "outputOnFailure": true, "verbosity": "verbose" } }
   ]
 }

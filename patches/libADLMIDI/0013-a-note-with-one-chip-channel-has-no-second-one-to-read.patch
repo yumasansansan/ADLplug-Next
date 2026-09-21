@@ -1,0 +1,36 @@
+SPDX-FileCopyrightText: 2017-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+A note with one chip channel has no second one to read
+
+noteUpdFreq() hands OPL3::noteOn() the channel of the note's second voice as info.chip_channels[1].chip_chan, without asking how many channels the note holds. A note takes them in realTime_NoteOn(), from the entries of chipChannel[] that are there, and a note of one voice fills chip_channels[0] and leaves chip_channels[1] as the stack left it. chip_channels_count is what says how many there are, and noteUpdate(), which calls this, guards that very element with it.
+
+Nothing crashes, which is why this has stood: noteOn() takes the number as c2 and makes cc2 = c2 % NUM_OF_CHANNELS and chan2 = c2 < m_insCache.size ? c2 : 0, so the modulus and the fallback keep every index in range. What follows from it is smaller and quieter. patch2 = m_insCache[chan2] is then some other channel's instrument, and it is read to build ops[2] and ops[3], which a channel of two operators never uses. On a channel the synth has made the first of a four-operator pair, op_addr[2] and op_addr[3] are taken from cc2, and the multiplier of two operators is written to whatever channel that number happened to name.
+
+What found it is the memory sanitizer, in the first seconds of ADLplug-Next's fuzz targets for what a host does to the synthesiser and for MIDI through to synthesis: ten bytes in the one and twelve in the other, a note on being enough. That sanitizer reports a value that was never written, which no other sanitizer looks for, and it named this one down to the stack frame the value came from.
+
+The count is read first now, the way the caller reads it. Where there is no second voice the first one stands in, so noteOn() is given two channels that are equal rather than one that was never set; where the count is two, nothing about this changes.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/adlmidi_midiplay.cpp b/src/adlmidi_midiplay.cpp
+--- a/src/adlmidi_midiplay.cpp
++++ b/src/adlmidi_midiplay.cpp
+@@ -1425,7 +1425,15 @@ void MIDIplay::noteUpdFreq(size_t midCh, const AdlChannel::Location &loc, MIDIch
+         if(vibrato && (d.is_end() || d->value.vibdelay_us >= chan.vibdelay_us))
+             bend += static_cast<double>(vibrato) * chan.vibdepth * std::sin(chan.vibpos);
+
+-        m_synth->noteOn(ins.chip_chan, info.chip_channels[1].chip_chan, info.currentTone + bend + phase);
++        // The channel of the second voice, where the note has one. A note that
++        // holds a single chip channel never wrote chip_channels[1], so reading it
++        // reads whatever the stack held; the count is what says how many are
++        // there, as it does below. With no second voice the first one stands in,
++        // which leaves noteOn() the two channels equal rather than one of them a
++        // number that was never set.
++        const uint16_t second_chan = (info.chip_channels_count > 1) ?
++                                     info.chip_channels[1].chip_chan : ins.chip_chan;
++        m_synth->noteOn(ins.chip_chan, second_chan, info.currentTone + bend + phase);
+
+         if(hooks.onNote)
+             hooks.onNote(hooks.onNote_userData, ins.chip_chan, info.noteTone, info.midiins, info.vol, midibend);

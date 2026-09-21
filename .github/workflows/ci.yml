@@ -186,6 +186,65 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+  # The memory sanitizer reads what none of the others can: a value that was never
+  # written. It sees only the code it has instrumented, which makes the C++ standard
+  # library part of what has to be, and no system ships one that is: ci/msan-libraries.sh
+  # builds libc++ with the sanitizer, and a libFuzzer against it, and ci/build.sh asks
+  # for them by the name of the preset. What can run under it is what this project
+  # builds whole, which is the fuzz targets and not the plugin: a plugin is loaded by
+  # a host, and a host the sanitizer knows nothing about would report every value it
+  # was handed. Each target is given its regression and seed inputs by its manifest,
+  # so those run before the new ones do.
+  msan:
+    name: ${{ matrix.preset }} (ubuntu-26.04)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [adl-msan, opn-msan]
+
+    steps:
+      - name: Check out
+        run: |
+          # The commit with its whole history, the submodules at depth 1. Git
+          # keeps the files as committed, CRLF or LF, on every runner.
+          git config --global core.autocrlf false
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git submodule update --init --depth 1 --jobs 4
+          git log -1 --format='%H %s'
+
+      - name: Set up the toolchain
+        run: bash ci/setup.sh
+
+      - name: Build the fuzz targets
+        run: bash ci/build.sh --fuzz-only "${{ matrix.preset }}" baseline
+
+      # The sanitizer says nothing when it finds nothing, and silence cannot tell
+      # that from a check which never ran. One program reads a value that was
+      # never written, and this passes only when that is reported -- as the leak
+      # and race canaries do for theirs (tests/CMakeLists.txt). It is built by
+      # name, since the build above makes the fuzz targets and nothing else.
+      - name: Check that the sanitizer is looking
+        run: |
+          cmake --build "build/${{ matrix.preset }}" --target ADLplug_memory_canary
+          ctest --preset "${{ matrix.preset }}" -R sanitizer.memory_detection
+
+      - name: Fuzz for a minute each
+        run: bash ci/fuzz.sh "${{ matrix.preset }}" 60 fuzz-run/corpora fuzz-run/crashes
+
+      - name: Keep the inputs that failed
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-crashes-${{ matrix.preset }}
+          path: fuzz-run/crashes/
+          if-no-files-found: ignore
+          retention-days: 30
+
   tidy:
     name: static analysis (${{ matrix.preset }})
     runs-on: ubuntu-26.04
@@ -349,7 +408,7 @@ jobs:
 
   publish:
     name: Nightly release
-    needs: [build, reuse, fallback, rpm, sanitize, tidy]
+    needs: [build, reuse, fallback, rpm, sanitize, msan, tidy]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-26.04
     timeout-minutes: 30

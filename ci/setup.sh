@@ -136,8 +136,15 @@ setup_linux() {
 
   local codename
   codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
-  echo "deb [signed-by=$keyring] https://apt.llvm.org/$codename/ llvm-toolchain-$codename-$llvm_major main" |
-    sudo tee /etc/apt/sources.list.d/apt.llvm.org.list > /dev/null
+  # The sources as well as the binaries. What apt.llvm.org offers for a release is
+  # a snapshot of its branch, rebuilt often, so two builds of the same version
+  # number are not the same sources: the only way to have the sources of the very
+  # binaries installed here is to ask apt for them, which the memory sanitizer's
+  # standard library is built from (ci/msan-libraries.sh).
+  {
+    echo "deb [signed-by=$keyring] https://apt.llvm.org/$codename/ llvm-toolchain-$codename-$llvm_major main"
+    echo "deb-src [signed-by=$keyring] https://apt.llvm.org/$codename/ llvm-toolchain-$codename-$llvm_major main"
+  } | sudo tee /etc/apt/sources.list.d/apt.llvm.org.list > /dev/null
 
   sudo apt-get update -qq
   # libclang-rt has the profile runtime that the instrumented build of
@@ -149,6 +156,7 @@ setup_linux() {
     "clang-$llvm_major" "lld-$llvm_major" "llvm-$llvm_major" "libclang-rt-$llvm_major-dev" \
     "clang-tidy-$llvm_major" "clang-tools-$llvm_major" \
     "${linux_packages[@]}"
+  llvm_from=apt
   llvm_bin=/usr/lib/llvm-$llvm_major/bin
 
   setup_pluginval Linux "$pluginval_linux_sha256" "$RUNNER_TEMP"
@@ -173,6 +181,7 @@ setup_linux() {
 }
 
 setup_windows() {
+  llvm_from=release
   local temp
   temp=$(cygpath --unix "$RUNNER_TEMP")
   download "$(release_url "$windows_archive")" "$temp/$windows_archive" "$windows_sha256"
@@ -184,6 +193,7 @@ setup_windows() {
 }
 
 setup_macos() {
+  llvm_from=release
   download "$(release_url "$macos_archive")" "$RUNNER_TEMP/$macos_archive" "$macos_sha256"
   extract "$RUNNER_TEMP/$macos_archive" "$RUNNER_TEMP/llvm" gtar .a
   # The plugins load the system's libc++, so they are compiled against the
@@ -197,6 +207,7 @@ setup_macos() {
 }
 
 setup_almalinux() {
+  llvm_from=release
   dnf install -y -q --setopt=install_weak_deps=False "${almalinux_packages[@]}"
   download "$(release_url "$linux_archive")" "$RUNNER_TEMP/$linux_archive" "$linux_sha256"
   extract "$RUNNER_TEMP/$linux_archive" "$RUNNER_TEMP/llvm" tar .a
@@ -215,6 +226,7 @@ setup_almalinux() {
 }
 
 tool_paths=()
+llvm_from=
 case "${RUNNER_OS:-}" in
   Linux)
     if [ -f /etc/almalinux-release ]; then
@@ -249,3 +261,18 @@ done >> "$GITHUB_PATH"
 # The configuration of every build checks that its toolchain is of this
 # version of LLVM (cmake/LLVMToolchain.cmake).
 echo "ADLplug_LLVM_MAJOR=$llvm_major" >> "$GITHUB_ENV"
+
+# Where LLVM came from, for whatever needs the sources of the very compiler
+# installed here rather than a compiler of the same number: Ubuntu takes the
+# packages of apt.llvm.org, and every other system the archives of LLVM's own
+# GitHub Releases. That is this project's one rule for it and this is where it is
+# written down; ci/msan-libraries.sh, which builds a C++ standard library with the
+# memory sanitizer, asks the same place for the sources of it. The difference
+# matters: a release is a tag and a tag does not move, while what apt.llvm.org
+# offers for a release is a snapshot of its branch, rebuilt often, and only apt can
+# say which of those builds is the one installed.
+if [ -z "$llvm_from" ]; then
+  echo "error: the setup of this runner did not say where LLVM came from" >&2
+  exit 1
+fi
+echo "ADLplug_LLVM_FROM=$llvm_from" >> "$GITHUB_ENV"

@@ -273,7 +273,8 @@ An option chooses whether ADLplug-Next or OPNplug-Next is built:
 | -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | Include the banks of the grey zone (see below)                                                |
 | -DADLplug_ARCH=baseline/avx2    | baseline                               | x86-64 instruction set: baseline (every x86-64 CPU) or avx2 (CPUs with AVX2)                  |
 | -DADLplug_PGO=ON/OFF            | ON                                     | Profile-guided optimisation of Release builds (see below)                                     |
-| -DADLplug_SANITIZERS=<list>     | empty                                  | Build with sanitizers: address, undefined, vptr, thread (comma-separated; see below)          |
+| -DADLplug_SANITIZERS=<list>     | empty                                  | Build with sanitizers: address, undefined, vptr, thread, memory (comma-separated; see below)   |
+| -DADLplug_MSAN_LIBRARIES=<dir>  | empty                                  | Prefix of the libraries the memory sanitizer needs, which ci/msan-libraries.sh builds          |
 | -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | Enable assertions (internal consistency checks) in any build type (Debug, Release and others) |
 | -DADLplug_WERROR=ON/OFF         | OFF (the presets set ON)               | Treat warnings in ADLplug-Next's own code as errors                                           |
 | -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | Build developer tools (a tool that loads the VST3 plugin and writes out its sound)            |
@@ -317,6 +318,19 @@ the plugin's: such a build leaves vptr out and says so, and the address build is
 where that check belongs. Clang has no thread sanitizer for Windows, so a thread
 build is for Linux and macOS, and configuring one on Windows stops with a
 message that says as much.
+
+The `adl-msan` and `opn-msan` presets name the memory and undefined sanitizers.
+memory finds what none of the others look for: a value that was never written.
+It sees only the code it has instrumented, and memory written by a library it has
+not seen is memory it believes was never written, so the C++ standard library has
+to be one built with it -- and no system ships such a library. `ci/msan-libraries.sh`
+builds libc++, libc++abi and a libFuzzer against them from the sources of the very
+compiler in use, and `ADLplug_MSAN_LIBRARIES` names the prefix it wrote them in;
+`ci/build.sh` calls it for a preset whose name ends in `-msan`, so a build of one
+needs nothing beforehand. Clang has a memory sanitizer for Linux alone, and it
+cannot be built together with address or thread. What runs under it is the fuzz
+targets rather than the plugins: a plugin is loaded by a host, and a host the
+sanitizer knows nothing about would have every value it hands over reported.
 
 Every emulator core is built by default. To leave cores out, turn off options
 in the Build option column of the tables under

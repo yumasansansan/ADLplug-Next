@@ -20,6 +20,12 @@
 # fuzzing does not need one; what the plugin needs is checked by the builds of
 # every push.
 #
+# A preset whose name ends in -msan builds with the memory sanitizer, which needs
+# a C++ standard library and a libFuzzer built with it and cannot use a system's:
+# this makes them first (ci/msan-libraries.sh, which does nothing when they are
+# already there) and tells CMake where they are. ADLplug_MSAN_LIBRARIES in the
+# environment names another prefix to keep them in.
+#
 # With --generated-only, it builds what the build generates rather than what it
 # compiles: the JUCE header of every target that has one, and the pack of banks
 # that a source of the plugin embeds -- for which the tool that writes the pack is
@@ -56,6 +62,16 @@ case $arch in
   baseline | avx2) args+=("-DADLplug_ARCH=$arch") ;;
   arm64) ;;
   *) echo "error: unknown instruction set '$arch'" >&2; exit 2 ;;
+esac
+# A memory-sanitizer build needs two libraries that no system ships, and they are
+# the same for every build of that kind, so this makes them rather than leaving
+# each caller to. ci/msan-libraries.sh does nothing when they are already there.
+case $preset in
+  *-msan)
+    msan_libraries=${ADLplug_MSAN_LIBRARIES:-$HOME/libcxx-msan}
+    bash "$(dirname "$0")/msan-libraries.sh" "$msan_libraries"
+    args+=("-DADLplug_MSAN_LIBRARIES=$msan_libraries")
+    ;;
 esac
 args+=("$@")
 

@@ -134,8 +134,20 @@ function(adlplug_fuzz_target name)
     endif()
 
     if(configuration STREQUAL "libfuzzer")
+      # -fsanitize=fuzzer is the instrumentation libFuzzer steers by and, at the
+      # link, libFuzzer itself. In a memory-sanitizer build the second half has to
+      # come from somewhere else: the libFuzzer that comes with the compiler is
+      # compiled against libstdc++, and this build links the instrumented libc++
+      # instead, which leaves every std::string and std::ifstream of libFuzzer's
+      # own code undefined. ci/msan-libraries.sh builds one against the same
+      # library, and the instrumentation is asked for on its own.
       target_compile_options(${target} PRIVATE -fsanitize=fuzzer)
-      target_link_options(${target} PRIVATE -fsanitize=fuzzer)
+      if("memory" IN_LIST ADLplug_SANITIZER_LIST)
+        target_link_options(${target} PRIVATE -fsanitize=fuzzer-no-link)
+        target_link_libraries(${target} PRIVATE "${ADLplug_MSAN_LIBRARIES}/lib/libFuzzer.a")
+      else()
+        target_link_options(${target} PRIVATE -fsanitize=fuzzer)
+      endif()
       set(arguments "-timeout=60")
       if(arg_DICTIONARY)
         list(APPEND arguments "-dict=${arg_DICTIONARY}")
