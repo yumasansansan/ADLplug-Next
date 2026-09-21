@@ -685,6 +685,7 @@ the binaries cannot be described as "GPLv3 only".
 | `thirdparty/libADLMIDI`                    | GNU LGPL v2.1+, GNU GPL v2+, GNU GPL v3+, MIT, BSD, Boost  |
 | `thirdparty/libOPNMIDI`                    | GNU LGPL v2.1+, GNU GPL v2+, GNU GPL v3+, MIT              |
 | `thirdparty/simpleini`                     | MIT                                                        |
+| `thirdparty/MediaPerch`                    | GNU GPL v3+ (only its resampler is built)                  |
 | `thirdparty/OPN2BankEditor`                | GNU GPL v3+ (only example banks are taken from it)         |
 | `sources/opl3/adl/measurer`                | GNU GPL v3+                                                |
 | `sources/opn2/adl/measurer`                | GNU GPL v3+                                                |

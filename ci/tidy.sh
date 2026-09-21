@@ -43,7 +43,14 @@ fi
 # regular expressions for the files to read and for the headers to report in,
 # and both are matched against the whole path.
 root=$(pwd -P)
-ours="^$root/(sources|tests|fuzz|tools)/"
+# MediaPerch's resampler is this project's own code as well -- the same author,
+# the same license, built with the same flags (cmake/MediaPerch.cmake) -- so it
+# is read here beside sources/. The rest of thirdparty/ is other people's, and
+# is named in what is excluded rather than left to a pattern that would take
+# MediaPerch with it.
+mediaperch="thirdparty/MediaPerch/modules/(dsp/resample|shared/transform)/"
+ours="^$root/((sources|tests|fuzz|tools)/|$mediaperch)"
+others="/thirdparty/(JUCE|libADLMIDI|libOPNMIDI|OPN2BankEditor|simpleini)/"
 
 jobs=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
 echo "== $(clang-tidy --version | sed -n 's/^.*LLVM version/LLVM/p' | head -n 1), $jobs files at a time, on $build"
@@ -68,5 +75,11 @@ REDUCE
 # run-clang-tidy comes with the toolchain, reads the compile commands, and takes
 # the files of ours from them as a set. It ends with a status of its own when any
 # file was reported.
+#
+# The check list is named rather than looked up: a file under
+# thirdparty/MediaPerch would otherwise be judged by the .clang-tidy of that
+# repository, which is a broader list and belongs to its own gate. Here the
+# question asked of it is the one asked of sources/.
 run-clang-tidy -p "$commands" -j "$jobs" -quiet -use-color=0 \
-  -header-filter="$ours" -exclude-header-filter="/thirdparty/" "$ours"
+  -config-file="$root/.clang-tidy" \
+  -header-filter="$ours" -exclude-header-filter="$others" "$ours"

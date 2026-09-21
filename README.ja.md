@@ -409,6 +409,7 @@ GPLv3 の第 13 条は，GPLv3 の著作物と AGPLv3 の著作物を組み合�
 | `thirdparty/libADLMIDI` | GNU LGPL v2.1+，GNU GPL v2+，GNU GPL v3+，MIT，BSD，Boost |
 | `thirdparty/libOPNMIDI` | GNU LGPL v2.1+，GNU GPL v2+，GNU GPL v3+，MIT |
 | `thirdparty/simpleini` | MIT |
+| `thirdparty/MediaPerch` | GNU GPL v3 以降（リサンプラだけを建てています） |
 | `thirdparty/OPN2BankEditor` | GNU GPL v3+（サンプルのバンクだけを取り込んでいます） |
 | `sources/opl3/adl/measurer` | GNU GPL v3+ |
 | `sources/opn2/adl/measurer` | GNU GPL v3+ |

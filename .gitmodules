@@ -25,3 +25,6 @@
 [submodule "thirdparty/OPN2BankEditor"]
 	path = thirdparty/OPN2BankEditor
 	url = https://github.com/Wohlstand/OPN2BankEditor.git
+[submodule "thirdparty/MediaPerch"]
+	path = thirdparty/MediaPerch
+	url = https://github.com/yumasansansan/MediaPerch.git

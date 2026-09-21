@@ -1060,6 +1060,14 @@ adlplug_own_sources(${ADLplug_OWN_SOURCES})
 adlplug_embed_banks("sources/resources.c")
 
 # --------------------------------------------------------------------------
+# MediaPerch's resampler, which is held to the same flags and is therefore built
+# here, after the function that applies them.
+
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/MediaPerch.cmake")
+
+target_link_libraries(ADLplug PUBLIC mediaperch-resample)
+
+# --------------------------------------------------------------------------
 # Tests
 
 if(ADLplug_BUILD_TESTS)
