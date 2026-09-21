@@ -24,11 +24,11 @@ public:
     Vu_Meter();
     explicit Vu_Meter(const String &name);
 
-    double value() const
+    [[nodiscard]] double value() const
         { return value_; }
     void set_value(double value);
 
-    bool logarithmic() const
+    [[nodiscard]] bool logarithmic() const
         { return logarithmic_; }
     void set_logarithmic(bool logarithmic);
 

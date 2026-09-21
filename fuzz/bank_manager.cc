@@ -143,7 +143,7 @@ public:
     Input(const std::uint8_t *data, std::size_t size) noexcept
         : data_(data), size_(size) {}
 
-    bool done() const noexcept
+    [[nodiscard]] bool done() const noexcept
         { return at_ >= size_; }
 
     std::uint8_t byte() noexcept

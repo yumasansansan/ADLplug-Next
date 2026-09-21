@@ -27,7 +27,7 @@ struct Emulator_Defaults {
     StringArray choices;
     unsigned default_index = 0;
 
-    bool is_built(unsigned index) const noexcept
+    [[nodiscard]] bool is_built(unsigned index) const noexcept
     {
         return index < static_cast<unsigned>(choices.size()) && choices[static_cast<int>(index)].isNotEmpty();
     }
@@ -58,6 +58,6 @@ struct Chip_Settings {
 
     bool operator==(const Chip_Settings &) const = default;
 
-    PropertySet to_properties() const;
+    [[nodiscard]] PropertySet to_properties() const;
     static Chip_Settings from_properties(const PropertySet &set);
 };

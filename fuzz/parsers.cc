@@ -68,7 +68,7 @@ public:
     Input(const std::uint8_t *data, std::size_t size) noexcept
         : data_(data), size_(size) {}
 
-    bool done() const noexcept
+    [[nodiscard]] bool done() const noexcept
         { return at_ >= size_; }
 
     std::uint8_t byte() noexcept
@@ -86,7 +86,7 @@ public:
     }
 
     // How many bytes are left, for a record that takes all of them.
-    std::size_t left() const noexcept
+    [[nodiscard]] std::size_t left() const noexcept
         { return (at_ < size_) ? size_ - at_ : 0; }
 
     // How long the bytes of a reader's input are: the rest of the input, or the

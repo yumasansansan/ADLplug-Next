@@ -35,11 +35,11 @@ struct Instrument : ADL_Instrument
 
     static Instrument from_adlmidi(const ADL_Instrument &o) noexcept;
     static Instrument from_wopl(const WOPLInstrument &o) noexcept;
-    WOPLInstrument to_wopl() const noexcept;
+    [[nodiscard]] WOPLInstrument to_wopl() const noexcept;
 
     static Instrument from_sbi(const std::uint8_t *data, std::size_t length) noexcept;
 
-    juce::PropertySet to_properties() const;
+    [[nodiscard]] juce::PropertySet to_properties() const;
     static Instrument from_properties(const juce::PropertySet &set);
 
     // Accessors for the fields packed into the register bytes.
@@ -87,8 +87,8 @@ struct Instrument : ADL_Instrument
     void describe(std::FILE *out) const noexcept;
     void describe_operator(unsigned op, std::FILE *out, const char *indent = "") const noexcept;
 
-    bool equal_instrument(const ADL_Instrument &o) const noexcept;
-    bool equal_instrument_except_delays(const ADL_Instrument &o) const noexcept;
+    [[nodiscard]] bool equal_instrument(const ADL_Instrument &o) const noexcept;
+    [[nodiscard]] bool equal_instrument_except_delays(const ADL_Instrument &o) const noexcept;
 };
 
 struct Instrument_Global_Parameters
@@ -102,7 +102,7 @@ struct Instrument_Global_Parameters
 
     bool operator==(const Instrument_Global_Parameters &) const = default;
 
-    juce::PropertySet to_properties() const;
+    [[nodiscard]] juce::PropertySet to_properties() const;
     static Instrument_Global_Parameters from_properties(const juce::PropertySet &set);
 };
 
@@ -115,9 +115,9 @@ struct Bank_Ref : ADL_Bank
 struct Bank_Id : ADL_BankId
 {
     constexpr Bank_Id() noexcept
-        : ADL_BankId{0, 0xff, 0xff} {}
+        : ADL_BankId{.percussive = 0, .msb = 0xff, .lsb = 0xff} {}
     constexpr Bank_Id(std::uint8_t bank_msb, std::uint8_t bank_lsb, bool is_percussive) noexcept
-        : ADL_BankId{static_cast<ADL_UInt8>(is_percussive), bank_msb, bank_lsb} {}
+        : ADL_BankId{.percussive = static_cast<ADL_UInt8>(is_percussive), .msb = bank_msb, .lsb = bank_lsb} {}
     // A bank the library can hold: it numbers one with two seven-bit halves and
     // refuses anything else, so a number out of that range is no bank -- the id
     // of an empty slot, which fills both halves, among them. The numbers come
@@ -127,9 +127,9 @@ struct Bank_Id : ADL_BankId
         { return msb <= 0x7f && lsb <= 0x7f; }
     constexpr bool operator==(const Bank_Id &o) const noexcept
         { return msb == o.msb && lsb == o.lsb && (percussive != 0) == (o.percussive != 0); }
-    constexpr std::uint32_t pseudo_id() const noexcept
+    [[nodiscard]] constexpr std::uint32_t pseudo_id() const noexcept
         { return (msb & 127u) << 7 | (lsb & 127u); }
-    constexpr std::uint32_t to_integer() const noexcept
+    [[nodiscard]] constexpr std::uint32_t to_integer() const noexcept
         { return (msb & 127u) << 8 | (lsb & 127u) << 1 | (percussive & 1u); }
     static constexpr Bank_Id from_integer(std::uint32_t x) noexcept
         { return Bank_Id(static_cast<std::uint8_t>((x >> 8) & 127), static_cast<std::uint8_t>((x >> 1) & 127), (x & 1) != 0); }

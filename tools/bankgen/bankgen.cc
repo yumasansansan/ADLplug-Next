@@ -126,7 +126,7 @@ public:
         return std::move(buffer).str();
     }
 
-    const std::set<fs::path> &paths() const noexcept
+    [[nodiscard]] const std::set<fs::path> &paths() const noexcept
         { return paths_; }
 
 private:

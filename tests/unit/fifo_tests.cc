@@ -239,7 +239,7 @@ ADLPLUG_TEST(messages_bad_size)
     // A header whose size is more than the queue could hold does not make the
     // body run past the buffer: the message is not read at all.
     Simple_Fifo fifo(64);
-    const Message_Header header {std::to_underlying(User_Message::Midi), 0xffffffffu};
+    const Message_Header header {.tag = std::to_underlying(User_Message::Midi), .size = 0xffffffffu};
     unsigned offset = 0;
     std::uint8_t *const bytes = fifo.write(sizeof header, offset);
     CHECK(bytes != nullptr);

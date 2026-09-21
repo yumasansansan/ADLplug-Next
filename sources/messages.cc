@@ -44,7 +44,7 @@ void finish_read(Simple_Fifo &fifo, const Buffered_Message &msg) noexcept
 Buffered_Message write(Simple_Fifo &fifo, unsigned tag, unsigned size) noexcept
 {
     Buffered_Message msg;
-    msg.header = Message_Header{tag, size};
+    msg.header = Message_Header{.tag = tag, .size = size};
     unsigned offset = 0;
     std::uint8_t *header = fifo.write(sizeof msg.header, offset);
     if (header == nullptr)

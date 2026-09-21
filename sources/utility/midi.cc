@@ -24,5 +24,5 @@ Midi_Input_Message Midi_Input_Source::read_event()
         return {};
     const MidiMessageMetadata event = *cursor.current;
     ++cursor.current;
-    return {event.data, static_cast<unsigned>(event.numBytes), event.samplePosition};
+    return {.data = event.data, .size = static_cast<unsigned>(event.numBytes), .time = event.samplePosition};
 }

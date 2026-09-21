@@ -93,6 +93,18 @@
 #   readability-named-parameter has every parameter say what it is, in the
 #     declaration as well as the definition. A name a function does not use is a
 #     warning of its own (-Wunused-parameter), so those names are in comments.
+#   modernize-use-designated-initializers has the field named where a value goes
+#     into a struct, rather than counted from the front of it. That is what the
+#     libraries' own structs are filled with here as well: the three bytes of a
+#     bank id said nothing at all in the order they were written in.
+#   modernize-use-nodiscard has a function that answers a question say that the
+#     answer is the whole point of calling it, so that dropping it is an error
+#     rather than a line which does nothing. It leaves alone every method of a
+#     class that holds a mutable member -- measured, not guessed: one such member
+#     exempts the whole class, because there a const method may change the object
+#     after all. That is why the processor's own accessors are not marked and the
+#     nested class beside them is; the ones it does not ask for are not added by
+#     hand, since the gate is what says where the rule holds.
 #   cppcoreguidelines-narrowing-conversions, google-explicit-constructor,
 #     readability-qualified-auto and readability-static-accessed-through-instance
 #     say nothing about this project today: a narrowing conversion is written out
@@ -138,7 +150,9 @@ Checks: >
   -misc-override-with-different-visibility,
   -misc-use-anonymous-namespace,
   modernize-deprecated-headers,
+  modernize-use-designated-initializers,
   modernize-use-emplace,
+  modernize-use-nodiscard,
   modernize-use-nullptr,
   modernize-use-equals-default,
   modernize-use-equals-delete,

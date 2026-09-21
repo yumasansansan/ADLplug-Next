@@ -336,7 +336,7 @@ std::vector<Scheduled_Event> make_sequence(double seconds)
     const auto at = [](double t) { return static_cast<int>(t * sample_rate); };
     const int total = at(seconds);
     const int end_of_notes = total - std::min(at(3.0), total / 4);   // leave time for releases
-    const auto add = [&ev](int sample, const juce::MidiMessage &m) { ev.push_back({sample, m}); };
+    const auto add = [&ev](int sample, const juce::MidiMessage &m) { ev.push_back({.sample = sample, .message = m}); };
     const auto velocity = [](int v) { return static_cast<juce::uint8>(v); };
 
     // Channel 1: overlapping random chords -- more voices than the chips have

@@ -235,7 +235,8 @@ private:
     public:
         explicit Vst3_Extensions(const AudioProcessor &processor) noexcept
             : processor_(processor) {}
-        std::map<std::uint32_t, String> getCompatibleParameterIds(const VST3Interface::Id &compatible_class) const override;
+        [[nodiscard]] std::map<std::uint32_t, String>
+        getCompatibleParameterIds(const VST3Interface::Id &compatible_class) const override;
 
     private:
         const AudioProcessor &processor_;

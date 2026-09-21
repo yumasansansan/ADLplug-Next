@@ -64,33 +64,33 @@ public:
         { return opn2_getInstrument(player_.get(), &bank, index, &ins) >= 0; }
     bool set_instrument(Bank_Ref &bank, unsigned index, const Instrument &ins)
         { return opn2_setInstrument(player_.get(), &bank, index, &ins) >= 0; }
-    const char *emulator_name() const
+    [[nodiscard]] const char *emulator_name() const
         { return opn2_chipEmulatorName(player_.get()); }
-    unsigned emulator() const noexcept
+    [[nodiscard]] unsigned emulator() const noexcept
         { return emu_; }
     void set_emulator(unsigned emu)
         { if (opn2_switchEmulator(player_.get(), static_cast<int>(emu)) >= 0) emu_ = emu; }
-    unsigned num_chips() const
+    [[nodiscard]] unsigned num_chips() const
         { return static_cast<unsigned>(std::max(0, opn2_getNumChipsObtained(player_.get()))); }
     bool set_num_chips(unsigned chips)
         { return opn2_setNumChips(player_.get(), static_cast<int>(chips)) == 0; }
-    int channel_alloc_mode() const
+    [[nodiscard]] int channel_alloc_mode() const
         { return opn2_getChannelAllocMode(player_.get()); }
     void set_channel_alloc_mode(int mode)
         { opn2_setChannelAllocMode(player_.get(), mode); }
-    unsigned chip_type() const
+    [[nodiscard]] unsigned chip_type() const
         { return static_cast<unsigned>(std::max(0, opn2_getChipType(player_.get()))); }
     void set_chip_type(unsigned type)
         { opn2_setChipType(player_.get(), static_cast<int>(type)); }
-    int volume_model() const
+    [[nodiscard]] int volume_model() const
         { return opn2_getVolumeRangeModel(player_.get()); }
     void set_volume_model(int model)
         { opn2_setVolumeRangeModel(player_.get(), model); }
-    bool lfo_enabled() const
+    [[nodiscard]] bool lfo_enabled() const
         { return opn2_getLfoEnabled(player_.get()) != 0; }
     void set_lfo_enabled(bool enable)
         { opn2_setLfoEnabled(player_.get(), enable ? 1 : 0); }
-    int lfo_frequency() const
+    [[nodiscard]] int lfo_frequency() const
         { return opn2_getLfoFrequency(player_.get()); }
     void set_lfo_frequency(int frequency)
         { opn2_setLfoFrequency(player_.get(), frequency); }

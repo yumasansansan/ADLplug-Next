@@ -26,7 +26,7 @@ public:
     explicit Wave_Label(const Waves &waves);
     explicit Wave_Label(const Waves &waves, const String &name);
 
-    unsigned wave() const
+    [[nodiscard]] unsigned wave() const
         { return wave_; }
     void set_wave(unsigned wave, NotificationType notification);
 

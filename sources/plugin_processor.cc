@@ -808,7 +808,7 @@ void AdlplugAudioProcessor::processBlock(AudioBuffer<float> &buffer,
 
     const auto nframes = static_cast<unsigned>(buffer.getNumSamples());
 
-    Midi_Input_Source::Buffer_Cursor midi_cursor {midi_messages.begin(), midi_messages.end()};
+    Midi_Input_Source::Buffer_Cursor midi_cursor {.current = midi_messages.begin(), .end = midi_messages.end()};
     Midi_Input_Source midi_source(midi_cursor);
 
     if (channels >= 2) {
@@ -948,7 +948,8 @@ void AdlplugAudioProcessor::create_player(unsigned sample_rate)
 
     for (unsigned p = 0; p < 16; ++p) {
         const bool percussive = p == 9;
-        selection_[p] = Selection{Bank_Id(0, 0, percussive), static_cast<std::uint8_t>(percussive ? 35 : 0)};
+        selection_[p] = Selection{.bank = Bank_Id(0, 0, percussive),
+                                  .program = static_cast<std::uint8_t>(percussive ? 35 : 0)};
     }
 
     active_part_ = 0;

@@ -55,7 +55,7 @@ bool split_fields(std::string_view text, std::vector<Field> &fields)
         const std::size_t equals = item.find('=');
         if (equals == std::string_view::npos)
             return false;
-        fields.push_back({trim(item.substr(0, equals)), trim(item.substr(equals + 1))});
+        fields.push_back({.key = trim(item.substr(0, equals)), .value = trim(item.substr(equals + 1))});
     }
     return true;
 }
@@ -79,18 +79,18 @@ struct Operator_Key {
 };
 
 constexpr std::array<Operator_Key, 12> operator_keys {{
-    {"AT", &WOPLOperator::atdec_60, 4, 15},
-    {"DC", &WOPLOperator::atdec_60, 0, 15},
-    {"ST", &WOPLOperator::susrel_80, 4, 15},
-    {"RL", &WOPLOperator::susrel_80, 0, 15},
-    {"WF", &WOPLOperator::waveform_E0, 0, 7},
-    {"ML", &WOPLOperator::avekf_20, 0, 15},
-    {"TL", &WOPLOperator::ksl_l_40, 0, 63},
-    {"KL", &WOPLOperator::ksl_l_40, 6, 3},
-    {"VB", &WOPLOperator::avekf_20, 6, 1},
-    {"AM", &WOPLOperator::avekf_20, 7, 1},
-    {"EG", &WOPLOperator::avekf_20, 5, 1},
-    {"KR", &WOPLOperator::avekf_20, 4, 1},
+    {.key = "AT", .reg = &WOPLOperator::atdec_60, .shift = 4, .max = 15},
+    {.key = "DC", .reg = &WOPLOperator::atdec_60, .shift = 0, .max = 15},
+    {.key = "ST", .reg = &WOPLOperator::susrel_80, .shift = 4, .max = 15},
+    {.key = "RL", .reg = &WOPLOperator::susrel_80, .shift = 0, .max = 15},
+    {.key = "WF", .reg = &WOPLOperator::waveform_E0, .shift = 0, .max = 7},
+    {.key = "ML", .reg = &WOPLOperator::avekf_20, .shift = 0, .max = 15},
+    {.key = "TL", .reg = &WOPLOperator::ksl_l_40, .shift = 0, .max = 63},
+    {.key = "KL", .reg = &WOPLOperator::ksl_l_40, .shift = 6, .max = 3},
+    {.key = "VB", .reg = &WOPLOperator::avekf_20, .shift = 6, .max = 1},
+    {.key = "AM", .reg = &WOPLOperator::avekf_20, .shift = 7, .max = 1},
+    {.key = "EG", .reg = &WOPLOperator::avekf_20, .shift = 5, .max = 1},
+    {.key = "KR", .reg = &WOPLOperator::avekf_20, .shift = 4, .max = 1},
 }};
 
 // The rhythm-mode drum types of the RHYTHM attribute, from 6 on.

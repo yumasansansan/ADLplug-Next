@@ -81,19 +81,19 @@ public:
             { return static_cast<bool>(id); }
         std::span<char, name_size> program_name(unsigned program) noexcept
             { assert(program < program_count); return ins_names[program]; }
-        std::span<const char, name_size> program_name(unsigned program) const noexcept
+        [[nodiscard]] std::span<const char, name_size> program_name(unsigned program) const noexcept
             { assert(program < program_count); return ins_names[program]; }
     };
 
-    const std::array<Bank_Info, bank_reserve_size> &bank_infos() const noexcept
+    [[nodiscard]] const std::array<Bank_Info, bank_reserve_size> &bank_infos() const noexcept
         { return bank_infos_; }
 
 private:
     void initialize_all_banks();
     static void forget_bank(Bank_Info &info) noexcept;
 
-    std::optional<unsigned> find_slot(const Bank_Id &id) const noexcept;
-    std::optional<unsigned> find_empty_slot() const noexcept;
+    [[nodiscard]] std::optional<unsigned> find_slot(const Bank_Id &id) const noexcept;
+    [[nodiscard]] std::optional<unsigned> find_empty_slot() const noexcept;
 
     bool emit_slots();
     bool emit_notification(const Bank_Info &info, unsigned program);

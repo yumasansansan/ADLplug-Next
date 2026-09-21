@@ -42,9 +42,9 @@ public:
     std::uint8_t *write(unsigned length, unsigned &offset) noexcept;
     void finish_write(unsigned length) noexcept;
 
-    unsigned get_free_space() const noexcept
+    [[nodiscard]] unsigned get_free_space() const noexcept
         { return static_cast<unsigned>(fifo_.getFreeSpace()); }
-    unsigned get_num_ready() const noexcept
+    [[nodiscard]] unsigned get_num_ready() const noexcept
         { return static_cast<unsigned>(fifo_.getNumReady()); }
 
 private:

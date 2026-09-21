@@ -27,17 +27,17 @@ class counting_bitset {
 public:
     bool operator==(const counting_bitset &) const = default;
 
-    bool test(std::size_t pos) const
+    [[nodiscard]] bool test(std::size_t pos) const
         { return bits_.test(pos); }
 
-    bool all() const noexcept
+    [[nodiscard]] bool all() const noexcept
         { return count_ == N; }
-    bool any() const noexcept
+    [[nodiscard]] bool any() const noexcept
         { return count_ > 0; }
-    bool none() const noexcept
+    [[nodiscard]] bool none() const noexcept
         { return count_ == 0; }
 
-    std::size_t count() const noexcept
+    [[nodiscard]] std::size_t count() const noexcept
         { return count_; }
 
     counting_bitset &set() noexcept

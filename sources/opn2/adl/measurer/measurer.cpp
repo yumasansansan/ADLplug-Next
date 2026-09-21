@@ -56,9 +56,9 @@ class AudioHistory
     std::size_t m_capacity = 0;
 
 public:
-    std::size_t size() const { return m_length; }
-    std::size_t capacity() const { return m_capacity; }
-    const T *data() const { return &m_data[m_index + m_capacity - m_length]; }
+    [[nodiscard]] std::size_t size() const { return m_length; }
+    [[nodiscard]] std::size_t capacity() const { return m_capacity; }
+    [[nodiscard]] const T *data() const { return &m_data[m_index + m_capacity - m_length]; }
 
     void reset(std::size_t capacity)
     {

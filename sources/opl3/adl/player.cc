@@ -157,7 +157,10 @@ void Player::generate(float *left, float *right, unsigned nframes, unsigned stri
     // go in as the floats they are, seen as bytes, which is allowed; a buffer
     // of bytes to copy out of afterwards would instead have the library store
     // floats in storage of another type, and without their alignment.
-    const ADLMIDI_AudioFormat format {ADLMIDI_SampleType_F32, sizeof(float), static_cast<unsigned>(stride * sizeof(float))};
+    const ADLMIDI_AudioFormat format {
+        .type = ADLMIDI_SampleType_F32,
+        .containerSize = sizeof(float),
+        .sampleOffset = static_cast<unsigned>(stride * sizeof(float))};
     // The library takes the bytes of the buffers, and the format of a sample
     // beside them, which is how it writes floats into them.
     // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)

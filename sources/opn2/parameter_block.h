@@ -25,8 +25,8 @@ struct Chip_Settings;
 struct Instrument_Global_Parameters;
 
 struct Parameter_Block : Basic_Parameter_Block {
-    Chip_Settings chip_settings() const;
-    Instrument_Global_Parameters global_parameters() const;
+    [[nodiscard]] Chip_Settings chip_settings() const;
+    [[nodiscard]] Instrument_Global_Parameters global_parameters() const;
     void set_chip_settings(const Chip_Settings &cs);
     void set_global_parameters(const Instrument_Global_Parameters &gp);
 
@@ -55,7 +55,7 @@ struct Parameter_Block : Basic_Parameter_Block {
     struct Part {
         // The instrument the parameters describe, over base: what no parameter
         // holds, such as the pseudo eight-operator flag, keeps base's value.
-        Instrument instrument(const Instrument &base) const;
+        [[nodiscard]] Instrument instrument(const Instrument &base) const;
         void set_instrument(const Instrument &ins);
 
         // AudioParameterBool *p_ps8op = nullptr;
@@ -75,7 +75,7 @@ struct Parameter_Block : Basic_Parameter_Block {
         // Operators in the order the instrument numbers them.
         Operator &nth_operator(unsigned i) noexcept
             { return this->*operator_member(i); }
-        const Operator &nth_operator(unsigned i) const noexcept
+        [[nodiscard]] const Operator &nth_operator(unsigned i) const noexcept
             { return this->*operator_member(i); }
 
     private:

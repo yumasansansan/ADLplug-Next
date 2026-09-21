@@ -44,10 +44,10 @@ public:
     // bit may or may not survive.
     void reset_all(std::memory_order order = std::memory_order_seq_cst);
 
-    bool test(std::size_t idx, std::memory_order order = std::memory_order_seq_cst) const;
+    [[nodiscard]] bool test(std::size_t idx, std::memory_order order = std::memory_order_seq_cst) const;
     bool operator[](std::size_t idx) const { return test(idx); }
 
-    constexpr std::size_t size() const { return N; }
+    [[nodiscard]] constexpr std::size_t size() const { return N; }
 
 private:
     using Block = unsigned int;

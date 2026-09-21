@@ -41,7 +41,7 @@ public:
     void load(const Image &img, int frame_count);
     void load_data(const void *data, std::size_t size, int frame_count);
 
-    Km_Skin_Ptr scaled(double ratio) const;
+    [[nodiscard]] Km_Skin_Ptr scaled(double ratio) const;
 
 private:
     JUCE_LEAK_DETECTOR(Km_Skin)

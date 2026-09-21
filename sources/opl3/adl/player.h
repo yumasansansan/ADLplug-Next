@@ -64,36 +64,36 @@ public:
         { return adl_getInstrument(player_.get(), &bank, index, &ins) >= 0; }
     bool set_instrument(Bank_Ref &bank, unsigned index, const Instrument &ins)
         { return adl_setInstrument(player_.get(), &bank, index, &ins) >= 0; }
-    const char *emulator_name() const
+    [[nodiscard]] const char *emulator_name() const
         { return adl_chipEmulatorName(player_.get()); }
-    unsigned emulator() const noexcept
+    [[nodiscard]] unsigned emulator() const noexcept
         { return emu_; }
     void set_emulator(unsigned emu)
         { if (adl_switchEmulator(player_.get(), static_cast<int>(emu)) >= 0) emu_ = emu; }
-    unsigned num_chips() const
+    [[nodiscard]] unsigned num_chips() const
         { return static_cast<unsigned>(std::max(0, adl_getNumChipsObtained(player_.get()))); }
     bool set_num_chips(unsigned chips)
         { return adl_setNumChips(player_.get(), static_cast<int>(chips)) == 0; }
-    int channel_alloc_mode() const
+    [[nodiscard]] int channel_alloc_mode() const
         { return adl_getChannelAllocMode(player_.get()); }
     void set_channel_alloc_mode(int mode)
         { adl_setChannelAllocMode(player_.get(), mode); }
-    unsigned num_4ops() const
+    [[nodiscard]] unsigned num_4ops() const
         { return static_cast<unsigned>(std::max(0, adl_getNumFourOpsChnObtained(player_.get()))); }
     bool set_num_4ops(unsigned count);
-    int volume_model() const
+    [[nodiscard]] int volume_model() const
         { return adl_getVolumeRangeModel(player_.get()); }
     void set_volume_model(int model)
         { adl_setVolumeRangeModel(player_.get(), model); }
-    bool deep_tremolo() const
+    [[nodiscard]] bool deep_tremolo() const
         { return adl_getHTremolo(player_.get()) != 0; }
     void set_deep_tremolo(bool trem)
         { adl_setHTremolo(player_.get(), trem ? 1 : 0); }
-    bool deep_vibrato() const
+    [[nodiscard]] bool deep_vibrato() const
         { return adl_getHVibrato(player_.get()) != 0; }
     void set_deep_vibrato(bool vib)
         { adl_setHVibrato(player_.get(), vib ? 1 : 0); }
-    bool mt32_defaults() const;
+    [[nodiscard]] bool mt32_defaults() const;
     void set_mt32_defaults(bool mt32);
     void set_soft_pan_enabled(bool sp)
         { adl_setSoftPanEnabled(player_.get(), sp ? 1 : 0); }

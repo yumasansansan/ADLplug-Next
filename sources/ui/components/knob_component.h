@@ -30,22 +30,22 @@ public:
     explicit Knob(const String &name);
     ~Knob() override = default;
 
-    Km_Skin *skin() const;
+    [[nodiscard]] Km_Skin *skin() const;
     void set_skin(Km_Skin *skin);
 
-    double value() const
+    [[nodiscard]] double value() const
         { return value_; }
     void set_value(double v, NotificationType notification);
 
-    double min() const
+    [[nodiscard]] double min() const
         { return min_; }
-    double max() const
+    [[nodiscard]] double max() const
         { return max_; }
     void set_range(double min, double max);
 
     void set_max_increment(double maxinc);
 
-    bool is_dragging() const
+    [[nodiscard]] bool is_dragging() const
         { return in_drag_; }
 
     class Listener {
@@ -69,7 +69,7 @@ protected:
 
 private:
     void handle_drag(const MouseEvent &event);
-    Rectangle<float> get_frame_bounds() const;
+    [[nodiscard]] Rectangle<float> get_frame_bounds() const;
     Km_Skin_Ptr skin_;
     double value_ = 0;
     double min_ = 0;

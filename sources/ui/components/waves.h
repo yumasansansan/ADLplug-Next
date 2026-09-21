@@ -20,6 +20,6 @@
 class Waves {
 public:
     virtual ~Waves() = default;
-    virtual unsigned wave_count() const = 0;
-    virtual double compute_wave(unsigned wave, double phase) const = 0;
+    [[nodiscard]] virtual unsigned wave_count() const = 0;
+    [[nodiscard]] virtual double compute_wave(unsigned wave, double phase) const = 0;
 };

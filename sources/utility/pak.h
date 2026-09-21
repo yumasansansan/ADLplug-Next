@@ -34,16 +34,16 @@
 class Pak_File_Reader {
 public:
     bool init_with_data(const std::uint8_t *data, std::size_t size);
-    std::size_t entry_count() const noexcept
+    [[nodiscard]] std::size_t entry_count() const noexcept
         { return entries_.size(); }
 
-    const std::string &name(std::size_t nth) const;
+    [[nodiscard]] const std::string &name(std::size_t nth) const;
     // The bank file, in WOPL or WOPN format.
-    std::vector<std::uint8_t> extract(std::size_t nth) const;
+    [[nodiscard]] std::vector<std::uint8_t> extract(std::size_t nth) const;
     // What the sources say of the bank, in UTF-8.
-    std::string info(std::size_t nth) const;
+    [[nodiscard]] std::string info(std::size_t nth) const;
     // The bank of the given name, if there is one.
-    std::optional<std::size_t> find(std::string_view name) const;
+    [[nodiscard]] std::optional<std::size_t> find(std::string_view name) const;
 
 private:
     struct Entry {
@@ -61,5 +61,5 @@ private:
     std::size_t content_offset_ = 0;
 
     bool read_dictionary();
-    std::vector<std::uint8_t> read_content(std::uint32_t offset, std::uint32_t size) const;
+    [[nodiscard]] std::vector<std::uint8_t> read_content(std::uint32_t offset, std::uint32_t size) const;
 };

@@ -25,12 +25,12 @@ class Indicator_NxM : public Component
 public:
     Indicator_NxM(unsigned rows, unsigned cols);
 
-    bool value(unsigned row, unsigned column) const;
+    [[nodiscard]] bool value(unsigned row, unsigned column) const;
     void set_value(unsigned row, unsigned column, bool value);
 
-    unsigned rows() const
+    [[nodiscard]] unsigned rows() const
         { return rows_; }
-    unsigned columns() const
+    [[nodiscard]] unsigned columns() const
         { return columns_; }
 
 protected:
@@ -41,5 +41,5 @@ private:
     unsigned columns_ = 0;
     std::vector<bool> bits_;
     // Past the end of bits_ for a cell outside the grid.
-    std::size_t index_from(unsigned row, unsigned column) const;
+    [[nodiscard]] std::size_t index_from(unsigned row, unsigned column) const;
 };
