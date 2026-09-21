@@ -148,6 +148,12 @@ jobs:
           - { os: ubuntu-26.04, arch: baseline, preset: opn-sanitize, fuzz: true }
           - { os: ubuntu-26.04, arch: baseline, preset: adl-tsan, fuzz: true }
           - { os: ubuntu-26.04, arch: baseline, preset: opn-tsan, fuzz: true }
+          # The realtime sanitizer has no fuzz targets of its own: Clang will not
+          # link libFuzzer with it. What it watches is reached by the tests instead
+          # -- the render of twenty seconds through processBlock, and the replay of
+          # every input the fuzz targets once failed on.
+          - { os: ubuntu-26.04, arch: baseline, preset: adl-rtsan, fuzz: false }
+          - { os: ubuntu-26.04, arch: baseline, preset: opn-rtsan, fuzz: false }
           - { os: macos-26, arch: arm64, preset: adl-sanitize, fuzz: false }
           - { os: macos-26, arch: arm64, preset: opn-sanitize, fuzz: false }
 

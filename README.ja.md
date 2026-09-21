@@ -174,7 +174,7 @@ cmake --build --preset adl-release     # 上と同様です．
 | -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | グレーゾーンのバンクを含める（後述） |
 | -DADLplug_ARCH=baseline/avx2    | baseline                               | x86-64 の命令セット（baseline はすべての x86-64 CPU 向け，avx2 は AVX2 に対応した CPU 向け） |
 | -DADLplug_PGO=ON/OFF            | ON                                     | Release ビルドで，プロファイルに基づく最適化（PGO）を行う（後述） |
-| -DADLplug_SANITIZERS=<list>     | 空                                     | サニタイザ付きでビルドする（address・undefined・vptr・thread・memory をカンマ区切りで指定，後述） |
+| -DADLplug_SANITIZERS=<list>     | 空                                     | サニタイザ付きでビルドする（address・undefined・vptr・thread・memory・realtime をカンマ区切りで指定，後述） |
 | -DADLplug_MSAN_LIBRARIES=<dir>  | 空                                     | memory サニタイザが必要とするライブラリの置き場所（`ci/msan-libraries.sh` がビルドします，後述） |
 | -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | ビルドの種類（Debug・Release など）にかかわらず，アサーション（内部の整合性のチェック）を有効にする |
 | -DADLplug_WERROR=ON/OFF         | OFF（プリセットでは ON に設定されています）  | ADLplug-Next 自身のコードの警告をエラーとして扱う |
@@ -192,6 +192,8 @@ cmake --build --preset adl-release     # 上と同様です．
 `adl-tsan`・`opn-tsan` のプリセットは，address の代わりに thread を，undefined と組み合わせて指定します．thread は，ホストがプラグインを動かす複数のスレッド（同時に進む処理の流れ．音声を要求してくるスレッド，エディタが動いているスレッド，プラグイン自身のワーカーがあります）を見張り，そのうちの 2 つが，順序を決めるしくみなしに同じメモリを読み書きしていないか，互いを待ち合って止まってしまうような順序でロック（他のスレッドを待たせるしくみ）を取っていないか，プログラムの終了時にまだ動いているスレッドがないかを調べます．address とは，どちらもメモリ全体の状態を独自の方法で覚えておくため，同時にビルドできません．そのため，別のプリセットになっています．CI では，どちらのプラグインも，両方の組み合わせでビルドしています．vptr は含めません．vptr の検査と thread のランタイムは，LLVM 自身の中で互いに競合するため（2019 年から google/sanitizers の issue 1106 として知られています），両方を指定したビルドでは，プラグインの問題ではなく LLVM の競合が報告されてしまいます（指定した場合は，vptr を除いた旨を表示してビルドします）．vptr の検査は address のビルドが受け持ちます．なお，Windows の Clang には thread がないため，これは Linux と macOS 向けのビルドです．Windows で configure すると，その旨のメッセージを表示して止まります．
 
 `adl-msan`・`opn-msan` のプリセットは，memory と undefined を指定します．memory は，ほかのどのサニタイザも見ない誤り——**一度も書き込まれていない値を読むこと**——を見つけます．このサニタイザは自分が計測（instrument）したコードしか見えず，計測していないライブラリが書いたメモリは「書き込まれていない」と見なすため，C++ 標準ライブラリもこのサニタイザ付きでビルドしたものでなければなりません．そのようなライブラリを配布しているシステムはないので，`ci/msan-libraries.sh` が，使っているコンパイラ自身のソースから libc++・libc++abi と，それに合わせた libFuzzer をビルドします．その置き場所を指定するのが `ADLplug_MSAN_LIBRARIES` です．名前が `-msan` で終わるプリセットでは `ci/build.sh` がこのスクリプトを呼ぶので，あらかじめ何かをしておく必要はありません．Clang の memory サニタイザは Linux にしかなく，address や thread と同時にはビルドできません．このサニタイザの下で走らせるのはプラグインではなく fuzz の対象です．プラグインはホストに読み込まれるものであり，サニタイザが何も知らないホストが渡してくる値は，すべて報告されてしまうからです．
+
+`adl-rtsan`・`opn-rtsan` のプリセットは realtime サニタイザを指定します．これはほかのサニタイザとは問いが違い，コードが間違っているかではなく，**一瞬でも待てば音が途切れる場所で動かしてよいコードか**を見ます．`processBlock` とそこから呼ばれるものには `[[clang::nonblocking]]` の印が付いていて，その下ではロックの取得・メモリの確保・解放・ファイルの読み込み・例外が許されません．サニタイザは，そうした呼び出しを最初に捕まえたところで報告します．Clang は realtime をほかのどのサニタイザとも——undefined とさえ——同時に指定できないので専用のプリセットになっており，fuzz の対象も持ちません（libFuzzer ともリンクできません）．見張る先には，代わりにテストが届きます．この印はサニタイザなしのビルドでは何の費用もかからないので，コードは常に付けたままにしています——何かが検査しているかどうかに関わらず，そこが守るべき約束を述べているからです．Windows の Clang には realtime サニタイザはありません．
 
 エミュレータコアは，デフォルトですべてビルドされます．コアを除くには，[FM 音源コアの特徴](#fm-音源コアの特徴) の表の「ビルドオプション」の列にあるオプションを OFF にします（例: `-DUSE_OPAL_EMULATOR=OFF`）．`USE_NUKED_EMULATOR` のように，1 つで複数のコアをまとめて除くオプションや，libADLMIDI と libOPNMIDI の両方にある名前のオプションもあります．両方にある名前でも，影響するのはビルドするプラグインの側（ADLplug-Next なら libADLMIDI）だけです．`USE_DOSBOX_EMULATOR`（ADLplug-Next）と `USE_MAME_EMULATOR`（OPNplug-Next）は，プラグインが音色の計測に使うため，OFF にすることはできません（configure の時点でエラーになります）．
 

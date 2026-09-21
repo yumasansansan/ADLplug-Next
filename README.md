@@ -273,7 +273,7 @@ An option chooses whether ADLplug-Next or OPNplug-Next is built:
 | -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | Include the banks of the grey zone (see below)                                                |
 | -DADLplug_ARCH=baseline/avx2    | baseline                               | x86-64 instruction set: baseline (every x86-64 CPU) or avx2 (CPUs with AVX2)                  |
 | -DADLplug_PGO=ON/OFF            | ON                                     | Profile-guided optimisation of Release builds (see below)                                     |
-| -DADLplug_SANITIZERS=<list>     | empty                                  | Build with sanitizers: address, undefined, vptr, thread, memory (comma-separated; see below)   |
+| -DADLplug_SANITIZERS=<list>     | empty                                  | Build with sanitizers: address, undefined, vptr, thread, memory, realtime (comma-separated; see below) |
 | -DADLplug_MSAN_LIBRARIES=<dir>  | empty                                  | Prefix of the libraries the memory sanitizer needs, which ci/msan-libraries.sh builds          |
 | -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | Enable assertions (internal consistency checks) in any build type (Debug, Release and others) |
 | -DADLplug_WERROR=ON/OFF         | OFF (the presets set ON)               | Treat warnings in ADLplug-Next's own code as errors                                           |
@@ -331,6 +331,18 @@ needs nothing beforehand. Clang has a memory sanitizer for Linux alone, and it
 cannot be built together with address or thread. What runs under it is the fuzz
 targets rather than the plugins: a plugin is loaded by a host, and a host the
 sanitizer knows nothing about would have every value it hands over reported.
+
+The `adl-rtsan` and `opn-rtsan` presets name the realtime sanitizer, which asks a
+different question from all of the others: not whether the code is wrong, but
+whether it may be run where a moment's wait is a gap in the sound. `processBlock`
+and what it calls are marked `[[clang::nonblocking]]`, and nothing under them may
+take a lock, allocate, free, read a file or throw; the sanitizer reports the first
+such call it intercepts. Clang refuses it together with every other sanitizer,
+undefined included, so it has presets of its own, and it has no fuzz targets: Clang
+will not link libFuzzer with it either. What it watches is reached by the tests
+instead. The attribute costs nothing in a build without the sanitizer, so the code
+carries it always -- it says what the contract is whether or not anything is
+checking. Clang has no realtime sanitizer for Windows.
 
 Every emulator core is built by default. To leave cores out, turn off options
 in the Build option column of the tables under

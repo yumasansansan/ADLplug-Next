@@ -109,7 +109,7 @@ option(ADLplug_GREYZONE_BANKS "Include the instrument banks of the grey zone, fo
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
 set(ADLplug_ARCH "baseline" CACHE STRING "Instruction set of x86-64 builds (baseline, avx2)")
-set(ADLplug_SANITIZERS "" CACHE STRING "Sanitizers to build with, comma-separated (address, undefined, vptr, thread, memory)")
+set(ADLplug_SANITIZERS "" CACHE STRING "Sanitizers to build with, comma-separated (address, undefined, vptr, thread, memory, realtime)")
 set(ADLplug_MSAN_LIBRARIES "" CACHE PATH "Prefix of the libraries a memory-sanitizer build needs and no system ships: a C++ standard library built with that sanitizer, and a libFuzzer built against it (ci/msan-libraries.sh writes them)")
 
 # Applied per-target rather than globally: these variables are inherited by
@@ -242,7 +242,7 @@ endif()
 # Sanitizers
 #
 # ADLplug_SANITIZERS names the sanitizers of a build, comma-separated (address,
-# undefined, vptr, thread, memory), and gives them to every target: ADLplug-Next's own
+# undefined, vptr, thread, memory, realtime), and gives them to every target: ADLplug-Next's own
 # code, JUCE, libADLMIDI and libOPNMIDI. The emulator cores are part of what
 # the plugins ship, so a mistake of memory or an undefined operation in them is
 # the plugin's. Undefined behaviour stops the program
@@ -306,10 +306,10 @@ if(ADLplug_SANITIZERS)
   endif()
   string(REPLACE "," ";" ADLplug_SANITIZER_LIST "${ADLplug_SANITIZERS}")
   foreach(sanitizer IN LISTS ADLplug_SANITIZER_LIST)
-    if(NOT sanitizer MATCHES "^(address|undefined|vptr|thread|memory)$")
+    if(NOT sanitizer MATCHES "^(address|undefined|vptr|thread|memory|realtime)$")
       message(FATAL_ERROR
         "ADLplug_SANITIZERS names '${sanitizer}', which is not one of address, undefined, vptr, "
-        "thread, memory.")
+        "thread, memory, realtime.")
     endif()
   endforeach()
   if("address" IN_LIST ADLplug_SANITIZER_LIST AND "thread" IN_LIST ADLplug_SANITIZER_LIST)
@@ -343,6 +343,35 @@ if(ADLplug_SANITIZERS)
       message(FATAL_ERROR "ADLplug_SANITIZERS names no sanitizer that this build can have besides vptr.")
     endif()
   endif()
+  # realtime asks a different question from all of them: not whether the code is
+  # wrong, but whether it may be run where a moment's wait is a gap in the sound.
+  # A function marked [[clang::nonblocking]] -- processBlock and what it calls --
+  # may not take a lock, allocate, free, read a file or throw, and the sanitizer
+  # reports the first such call it intercepts. This project is written that way
+  # already: a lock-free queue carries what the editor asks for, a worker thread
+  # does the measuring, and the audio thread takes the player's lock with
+  # try_to_lock so that it never waits for it. Nothing checked that until now, and
+  # one new allocation under processBlock would have gone unnoticed.
+  #
+  # It is on its own: Clang refuses -fsanitize=realtime with every other sanitizer,
+  # undefined included, so the *-rtsan presets name it alone. The attribute costs
+  # nothing in a build without it, which is why the code carries it always -- it
+  # says what the contract is whether or not anything is checking.
+  if("realtime" IN_LIST ADLplug_SANITIZER_LIST)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+      message(FATAL_ERROR
+        "ADLplug_SANITIZERS names realtime, which Clang has no realtime sanitizer for on Windows. "
+        "The *-rtsan presets are for Linux and macOS.")
+    endif()
+    list(LENGTH ADLplug_SANITIZER_LIST ADLplug_SANITIZER_COUNT)
+    if(NOT ADLplug_SANITIZER_COUNT EQUAL 1)
+      message(FATAL_ERROR
+        "ADLplug_SANITIZERS names realtime together with something else (${ADLplug_SANITIZERS}). "
+        "Clang refuses -fsanitize=realtime with every other sanitizer, undefined included: the "
+        "*-rtsan presets name realtime and nothing besides.")
+    endif()
+  endif()
+
   # memory reads what the others cannot: a value that was never written. It sees
   # only the code it has instrumented, and memory written by code it has not seen
   # is memory it believes was never written, so every read of that is reported.

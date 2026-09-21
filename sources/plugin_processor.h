@@ -63,10 +63,18 @@ public:
 
     bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
 
-    void processBlock(AudioBuffer<float> &buffer, MidiBuffer &midi_messages) override;
-    void processBlockBypassed(AudioBuffer<float> &buffer, MidiBuffer &midi_messages) override;
+    // What the host calls on its audio thread, where a moment's wait is a gap in
+    // the sound: nothing under these may take a lock, allocate, free, read a file
+    // or throw. The attribute says so, and the realtime sanitizer holds them to it
+    // (ADLplug_SANITIZERS=realtime). It costs nothing in a build without that
+    // sanitizer, so it is here to be read as much as to be checked. The definition
+    // needs no repeat of it: the attribute belongs to the function's type.
+    void processBlock(AudioBuffer<float> &buffer, MidiBuffer &midi_messages)
+        [[clang::nonblocking]] override;
+    void processBlockBypassed(AudioBuffer<float> &buffer, MidiBuffer &midi_messages)
+        [[clang::nonblocking]] override;
 
-    void process(float *outputs[], unsigned nframes, Midi_Input_Source &midi);
+    void process(float *outputs[], unsigned nframes, Midi_Input_Source &midi) [[clang::nonblocking]];
 
 private:
     void process_messages(bool under_lock);

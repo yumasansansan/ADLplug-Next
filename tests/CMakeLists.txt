@@ -61,7 +61,8 @@ set(ADLplug_UNIT_TESTED_SOURCES
 # detection is asked for. Races: wherever the thread sanitizer is built with.
 # Values never written: wherever the memory sanitizer is, which is a build of the
 # fuzz targets alone, so that one is run by the job that builds them rather than
-# by a whole ctest (.github/workflows/ci.yml).
+# by a whole ctest (.github/workflows/ci.yml). Waiting where the sound cannot
+# wait: wherever the realtime sanitizer is.
 if(ADLplug_SANITIZERS)
   cmake_language(DEFER CALL adlplug_sanitizer_test_environment)
 
@@ -90,6 +91,17 @@ if(ADLplug_SANITIZERS)
     add_test(NAME sanitizer.memory_detection COMMAND ADLplug_memory_canary)
     set_tests_properties(sanitizer.memory_detection PROPERTIES
       PASS_REGULAR_EXPRESSION "WARNING: MemorySanitizer: use-of-uninitialized-value")
+  endif()
+
+  # C++ where the others are C: the attribute the sanitizer watches for is one
+  # Clang acts on in C++ alone (realtime_canary.cc says so).
+  if(ADLplug_SANITIZERS MATCHES "(^|,)realtime(,|$)")
+    add_executable(ADLplug_realtime_canary sanitizers/realtime_canary.cc)
+    adlplug_set_language_standard(ADLplug_realtime_canary)
+    adlplug_own_sources(sanitizers/realtime_canary.cc)
+    add_test(NAME sanitizer.realtime_detection COMMAND ADLplug_realtime_canary)
+    set_tests_properties(sanitizer.realtime_detection PROPERTIES
+      PASS_REGULAR_EXPRESSION "ERROR: RealtimeSanitizer")
   endif()
 endif()
 

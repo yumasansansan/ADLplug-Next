@@ -17,6 +17,7 @@
 
 #include "adl/player.h"
 #include "utility/midi.h"
+#include "utility/realtime.h"
 #include "utility/name_field.h"
 #include "utility/simple_fifo.h"
 #include "utility/pak.h"
@@ -344,7 +345,7 @@ void AdlplugAudioProcessor::process(float *outputs[], unsigned nframes, Midi_Inp
         iframe += segment_nframes;
     }
     const int64 time_after_generate = Time::getHighResolutionTicks();
-    lock.unlock();
+    release_on_audio_thread(lock);
 
     Dc_Filter &dclf = dc_filter_[0];
     Dc_Filter &dcrf = dc_filter_[1];
@@ -847,12 +848,14 @@ void AdlplugAudioProcessor::processBlock(AudioBuffer<float> &buffer,
 void AdlplugAudioProcessor::processBlockBypassed(AudioBuffer<float> &buffer, MidiBuffer &midi_messages)
 {
     {
-        // The lock goes when the scope does. Unlocking it by hand would throw
-        // when the try had not got it -- which is whenever another thread holds
-        // the player, as the worker does while it measures an instrument or
-        // changes the chips -- and nothing catches that.
-        const std::unique_lock<std::mutex> lock(player_lock_, std::try_to_lock);
+        // Released by hand, and only if the try got it: unlocking a lock that was
+        // never taken throws, and the try does not get it whenever another thread
+        // holds the player, as the worker does while it measures an instrument or
+        // changes the chips. What it is released inside says why the audio thread
+        // may release a lock at all (utility/realtime.h).
+        std::unique_lock<std::mutex> lock(player_lock_, std::try_to_lock);
         process_messages(lock.owns_lock());
+        release_on_audio_thread(lock);
     }
 
     cpu_load_.store(0.0, std::memory_order_relaxed);
