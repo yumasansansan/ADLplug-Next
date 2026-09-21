@@ -23,6 +23,7 @@
 #include "adl/chip_settings.h"
 #include "utility/processor_ex.h"
 #include "utility/atomic_bit_set.h"
+#include "utility/chip_resampler.h"
 #include "JuceHeader.h"
 #include <array>
 #include <atomic>
@@ -31,6 +32,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <vector>
 class Player;
 class Bank_Manager;
@@ -172,6 +174,7 @@ public:
 private:
     void create_player(unsigned sample_rate);
     void create_first_player(unsigned sample_rate);
+    void recreate_player_keeping_state(unsigned sample_rate);
     void write_state(MemoryBlock &data);
     void read_state(const XmlElement &root);
     void mark_state_for_notification();
@@ -187,6 +190,19 @@ private:
     // state, or saves one after a parameter has changed. Each prepareToPlay()
     // replaces it with one for its sample rate; releaseResources() keeps it.
     std::unique_ptr<Player> player_;
+
+    // The chip's samples become the host's here rather than in the library
+    // (sources/utility/chip_resampler.h). The filter is designed when the player
+    // is made, for the chip's rate and the host's; where it cannot be designed --
+    // a ratio that does not reduce, which is every host rate against the OPN's --
+    // the player is given the host's rate instead and the library interpolates as
+    // it did before, and `resampling_why_` is what it said about that.
+    Chip_Resampler resampler_;
+    mp::resample::Design resampling_design_;
+    std::string resampling_why_;
+    // What the host asked for, which a player made without a prepareToPlay()
+    // (a chip type that changes the chip's rate) has to be made for again.
+    unsigned host_sample_rate_ = 0;
 
     std::unique_ptr<Bank_Manager> bank_manager_;
 

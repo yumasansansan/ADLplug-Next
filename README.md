@@ -195,6 +195,23 @@ sound to a file) in a DAW.
 | YMFM OPNA                | OPNA (YM2608)  | As YMFM OPL3                                                                                            |   66× | no           | `USE_YMFM_EMULATOR`           |
 | YM2608-LLE OPNA          | OPNA (YM2608)  | As YM2612-LLE                                                                                           |  0.3× | no           | `USE_NUKED_OPNA_LLE_EMULATOR` |
 
+### The chip's rate and the host's
+
+A sound chip runs at a rate of its own: 49716 samples a second for the OPL3,
+53267 for the OPN2, 55466 for the OPNA. A host asks for its own rate, usually
+44100 or 48000, so something has to convert between the two.
+
+Where the two rates share a factor, ADLplug-Next takes the chip's own samples
+and converts them with a filter made for that pair of rates. Nothing of the top
+octave is lost and nothing folds back into what you hear. That is the case for
+the OPL3 at the rates hosts ask for.
+
+Where they share none, that kind of filter would need millions of numbers to
+hold it -- 53267 is a prime number, so no host rate shares a factor with it --
+and the conversion is left to the straight-line interpolation inside libADLMIDI
+and libOPNMIDI, as it was before. That is the case for the OPN2 and the OPNA
+today.
+
 ## Build instructions
 
 This section is about building the plugins from their source code. To use the

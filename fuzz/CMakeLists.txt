@@ -293,6 +293,7 @@ set(ADLplug_FUZZ_PROCESSOR_SOURCES
   "${PROJECT_SOURCE_DIR}/sources/${ADLplug_FUZZ_CHIP}/adl/measurer/measurer.cpp")
 
 set(ADLplug_FUZZ_PROCESSOR_LIBRARIES ${ADLplug_FUZZ_PLAY_LIBRARY}
+  mediaperch-resample
   # The headless audio processors module of JUCE 9 is the same processor
   # without the interface, and it needs neither juce_gui_basics nor the X11
   # packages that module wants on Linux. The graphics module comes in for the

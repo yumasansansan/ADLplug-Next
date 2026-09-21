@@ -129,6 +129,7 @@ else()
   target_link_libraries(ADLplug_unit_tests PRIVATE wopn OPNMIDI_static)
 endif()
 target_link_libraries(ADLplug_unit_tests PRIVATE
+  mediaperch-resample
   juce::juce_core
   juce::juce_graphics
   juce::juce_recommended_config_flags)

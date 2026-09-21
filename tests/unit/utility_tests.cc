@@ -8,15 +8,18 @@
 
 #include "test.h"
 #include "utility/atomic_bit_set.h"
+#include "utility/chip_resampler.h"
 #include "utility/counting_bitset.h"
 #include "utility/field_bitops.h"
 #include "utility/fourcc.h"
 #include "utility/semaphore.h"
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -123,6 +126,94 @@ ADLPLUG_TEST(fourcc)
 {
     CHECK(fourcc("chip") == 0x63686970u);
     CHECK(fourcc("\xff\x01\x00\x80") == 0xff010080u);
+}
+
+// The rates of the two chips and of a host, which is where the ratios come from:
+// 49716 against 44100 reduces (36), and 53267 is prime, so it does not.
+ADLPLUG_TEST(chip_resampler)
+{
+    Chip_Resampler resampler;
+    const mp::resample::Design design;  // the default is the middle of the three settings
+    std::string why;
+
+    // The OPL3's rate against a common one: a filter, and one that meets the
+    // specification it was asked for rather than one that says it did.
+    CHECK(resampler.prepare(49716, 44100, 256, design, why));
+    CHECK(resampler.active());
+    CHECK(why.empty());
+    CHECK(resampler.chip_rate() == 49716);
+    CHECK(resampler.host_rate() == 44100);
+    CHECK(resampler.response().stopband_db <= -design.attenuation_db);
+    // A linear-phase filter leaves the host nothing to make up for.
+    CHECK(resampler.latency_frames() == 0.0);
+
+    // Asked for frames, it writes that many and no fewer, block after block, and
+    // asks the chip for about as many as the ratio says: the rest of a block the
+    // filter produced waits for the next one rather than being thrown away.
+    unsigned asked_of_chip = 0;
+    const auto steady = [&asked_of_chip](float *left, float *right, unsigned frames) {
+        asked_of_chip += frames;
+        for (unsigned i = 0; i < frames; ++i) {
+            left[i] = 0.5f;
+            right[i] = -0.25f;
+        }
+    };
+
+    std::vector<float> left(1024, 0.0f);
+    std::vector<float> right(1024, 0.0f);
+    unsigned written = 0;
+    for (const unsigned block : {256u, 64u, 1u, 200u, 256u, 13u}) {
+        for (unsigned i = 0; i < block; ++i) {
+            left[written + i] = 123.0f;  // so that a frame not written is seen
+            right[written + i] = 123.0f;
+        }
+        resampler.pull(left.data() + written, right.data() + written, block, steady);
+        written += block;
+    }
+    CHECK(written == 790);
+    for (unsigned i = 0; i < written; ++i) {
+        CHECK(left[i] != 123.0f);
+        CHECK(right[i] != 123.0f);
+    }
+    // 790 frames of the host's are 890 of the chip's, give or take the frames the
+    // filter holds either side.
+    const unsigned expected = 790u * 49716u / 44100u;
+    CHECK(asked_of_chip >= expected);
+    CHECK(asked_of_chip <= expected + 512);
+
+    // What went in was a constant, and a resampler passes one through: the
+    // filter's gain at direct current is one. The start of the stream is the
+    // filter filling up, so the end of it is where to look.
+    for (unsigned i = written - 200; i < written; ++i) {
+        CHECK(std::abs(static_cast<double>(left[i]) - 0.5) < 1e-6);
+        CHECK(std::abs(static_cast<double>(right[i]) + 0.25) < 1e-6);
+    }
+
+    // Equal rates are not resampled: there is nothing to say about it either.
+    why = "something";
+    CHECK(!resampler.prepare(44100, 44100, 256, design, why));
+    CHECK(!resampler.active());
+    CHECK(why == "something");
+
+    // The OPN2's rate against the same host rate does not reduce -- 53267 is
+    // prime -- so at these settings the filter is refused, in words, and the
+    // caller that hears no plays what it is given instead.
+    CHECK(!resampler.prepare(53267, 44100, 256, design, why));
+    CHECK(!resampler.active());
+    CHECK(!why.empty());
+
+    unsigned straight_through = 0;
+    const auto count = [&straight_through](float *l, float *r, unsigned frames) {
+        straight_through += frames;
+        for (unsigned i = 0; i < frames; ++i) {
+            l[i] = 1.0f;
+            r[i] = 1.0f;
+        }
+    };
+    resampler.pull(left.data(), right.data(), 128, count);
+    CHECK(straight_through == 128);
+    CHECK(left[0] == 1.0f);
+    CHECK(left[127] == 1.0f);
 }
 
 ADLPLUG_TEST(semaphore)

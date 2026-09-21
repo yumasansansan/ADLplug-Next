@@ -233,25 +233,23 @@ void AdlplugAudioProcessor::prepareToPlay(double given_sample_rate, int block_si
         const std::scoped_lock lock(player_lock_);
         const auto rate = static_cast<unsigned>(sample_rate);
 
-        if (!player_) {
+        if (!player_)
             create_first_player(rate);
-        }
-        else {
-            // A player runs at the rate it was made for, so a new one takes
-            // over the old one's state, with the parameter changes the old one
-            // has not taken yet. The parameters are not set from the new
-            // player: parts that select the same program would all get the
-            // values of the part applied last, and hosts expect a parameter to
-            // keep the value they gave it (auval checks that).
-            apply_parameter_changes();
-            MemoryBlock state;
-            write_state(state);
-            create_player(rate);
-            if (const std::unique_ptr<XmlElement> root = getXmlFromBinary(state.getData(), static_cast<int>(state.getSize())))
-                read_state(*root);
-        }
+        else
+            recreate_player_keeping_state(rate);
 
         mark_state_for_notification();
+
+        // What the filter leaves for the host to make up for: nothing for a
+        // linear-phase design, whose delay is taken out where the output is
+        // sampled from, and a number of frames for a minimum-phase one, whose
+        // delay is a different number at every frequency and cannot be. The
+        // filter counts it in the chip's frames, and a host counts its own.
+        const double left_over = resampler_.latency_frames();
+        const double per_chip_frame = resampler_.active()
+            ? static_cast<double>(resampler_.host_rate()) / static_cast<double>(resampler_.chip_rate())
+            : 1.0;
+        setLatencySamples(static_cast<int>(std::lround(left_over * per_chip_frame)));
     }
 
     ready_.store(true);
@@ -285,6 +283,16 @@ std::unique_lock<std::mutex> AdlplugAudioProcessor::acquire_player_nonrt()
 
 void AdlplugAudioProcessor::set_chip_settings_nonrt(const Chip_Settings &cs)
 {
+    // The chip type says which chip it is, and the two run at different rates
+    // (OPN2 and OPNA). A player runs at the rate it was made for, so a change
+    // there is a new player -- made from these settings, which are the
+    // parameters' -- rather than a setting applied to the one that is there.
+    if (resampler_.active() && chip_sample_rate(cs) != resampler_.chip_rate()) {
+        recreate_player_keeping_state(host_sample_rate_);
+        mark_state_for_notification();
+        return;
+    }
+
     Player &pl = *player_;
     pl.panic();
     set_player_chip_settings(pl, cs);
@@ -341,7 +349,10 @@ void AdlplugAudioProcessor::process(float *outputs[], unsigned nframes, Midi_Inp
             midi.get_next_event();
         }
 
-        pl.generate(&left[iframe], &right[iframe], segment_nframes, 1);
+        // The chip's own samples, resampled here to the host's rate; without a
+        // filter this is the player writing into the block as it always did.
+        resampler_.pull(&left[iframe], &right[iframe], segment_nframes,
+                        [&pl](float *l, float *r, unsigned n) { pl.generate(l, r, n, 1); });
         iframe += segment_nframes;
     }
     const int64 time_after_generate = Time::getHighResolutionTicks();
@@ -963,11 +974,21 @@ void AdlplugAudioProcessor::create_player(unsigned sample_rate)
     std::vector<std::uint8_t> default_wopl = pak.extract(0);
     assert(!default_wopl.empty());
 
+    // The rate the chip runs at, and the filter from it to the host's. A filter
+    // that cannot be built leaves the player at the host's rate, where the library
+    // interpolates as before; what it said is kept for the editor to show.
+    const Chip_Settings &settings = parameter_block_->chip_settings();
+    const unsigned chip_rate = chip_sample_rate(settings);
+    host_sample_rate_ = sample_rate;
+    resampling_why_.clear();
+    const bool resampling =
+        resampler_.prepare(chip_rate, sample_rate, midi_interval_max, resampling_design_, resampling_why_);
+
     auto pl = std::make_unique<Player>();
-    pl->init(sample_rate);
+    pl->init(resampling ? chip_rate : sample_rate);
     pl->reserve_banks(bank_reserve_size);
     pl->set_soft_pan_enabled(true);
-    set_player_chip_settings(*pl, parameter_block_->chip_settings());
+    set_player_chip_settings(*pl, settings);
 
     auto bm = std::make_unique<Bank_Manager>(*this, *pl, default_wopl);
 
@@ -983,6 +1004,22 @@ void AdlplugAudioProcessor::create_player(unsigned sample_rate)
 
     active_part_ = 0;
     copy_text(bank_title_, sizeof bank_title_, pak.name(0));
+}
+
+// Replaces the player with one for the rate given, carrying the state of the old
+// one over. The parameters are not set from the new player: parts that select the
+// same program would all get the values of the part applied last, and hosts expect
+// a parameter to keep the value they gave it (auval checks that). The player lock
+// is held.
+void AdlplugAudioProcessor::recreate_player_keeping_state(unsigned sample_rate)
+{
+    apply_parameter_changes();
+    MemoryBlock state;
+    write_state(state);
+    create_player(sample_rate);
+    if (const std::unique_ptr<XmlElement> root =
+            getXmlFromBinary(state.getData(), static_cast<int>(state.getSize())))
+        read_state(*root);
 }
 
 // Makes the first player and settles the parameters with it. Until then the

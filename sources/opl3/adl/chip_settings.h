@@ -17,6 +17,7 @@
 
 #pragma once
 #include "JuceHeader.h"
+#include <adlmidi.h>
 #include <vector>
 
 struct Emulator_Defaults;
@@ -61,3 +62,12 @@ struct Chip_Settings {
     [[nodiscard]] PropertySet to_properties() const;
     static Chip_Settings from_properties(const PropertySet &set);
 };
+
+// The rate the chip itself runs at, which the settings do not change: every OPL3
+// core of the library runs at this one. Asking the library for that rate is asking
+// for the chip's own samples, which is what lets the resampling be done here
+// (sources/utility/chip_resampler.h).
+[[nodiscard]] inline unsigned chip_sample_rate(const Chip_Settings &) noexcept
+{
+    return ADL_CHIP_SAMPLE_RATE;
+}
