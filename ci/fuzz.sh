@@ -61,7 +61,25 @@ seconds=$2
 corpora=$3
 crashes=$4
 earlier=${5:-}
+
+# The time a target is given beyond the time it was asked to run for, after which
+# it is taken to have hung rather than to be slow. Ten minutes is room enough for a
+# build with the address or thread sanitizer to start, read every seed and
+# regression input, and stop when it is told to.
+#
+# A build with the memory sanitizer is slower than that by a good deal, and what
+# counts as hung has to allow for it: measured on one CI run of the same commit and
+# the same target, the bank manager's did 2 inputs a second under the address
+# sanitizer and 0.3 under the memory one, and its slowest single input took 31
+# seconds where the address sanitizer's took under one. That target asks the
+# plugin's own worker to measure an instrument, which plays it for as long as forty
+# seconds and listens for sixty more, and every one of those samples is carried
+# through the shadow memory and the origins. So the memory sanitizer's builds get
+# half an hour instead of ten minutes: the same work, at the speed it really runs.
 guard=$((seconds + 600))
+if grep -q '^ADLplug_SANITIZERS:STRING=.*\bmemory\b' "build/$preset/CMakeCache.txt" 2>/dev/null; then
+  guard=$((seconds + 1800))
+fi
 
 shopt -s nullglob
 manifests=("build/$preset/fuzz/"*.args)

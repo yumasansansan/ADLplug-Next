@@ -1,0 +1,35 @@
+SPDX-FileCopyrightText: 2011 David Korth
+SPDX-FileCopyrightText: 2017-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-2.0-or-later
+
+The counter the interpolation starts from is set before it is read
+
+Ym2612Private's constructor sets one member, q, and leaves int_cnt as the allocation left it. Both of Ym2612's constructors say as much where they make it -- "TODO: Some initialization should go here!" -- and this is what comes of it.
+
+int_cnt is what the interpolation carries from one update to the next. A channel's update assigns it from state.Inter_Cnt, but only after the channel has decided it has something to play: T_Update_Chan_Int and T_Update_Chan_LFO_Int return before that assignment when every envelope of the channel has ended. An update in which each channel returns that way leaves int_cnt as it was, and Ym2612::update() ends with state.Inter_Cnt = d->int_cnt -- so before anything has assigned it, what is stored into the state is whatever the heap held, and from then on every interpolated sample is worked out from it (DO_OUTPUT_INT weighs the two samples by int_cnt and 0x3FFF - int_cnt). Nought is what state.Inter_Cnt is set to everywhere else, in reInit and in reset, and it is what int_cnt starts from now.
+
+What found it is ADLplug-Next's memory sanitizer build, in the first minute of its fuzz target for MIDI through to synthesis: ten bytes, two note-ons of one note on a chip whose channels have nothing sounding. The sanitizer named the heap allocation of the private object as where the value was made, the store into state.Inter_Cnt as where it travelled, and the interpolation as where it was read. No other sanitizer looks for this: the value is read and weighed, not written out of bounds, so nothing crashes -- the first samples of a chip are simply mixed by a number nobody chose. ADLplug-Next keeps that input as a regression.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/chips/gens/Ym2612.cpp b/src/chips/gens/Ym2612.cpp
+--- a/src/chips/gens/Ym2612.cpp
++++ b/src/chips/gens/Ym2612.cpp
+@@ -171,6 +171,16 @@ int Ym2612Private::LFO_FREQ_TAB[LFO_LENGTH];	// LFO FMS TABLE
+
+ Ym2612Private::Ym2612Private(Ym2612 *q)
+ 	: q(q)
++	// The counter the interpolation carries between one update and the next. A
++	// channel's update assigns it from state.Inter_Cnt, but only after it has
++	// decided it has something to play: a channel whose envelopes have all ended
++	// returns before that. An update where every channel returns that way leaves
++	// the counter as it was, and Ym2612::update() stores it into state.Inter_Cnt
++	// when it is done -- so with nothing set at the start, what is stored is
++	// whatever the allocation held, and every interpolated sample after it is
++	// worked out from that. Nought is what state.Inter_Cnt is set to everywhere
++	// else (reInit, reset), so it is what this starts from.
++	, int_cnt(0)
+ {
+ 	if (!isInit) {
+ 		// Initialize the static tables.

@@ -133,3 +133,5 @@ adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0013-a-panic-takes-every-note-a-channel-holds.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0014-a-number-of-chips-the-library-refuses-is-not-one-it-keeps.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0015-the-counter-the-interpolation-starts-from-is-set-before-it-is-read.patch")
