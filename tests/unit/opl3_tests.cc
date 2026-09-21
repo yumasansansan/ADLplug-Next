@@ -137,7 +137,7 @@ Peaks rhythm_peaks(OPLChipBase &chip, unsigned key, unsigned bits, unsigned soft
     std::vector<std::int16_t> out(2 * frames, 0);
     chip.generate(out.data(), frames);
 
-    Peaks peaks {0, 0};
+    Peaks peaks {.left = 0, .right = 0};
     for (std::size_t i = 0; i < frames; ++i) {
         peaks.left = std::max(peaks.left, std::abs(static_cast<int>(out[2 * i])));
         peaks.right = std::max(peaks.right, std::abs(static_cast<int>(out[2 * i + 1])));
