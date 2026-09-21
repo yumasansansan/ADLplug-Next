@@ -105,6 +105,8 @@ if(ADLplug_FUZZ_FULL_COVERAGE AND NOT ADLplug_BUILD_FUZZERS)
     "ADLplug_FUZZ_FULL_COVERAGE is about the coverage of the fuzz targets, and this build "
     "has none: it needs ADLplug_BUILD_FUZZERS.")
 endif()
+option(ADLplug_COVERAGE
+  "Measure which of ADLplug-Next's own code the tests and the fuzz corpus reach (ci/coverage.sh)" OFF)
 option(ADLplug_GREYZONE_BANKS "Include the instrument banks of the grey zone, for which no license or permission of their authors is known" OFF)
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
@@ -1011,14 +1013,46 @@ if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
   endif()
 endif()
 
+# --------------------------------------------------------------------------
+# Coverage
+#
+# ADLplug_COVERAGE measures which of this project's own code a run reaches:
+# every source that adlplug_own_sources() names is compiled to count what runs
+# (-fprofile-instr-generate -fcoverage-mapping), and every program that links
+# such an object writes a profile when it ends. Nothing of JUCE or of the
+# libraries is counted: what the measurement is for is knowing what the tests and
+# the fuzz corpus of this project never reach, so that the next test or target has
+# somewhere to aim, and a line of a submodule is not this project's to reach.
+#
+# ci/coverage.sh runs the tests and the fuzz corpus of a build configured this way,
+# merges what they wrote and reports it.
+#
+# Not for Release builds: those are optimised and built with a profile of their own
+# (ADLplug_PGO, cmake/PGO.cmake), and a line that an optimiser has folded into
+# another answers nothing about which line ran. The *-coverage presets configure
+# Debug, where each line is its own.
+if(ADLplug_COVERAGE)
+  if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    message(FATAL_ERROR
+      "ADLplug_COVERAGE is not for Release builds, which are optimised and carry a profile of "
+      "their own. Configure Debug, as the *-coverage presets do.")
+  endif()
+  set(ADLplug_COVERAGE_FLAGS -fprofile-instr-generate -fcoverage-mapping)
+  # Every program that links an instrumented object needs the runtime that writes
+  # the profile, and the tools and the tests link them as the plugin does.
+  add_link_options(-fprofile-instr-generate)
+  message(STATUS "Coverage: this project's own sources count what runs")
+endif()
+
 # Gives source files the settings above. Source file properties belong to the
 # directory that sets them, so tests/ calls this again for what it compiles.
 function(adlplug_own_sources)
   if(ADLplug_OWN_COMPILE_DEFINITIONS)
     set_source_files_properties(${ARGN} PROPERTIES COMPILE_DEFINITIONS "${ADLplug_OWN_COMPILE_DEFINITIONS}")
   endif()
-  if(ADLplug_WARNING_FLAGS)
-    set_source_files_properties(${ARGN} PROPERTIES COMPILE_OPTIONS "${ADLplug_WARNING_FLAGS}")
+  set(options ${ADLplug_WARNING_FLAGS} ${ADLplug_COVERAGE_FLAGS})
+  if(options)
+    set_source_files_properties(${ARGN} PROPERTIES COMPILE_OPTIONS "${options}")
   endif()
 endfunction()
 

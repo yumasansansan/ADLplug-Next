@@ -251,6 +251,50 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+  # What the tests and the fuzz corpus of this project reach of its own code, and
+  # what they reach of it not at all. The number is not a gate: nothing here fails
+  # for a figure being low. It is read to know where the next test or fuzz target
+  # belongs, and the page it leaves says it line by line.
+  coverage:
+    name: coverage (${{ matrix.preset }})
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [adl-coverage, opn-coverage]
+
+    steps:
+      - name: Check out
+        run: |
+          # The commit with its whole history, the submodules at depth 1. Git
+          # keeps the files as committed, CRLF or LF, on every runner.
+          git config --global core.autocrlf false
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git submodule update --init --depth 1 --jobs 4
+          git log -1 --format='%H %s'
+
+      - name: Set up the toolchain
+        run: bash ci/setup.sh
+
+      - name: Build
+        run: bash ci/build.sh "${{ matrix.preset }}" baseline
+
+      - name: Count what the tests and the corpus reach
+        run: bash ci/coverage.sh "${{ matrix.preset }}" --no-hosts
+
+      - name: Keep the page it leaves
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-${{ matrix.preset }}
+          path: build/${{ matrix.preset }}/coverage/html/
+          if-no-files-found: ignore
+          retention-days: 30
+
   tidy:
     name: static analysis (${{ matrix.preset }})
     runs-on: ubuntu-26.04

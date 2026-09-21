@@ -275,6 +275,7 @@ An option chooses whether ADLplug-Next or OPNplug-Next is built:
 | -DADLplug_PGO=ON/OFF            | ON                                     | Profile-guided optimisation of Release builds (see below)                                     |
 | -DADLplug_SANITIZERS=<list>     | empty                                  | Build with sanitizers: address, undefined, vptr, thread, memory, realtime (comma-separated; see below) |
 | -DADLplug_MSAN_LIBRARIES=<dir>  | empty                                  | Prefix of the libraries the memory sanitizer needs, which ci/msan-libraries.sh builds          |
+| -DADLplug_COVERAGE=ON/OFF       | OFF                                    | Count which of ADLplug-Next's own code the tests and the fuzz corpus reach (ci/coverage.sh)     |
 | -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | Enable assertions (internal consistency checks) in any build type (Debug, Release and others) |
 | -DADLplug_WERROR=ON/OFF         | OFF (the presets set ON)               | Treat warnings in ADLplug-Next's own code as errors                                           |
 | -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | Build developer tools (a tool that loads the VST3 plugin and writes out its sound)            |
@@ -343,6 +344,17 @@ will not link libFuzzer with it either. What it watches is reached by the tests
 instead. The attribute costs nothing in a build without the sanitizer, so the code
 carries it always -- it says what the contract is whether or not anything is
 checking. Clang has no realtime sanitizer for Windows.
+
+`ADLplug_COVERAGE` counts which of ADLplug-Next's own code a run reaches. Every
+source of this project is compiled to count what runs, nothing of JUCE or of the
+libraries is, and `ci/coverage.sh` runs the tests -- the unit tests, the renders
+through the plugin, and the replay of every seed and regression input through each
+fuzz target -- merges what they counted and reports it. The `adl-coverage` and
+`opn-coverage` presets configure it, with a Debug build, since a line an optimiser
+has folded into another answers nothing about which line ran. It is not a gate:
+nothing fails for a figure being low. What it is for is the end of the report,
+which names every file no test and no input reaches at all, so that the next test
+or fuzz target has somewhere to aim; the page it leaves says it line by line.
 
 Every emulator core is built by default. To leave cores out, turn off options
 in the Build option column of the tables under

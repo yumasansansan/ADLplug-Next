@@ -94,6 +94,14 @@
         "ADLplug_SANITIZERS": "realtime"
       }
     },
+    {
+      "name": "coverage",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ADLplug_COVERAGE": "ON"
+      }
+    },
 
     {
       "name": "adl-debug",
@@ -131,6 +139,11 @@
       "inherits": ["base", "adl", "sanitize-realtime"]
     },
     {
+      "name": "adl-coverage",
+      "displayName": "ADLplug (OPL3) — Debug, counting what of this project's own code a run reaches",
+      "inherits": ["base", "adl", "coverage"]
+    },
+    {
       "name": "opn-debug",
       "displayName": "OPNplug (OPN2) — Debug",
       "inherits": ["base", "opn", "debug"]
@@ -164,6 +177,11 @@
       "name": "opn-rtsan",
       "displayName": "OPNplug (OPN2) — RelWithDebInfo with the realtime sanitizer",
       "inherits": ["base", "opn", "sanitize-realtime"]
+    },
+    {
+      "name": "opn-coverage",
+      "displayName": "OPNplug (OPN2) — Debug, counting what of this project's own code a run reaches",
+      "inherits": ["base", "opn", "coverage"]
     }
   ],
 
@@ -175,13 +193,15 @@
     { "name": "adl-tsan",           "configurePreset": "adl-tsan" },
     { "name": "adl-msan",           "configurePreset": "adl-msan" },
     { "name": "adl-rtsan",          "configurePreset": "adl-rtsan" },
+    { "name": "adl-coverage",       "configurePreset": "adl-coverage" },
     { "name": "opn-debug",          "configurePreset": "opn-debug" },
     { "name": "opn-relwithdebinfo", "configurePreset": "opn-relwithdebinfo" },
     { "name": "opn-release",        "configurePreset": "opn-release" },
     { "name": "opn-sanitize",       "configurePreset": "opn-sanitize",       "environment": { "ASAN_OPTIONS": "detect_leaks=0" } },
     { "name": "opn-tsan",           "configurePreset": "opn-tsan" },
     { "name": "opn-msan",           "configurePreset": "opn-msan" },
-    { "name": "opn-rtsan",          "configurePreset": "opn-rtsan" }
+    { "name": "opn-rtsan",          "configurePreset": "opn-rtsan" },
+    { "name": "opn-coverage",       "configurePreset": "opn-coverage" }
   ],
 
   "testPresets": [
@@ -202,6 +222,7 @@
       "output": { "outputOnFailure": true, "verbosity": "verbose" } },
     { "name": "adl-rtsan",          "configurePreset": "adl-rtsan",          "inherits": "base",
       "output": { "outputOnFailure": true, "verbosity": "verbose" } },
+    { "name": "adl-coverage",       "configurePreset": "adl-coverage",       "inherits": "base" },
     { "name": "opn-debug",          "configurePreset": "opn-debug",          "inherits": "base" },
     { "name": "opn-relwithdebinfo", "configurePreset": "opn-relwithdebinfo", "inherits": "base" },
     { "name": "opn-release",        "configurePreset": "opn-release",        "inherits": "base" },
@@ -212,6 +233,7 @@
     { "name": "opn-msan",           "configurePreset": "opn-msan",           "inherits": "base",
       "output": { "outputOnFailure": true, "verbosity": "verbose" } },
     { "name": "opn-rtsan",          "configurePreset": "opn-rtsan",          "inherits": "base",
-      "output": { "outputOnFailure": true, "verbosity": "verbose" } }
+      "output": { "outputOnFailure": true, "verbosity": "verbose" } },
+    { "name": "opn-coverage",       "configurePreset": "opn-coverage",       "inherits": "base" }
   ]
 }
