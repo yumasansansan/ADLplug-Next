@@ -1,0 +1,38 @@
+SPDX-FileCopyrightText: 2017-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+A number of chips the library refuses is not a number it keeps
+
+opn2_setNumChips() kept the number it was given before it looked at it: the assignment to m_setup.numChips came first, and the range the number must be in was checked afterwards, on the value already stored. The refusal then left it where it was. The function answers -1 and says why, and the player carries a number of chips it never took -- nought, or a hundred and one, or whatever else was asked for.
+
+What sees it from outside is opn2_getNumChips(), which gives back m_setup.numChips: a caller that asks after a refusal is told the number that was refused. The synth is untouched, which is why nothing crashes and nothing sounds different; the number is simply not true any more.
+
+The same order stands in libADLMIDI's adl_setNumChips(), and ADLplug-Next patches both. It reads the number the synth really has (opn2_getNumChipsObtained()), so its own screens are not the ones that would lie; what brought this out is its fuzz target for what a host does to the synthesiser, which hands the library the numbers a project may hold without holding them to a range first. The fault was read rather than crashed into: there is nothing here for a sanitizer to catch.
+
+The number is looked at first now, and kept only if it is one the player may have. What the check reads is the number the caller gave rather than that number after a cast to unsigned: a negative count is refused by the lower bound where it used to be refused by the upper one after wrapping around it.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/opnmidi.cpp b/src/opnmidi.cpp
+--- a/src/opnmidi.cpp
++++ b/src/opnmidi.cpp
+@@ -86,13 +86,16 @@
+ 
+     MidiPlayer *play = GET_MIDI_PLAYER(device);
+     assert(play);
+-    play->m_setup.numChips = static_cast<unsigned int>(numChips);
+-    if(play->m_setup.numChips < 1 || play->m_setup.numChips > OPN_MAX_CHIPS)
++    /* The number is looked at before it is kept: one that is refused is not a
++       number this player has, and opn2_getNumChips() gives back what is kept. */
++    if(numChips < 1 || numChips > OPN_MAX_CHIPS)
+     {
+         play->setErrorString("number of chips may only be 1.." OPN_MAX_CHIPS_STR ".\n");
+         return -1;
+     }
+ 
++    play->m_setup.numChips = static_cast<unsigned int>(numChips);
++
+     Synth &synth = *play->m_synth;
+     if(!synth.setupLocked())
+     {
