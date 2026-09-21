@@ -1,0 +1,45 @@
+SPDX-FileCopyrightText: 2017-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+A panic takes every note a channel holds
+
+OPNMIDIplay::panic() went through the note numbers: for every MIDI channel, one note off for each of the hundred and twenty-eight numbers, and by way of realTime_NoteOff(), which is the note off a host sends and which the sustain pedal holds back. A note on of a number that is already sounding does not replace the note that is there -- realTime_NoteOn() appends one with ensure_create_activenote(), and the note off that would have replaced it is commented out beside it -- so a channel can hold several notes of one number. Taking them by number takes the first and leaves the rest, and each of those keeps the chip channels it was playing on.
+
+That is what partialReset() asks a panic for, before it rebuilds the chips. Rebuilding them resizes every array a chip channel indexes -- m_insCache and its kind, and m_chipChannels after them -- and opn2_setNumChips() with fewer chips than before goes through exactly that. A note left behind then names a channel that no longer exists, and anything that reaches noteUpdate() for it reads past the end of those arrays.
+
+The crash itself was found in libADLMIDI, whose MIDIplay::panic() is this function with other names and whose note on appends in the same way: a fuzz target of ADLplug-Next, for what a host does to the synthesiser, stopped on the m_insCache[c] of OPL3::touchNote() under the address sanitizer, in the long fuzzing of 2026-09-21. Here the same road is open by reading -- nothing in this library removes the notes that were left, and nothing checks a channel against the arrays before it indexes them -- and it is shorter, since a chip has six channels rather than twenty-three, so a handful of notes of one number reaches the second chip. That it has not been seen from the outside yet is all that separates the two.
+
+The panic now walks the notes of each channel, as noteUpdateAll() does, and takes each of them with noteUpdate(..., Upd_Off), which is what a note off does when nothing holds it back. A note under the sustain pedal is taken as well, which is what a panic means; noteUpdOff() erases the note's channels whether the pedal is down or not. A channel that holds one note of a number is left as it was, save that the pedal no longer keeps it through a panic.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/opnmidi_midiplay.cpp b/src/opnmidi_midiplay.cpp
+--- a/src/opnmidi_midiplay.cpp
++++ b/src/opnmidi_midiplay.cpp
+@@ -1566,10 +1566,22 @@
+ 
+ void OPNMIDIplay::panic()
+ {
+-    for(uint8_t chan = 0; chan < m_midiChannels.size(); chan++)
++    // Every note the channel holds, and not one note of every number. A note on
++    // of a number that is already sounding adds a note rather than replacing it
++    // -- the note off that would have replaced it is commented out in
++    // realTime_NoteOn -- so a channel can hold several notes of one number, and
++    // taking them by number takes the first and leaves the rest. What is left
++    // behind keeps the chip channels it was playing on, and partialReset() calls
++    // this before it rebuilds the chips and resizes the arrays those channels
++    // index: the next thing to touch such a note, a controller change or a pitch
++    // bend, then reads past their end.
++    for(size_t chan = 0; chan < m_midiChannels.size(); chan++)
+     {
+-        for(uint8_t note = 0; note < 128; note++)
+-            realTime_NoteOff(chan, note);
++        for(MIDIchannel::notes_iterator i = m_midiChannels[chan].activenotes.begin(); !i.is_end();)
++        {
++            MIDIchannel::notes_iterator j(i++);
++            noteUpdate(chan, j, Upd_Off);
++        }
+     }
+ }
+ 

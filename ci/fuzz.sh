@@ -82,7 +82,12 @@ for manifest in "${manifests[@]}"; do
   mkdir -p "$corpora/$target" "$crashes/$target"
 
   if [ -n "$earlier" ]; then
-    failed=("$earlier/$target/"*)
+    # What libFuzzer writes beside a failing input, and what it names it: crash-,
+    # oom- and timeout- are the ones that failed, and slow-unit- is an input that
+    # took long enough to be worth keeping and failed at nothing. Replaying the
+    # slow ones would say every run that they are still slow, which is not a
+    # failure and not news.
+    failed=("$earlier/$target/"crash-* "$earlier/$target/"oom-* "$earlier/$target/"timeout-*)
     if [ ${#failed[@]} -gt 0 ]; then
       echo "== $target: ${#failed[@]} inputs that failed in an earlier run"
       code=0

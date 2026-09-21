@@ -7,7 +7,8 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-#   ci/build.sh [--fuzz-only] <preset> <baseline|avx2|arm64> [<cmake option>...]
+#   ci/build.sh [--fuzz-only | --generated-only] <preset>
+#               <baseline|avx2|arm64> [<cmake option>...]
 #
 # Configures a CMake preset, with the developer tools and the tests, for the
 # given instruction set (arm64 stands for the macOS build, which has no choice)
@@ -18,6 +19,14 @@
 # such a build cannot be loaded (fuzz/CMakeLists.txt says why), and the long
 # fuzzing does not need one; what the plugin needs is checked by the builds of
 # every push.
+#
+# With --generated-only, it builds what the build generates and nothing that is
+# compiled or linked: the JUCE header of every target that has one, and the pack
+# of banks that a source of the plugin embeds. That is all a reader of the code
+# needs to parse every file the way the build compiles it (ci/tidy.sh), and it is
+# what lets the static analysis look at a build whose libraries carry the fuzz
+# coverage: nothing is linked there, so nothing asks for the runtime that resolves
+# it, which only a sanitizer or libFuzzer itself brings.
 #
 # The configuration checks the toolchain (cmake/LLVMToolchain.cmake), and this
 # script shows what it checked, in the log and, in GitHub Actions, in the
@@ -31,10 +40,11 @@
 set -euo pipefail
 
 fuzz_only=0
-if [ "${1:-}" = "--fuzz-only" ]; then
-  fuzz_only=1
-  shift
-fi
+generated_only=0
+case "${1:-}" in
+  --fuzz-only) fuzz_only=1; shift ;;
+  --generated-only) generated_only=1; shift ;;
+esac
 
 preset=$1
 arch=$2
@@ -142,6 +152,21 @@ case "$(uname -s)" in
     fi
     ;;
 esac
+
+if [ "$generated_only" -eq 1 ]; then
+  # The compile commands name the JUCE header of every target that has one, as the
+  # directory each is compiled with; the pack of banks has a target of its own.
+  mapfile -t generated < <(
+    grep -oE -- '-isystem [^ "]*JuceLibraryCode' "build/$preset/compile_commands.json" |
+      sed 's|^-isystem ||; s|$|/JuceHeader.h|' | sort -u)
+  if [ ${#generated[@]} -eq 0 ]; then
+    echo "error: build/$preset names no JUCE header to generate" >&2
+    exit 1
+  fi
+  echo "== what the build generates: ${#generated[@]} JUCE headers and the pack of banks"
+  VERBOSE=1 cmake --build "build/$preset" --target ADLplug_banks -- "${generated[@]}"
+  exit 0
+fi
 
 # Ninja shows every command in full, rather than its short description. The
 # VERBOSE variable carries that into the builds that CMake starts within the

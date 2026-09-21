@@ -99,6 +99,8 @@ adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0009-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0010-nuked-opl3-the-fast-path-shifts-by-less-than-its-width.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0011-a-panic-takes-every-note-a-channel-holds.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-psg-a-noise-table-that-does-not-overflow.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
@@ -123,3 +125,5 @@ adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0011-the-chip-type-that-is-no-family.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0012-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0013-a-panic-takes-every-note-a-channel-holds.patch")

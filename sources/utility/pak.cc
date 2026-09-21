@@ -68,9 +68,21 @@ std::optional<std::size_t> Pak_File_Reader::find(std::string_view name) const
     return std::nullopt;
 }
 
+// The largest an entry of a pack may say it is. A pack of this project holds bank
+// files, and the formats bound one: a WOPL that names every bank and every
+// instrument it can is some two megabytes. This is eight times that, and it is
+// what keeps a pack from being taken at its word when it says two gigabytes. The
+// piecewise reading below answers a pack that says more than the stream holds; it
+// does not answer a stream that really can give it, since a few bytes of zlib
+// inflate to as much as anyone likes, and the fuzzing of the readers found
+// exactly that (fuzz/regressions holds the input).
+constexpr std::uint32_t pak_content_size_max = 16u * 1024u * 1024u;
+
 std::vector<std::uint8_t> Pak_File_Reader::read_content(std::uint32_t offset, std::uint32_t size) const
 {
-    if (size == 0 || size > static_cast<std::uint32_t>(std::numeric_limits<int>::max()))
+    static_assert(pak_content_size_max <= static_cast<std::uint32_t>(std::numeric_limits<int>::max()),
+                  "the pieces are read in ints, as a JUCE stream reads them");
+    if (size == 0 || size > pak_content_size_max)
         return {};
 
     MemoryInputStream mem_stream(data_ + content_offset_, size_ - content_offset_, false);
