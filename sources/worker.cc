@@ -172,6 +172,13 @@ void Worker::handle_message(const Buffered_Message &msg)
         proc.mark_for_notification(Cb_ChipSettings);
         break;
     }
+    case Fx_Message::RequestResampling: {
+        const auto body = Messages::body<Messages::Fx::RequestResampling>(msg);
+        trace("Resampling requested");
+        const std::unique_lock<std::mutex> lock = proc.acquire_player_nonrt();
+        proc.set_resampling_nonrt(body.settings);
+        break;
+    }
     default:
         assert(false);
         break;

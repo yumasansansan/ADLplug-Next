@@ -67,7 +67,7 @@ struct Chip_Settings {
 // core of the library runs at this one. Asking the library for that rate is asking
 // for the chip's own samples, which is what lets the resampling be done here
 // (sources/utility/chip_resampler.h).
-[[nodiscard]] inline unsigned chip_sample_rate(const Chip_Settings &) noexcept
+[[nodiscard]] inline unsigned chip_sample_rate([[maybe_unused]] const Chip_Settings &settings) noexcept
 {
     return ADL_CHIP_SAMPLE_RATE;
 }

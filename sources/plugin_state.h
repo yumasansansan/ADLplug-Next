@@ -27,6 +27,7 @@ enum State_Change_Bit : unsigned
     Cb_GlobalParameters,
     Cb_ActivePart,
     Cb_BankTitle,
+    Cb_Resampling,
     Cb_Instrument1,
     Cb_Instrument16 = Cb_Instrument1 + 15,
     Cb_Selection1,

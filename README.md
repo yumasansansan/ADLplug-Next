@@ -212,6 +212,19 @@ and the conversion is left to the straight-line interpolation inside libADLMIDI
 and libOPNMIDI, as it was before. That is the case for the OPN2 and the OPNA
 today.
 
+The conversion is set in the emulator menu, under *Resampling...*: where it is
+done (the plugin's own filter, or the libraries' straight line as before), and
+how the filter is made. The named settings -- *fast*, *good* (the default),
+*best* and *extreme* -- are places to start from, and every figure behind them
+can be changed by hand, from how far down the stopband has to be to how many
+coefficients a filter may have. The plugin caps none of them: a filter that
+cannot be made says why, and the libraries' interpolation plays in its place.
+Raising *Max taps* lets the OPN2 and the OPNA have a filter too, at the cost of
+memory -- tens of megabytes -- which the window shows once it is applied.
+
+The settings are saved with the project. They are not automatable parameters:
+every change makes a new filter, which takes a moment.
+
 ## Build instructions
 
 This section is about building the plugins from their source code. To use the

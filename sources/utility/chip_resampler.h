@@ -9,6 +9,7 @@
 #pragma once
 #include "resample.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <numeric>
 #include <string>
@@ -99,6 +100,18 @@ public:
     [[nodiscard]] unsigned host_rate() const noexcept { return host_rate_; }
     // Per frame of the host's, per channel, as the filter counts them.
     [[nodiscard]] double multiplies() const noexcept { return active_ ? cascade_.multiplies() : 0.0; }
+    // The coefficients the filter holds across its stages, which is the memory it
+    // takes: one phase of the prototype per step of the ratio, each phase as long
+    // as the loop that reads it.
+    [[nodiscard]] std::uint64_t coefficients() const noexcept
+    {
+        if (!active_)
+            return 0;
+        std::uint64_t count = 0;
+        for (std::size_t i = 0; i < cascade_.size(); ++i)
+            count += static_cast<std::uint64_t>(cascade_.stage(i).up()) * cascade_.stage(i).taps_per_phase();
+        return count;
+    }
     // What the design achieved, measured by the design itself.
     [[nodiscard]] mp::resample::Response response() const noexcept
         { return active_ ? cascade_.response() : mp::resample::Response{}; }

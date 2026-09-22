@@ -41,6 +41,7 @@ endif()
 set(ADLplug_UNIT_TESTED_SOURCES
   "${PROJECT_SOURCE_DIR}/sources/resources.c"
   "${PROJECT_SOURCE_DIR}/sources/messages.cc"
+  "${PROJECT_SOURCE_DIR}/sources/resampling_settings.cc"
   "${PROJECT_SOURCE_DIR}/sources/utility/pak.cc"
   "${PROJECT_SOURCE_DIR}/sources/utility/simple_fifo.cc"
   # The chip settings, which a project holds as properties, and the icons of the

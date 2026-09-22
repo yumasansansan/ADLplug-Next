@@ -100,6 +100,11 @@ void AdlplugAudioProcessorEditor::process_notifications()
         case Fx_Message::NotifyChipSettings:
             main.receive_chip_settings(Messages::body<Messages::Fx::NotifyChipSettings>(msg).cs);
             break;
+        case Fx_Message::NotifyResampling: {
+            const auto body = Messages::body<Messages::Fx::NotifyResampling>(msg);
+            main.receive_resampling(body.settings, body.status);
+            break;
+        }
         case Fx_Message::NotifySelection: {
             const auto body = Messages::body<Messages::Fx::NotifySelection>(msg);
             main.receive_selection(body.part, body.bank, body.program);

@@ -287,7 +287,7 @@ void AdlplugAudioProcessor::set_chip_settings_nonrt(const Chip_Settings &cs)
     // (OPN2 and OPNA). A player runs at the rate it was made for, so a change
     // there is a new player -- made from these settings, which are the
     // parameters' -- rather than a setting applied to the one that is there.
-    if (resampler_.active() && chip_sample_rate(cs) != resampler_.chip_rate()) {
+    if (!player_matches_settings()) {
         recreate_player_keeping_state(host_sample_rate_);
         mark_state_for_notification();
         return;
@@ -296,6 +296,21 @@ void AdlplugAudioProcessor::set_chip_settings_nonrt(const Chip_Settings &cs)
     Player &pl = *player_;
     pl.panic();
     set_player_chip_settings(pl, cs);
+}
+
+// A change of the resampling, which the editor asked for: a filter designed
+// again, and a player made again for it, with the state of the old one. The
+// worker calls this, holding the player lock; designing takes a noticeable part
+// of a second, which is why it is not the audio thread's to do.
+void AdlplugAudioProcessor::set_resampling_nonrt(const Resampling_Settings &settings)
+{
+    resampling_ = settings;
+    if (player_matches_settings()) {
+        mark_for_notification(Cb_Resampling);
+        return;
+    }
+    recreate_player_keeping_state(host_sample_rate_);
+    mark_state_for_notification();
 }
 
 void AdlplugAudioProcessor::panic_nonrt()
@@ -415,8 +430,23 @@ void AdlplugAudioProcessor::process_messages(bool under_lock)
     finish_handling_messages(ctx);
 }
 
+// Hands a change of the resampling to the worker, if one is waiting and its
+// queue has room; otherwise it waits for the next block.
+void AdlplugAudioProcessor::request_resampling()
+{
+    if (!resampling_to_request_)
+        return;
+    const Resampling_Settings settings = *resampling_to_request_;
+    if (Messages::send<Messages::Fx::RequestResampling>(*mq_to_worker_, [&settings](auto &body) { body.settings = settings; })) {
+        resampling_to_request_.reset();
+        worker_->postSemaphore();
+    }
+}
+
 void AdlplugAudioProcessor::process_parameter_changes()
 {
+    request_resampling();
+
     if (unmark_parameter_as_changed(Cb_ChipSettings)) {
         // The parameters keep the chip settings as they were given; compare
         // what the player would run for them.
@@ -481,6 +511,14 @@ void AdlplugAudioProcessor::process_notifications()
                 body.cs = get_player_chip_settings(pl);
             }))
             mark_for_notification(Cb_ChipSettings);
+    }
+
+    if (unmark_for_notification(Cb_Resampling)) {
+        if (!Messages::send<Messages::Fx::NotifyResampling>(queue, [this](auto &body) {
+                body.settings = resampling_;
+                body.status = resampling_status_;
+            }))
+            mark_for_notification(Cb_Resampling);
     }
 
     if (unmark_for_notification(Cb_GlobalParameters)) {
@@ -657,6 +695,15 @@ bool AdlplugAudioProcessor::handle_message(const Buffered_Message &msg, Message_
         break;
     case std::to_underlying(User_Message::RequestChipSettings):
         mark_for_notification(Cb_ChipSettings);
+        break;
+    case std::to_underlying(User_Message::RequestResampling):
+        mark_for_notification(Cb_Resampling);
+        break;
+    case std::to_underlying(User_Message::SetResampling):
+        // The worker designs it (set_resampling_nonrt); this thread only passes
+        // it on, and offers it again next time if the queue has no room now.
+        resampling_to_request_ = Messages::body<Messages::User::SetResampling>(msg).settings;
+        request_resampling();
         break;
     case std::to_underlying(User_Message::RequestSelections): {
         const auto body = Messages::body<Messages::User::RequestSelections>(msg);
@@ -958,6 +1005,12 @@ void AdlplugAudioProcessor::setStateInformation(const void *data, int size)
         create_first_player(state_only_sample_rate);
     read_state(*root);
 
+    // A project can carry a resampling of its own, or a chip type that runs at
+    // another rate; the player runs with what it was made with, so it is made
+    // again, for the same rate and with the state just read.
+    if (!player_matches_settings())
+        recreate_player_keeping_state(host_sample_rate_);
+
     // make the host aware of changed parameters
     parameter_block_->set_global_parameters(get_player_global_parameters(*player_));
     for (unsigned p = 0; p < 16; ++p)
@@ -980,9 +1033,27 @@ void AdlplugAudioProcessor::create_player(unsigned sample_rate)
     const Chip_Settings &settings = parameter_block_->chip_settings();
     const unsigned chip_rate = chip_sample_rate(settings);
     host_sample_rate_ = sample_rate;
+    chip_rate_in_use_ = chip_rate;
+    resampling_in_use_ = resampling_;
     resampling_why_.clear();
-    const bool resampling =
-        resampler_.prepare(chip_rate, sample_rate, midi_interval_max, resampling_design_, resampling_why_);
+    bool resampling = false;
+    if (resampling_.own_filter)
+        resampling = resampler_.prepare(chip_rate, sample_rate, midi_interval_max, resampling_.design, resampling_why_);
+    else
+        resampler_.unprepare();
+
+    // What became of it, for the editor.
+    Resampling_Status status;
+    status.active = resampling;
+    status.chip_rate = chip_rate;
+    status.host_rate = sample_rate;
+    status.stopband_db = resampler_.response().stopband_db;
+    status.passband_ripple_db = resampler_.response().passband_ripple_db;
+    status.multiplies = resampler_.multiplies();
+    status.coefficients = resampler_.coefficients();
+    copy_text(status.why, sizeof status.why, resampling_why_);
+    resampling_status_ = status;
+    mark_for_notification(Cb_Resampling);
 
     auto pl = std::make_unique<Player>();
     pl->init(resampling ? chip_rate : sample_rate);
@@ -1020,6 +1091,16 @@ void AdlplugAudioProcessor::recreate_player_keeping_state(unsigned sample_rate)
     if (const std::unique_ptr<XmlElement> root =
             getXmlFromBinary(state.getData(), static_cast<int>(state.getSize())))
         read_state(*root);
+}
+
+// Whether the player runs with the resampling and at the chip's rate its
+// settings ask for. A state read into it can carry other resampling settings or
+// a chip type that runs at another rate, and a player runs at the rate it was
+// made for, with the filter it was made with.
+bool AdlplugAudioProcessor::player_matches_settings() const
+{
+    return resampling_ == resampling_in_use_ &&
+           chip_sample_rate(parameter_block_->chip_settings()) == chip_rate_in_use_;
 }
 
 // Makes the first player and settles the parameters with it. Until then the
@@ -1102,6 +1183,7 @@ void AdlplugAudioProcessor::write_state(MemoryBlock &data)
     // otherwise (playable_chip_settings()).
     root.addChildElement(pb.chip_settings().to_properties().createXml("chip").release());
     root.addChildElement(get_player_global_parameters(pl).to_properties().createXml("global").release());
+    root.addChildElement(resampling_.to_properties().createXml("resampling").release());
 
     PropertySet common_set;
     common_set.setValue("bank_title", name_from_field(std::span(bank_title_, bank_title_size_max)));
@@ -1160,6 +1242,16 @@ void AdlplugAudioProcessor::read_state(const XmlElement &root)
         pb.set_chip_settings(Chip_Settings::from_properties(set));
     }
     set_player_chip_settings(pl, pb.chip_settings());
+
+    // The resampling, which is only kept here: the player is made again for it
+    // by whoever read the state, when it differs (player_matches_settings). A
+    // project from before there was a choice has none, and gets the defaults.
+    {
+        PropertySet set;
+        if (const XmlElement *elt = root.getChildByName("resampling"))
+            set.restoreFromXml(*elt);
+        resampling_ = Resampling_Settings::from_properties(set);
+    }
 
     // global parameters
     if (const XmlElement *elt = root.getChildByName("global")) {

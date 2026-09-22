@@ -21,6 +21,7 @@
 #include "adl/instrument.h"
 #include "adl/chip_settings.h"
 #include "ui/components/info_display.h"
+#include "ui/components/resampling_editor.h"
 #include "ui/utility/key_maps.h"
 #include <array>
 #include <concepts>
@@ -75,6 +76,7 @@ public:
     void receive_global_parameters(const Instrument_Global_Parameters &gp);
     void receive_instrument(Bank_Id bank, unsigned pgm, const Instrument &ins);
     void receive_chip_settings(const Chip_Settings &cs);
+    void receive_resampling(const Resampling_Settings &settings, const Resampling_Status &status);
     void receive_selection(unsigned part, Bank_Id bank, std::uint8_t pgm);
     void update_instrument_choices();
     void set_program_selection(int selection, NotificationType ntf);
@@ -102,6 +104,9 @@ public:
     void build_chip_menu(PopupMenu &menu);
     void select_chip_setting_by_menu(std::function<void(int)> on_selected);
     void apply_chip_menu_choice(int selection);
+    // How the chip's samples become the host's (sources/resampling_settings.h),
+    // which belongs with the chip and is offered from the same menu.
+    void open_resampling_editor();
 
     void handle_load_bank(Component *clicked);
     void finish_load_bank(int selection);
@@ -166,6 +171,7 @@ private:
     // Ids in the menu of the chip's button: an emulator is its own number and one,
     // and a way of taking a channel is this and the number the parameter gives it.
     static constexpr int chan_alloc_first_id = 1000;
+    static constexpr int resampling_id = 2000;
 
     struct Pending_Message {
         unsigned tag = 0;
@@ -206,6 +212,9 @@ protected:
     std::map<std::uint32_t, Editor_Bank> instrument_map_;
     Instrument_Global_Parameters instrument_gparam_;
     Chip_Settings chip_settings_;
+    // What the processor last said of the resampling, for the editor of it.
+    Resampling_Settings resampling_;
+    Resampling_Status resampling_status_;
     SharedResourcePointer<Emulator_Icons> emulator_icons_;
 
     std::map<String, std::unique_ptr<Timer>> parameters_delayed_;
@@ -234,6 +243,7 @@ protected:
     Component::SafePointer<DialogWindow> dlg_edit_program_;
     Component::SafePointer<DialogWindow> dlg_about_;
     Component::SafePointer<DialogWindow> dlg_bank_information_;
+    Component::SafePointer<DialogWindow> dlg_resampling_;
 
     // Made in the constructor of this base, before the T around it exists, so
     // it keeps the base and turns it into the T only when an event comes: a

@@ -273,6 +273,7 @@ endif()
 set(ADLplug_FUZZ_PROCESSOR_SOURCES
   "${PROJECT_SOURCE_DIR}/sources/plugin_processor.cc"
   "${PROJECT_SOURCE_DIR}/sources/plugin_state.cc"
+  "${PROJECT_SOURCE_DIR}/sources/resampling_settings.cc"
   "${PROJECT_SOURCE_DIR}/sources/bank_manager.cc"
   # The bytes of a bank file, read and sent the way the editor does it
   # (sources/bank_load.h): what fuzz/bank_manager.cc gives a file to.

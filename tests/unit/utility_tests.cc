@@ -8,6 +8,7 @@
 
 #include "test.h"
 #include "utility/atomic_bit_set.h"
+#include "resampling_settings.h"
 #include "utility/chip_resampler.h"
 #include "utility/counting_bitset.h"
 #include "utility/field_bitops.h"
@@ -19,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -214,6 +216,65 @@ ADLPLUG_TEST(chip_resampler)
     CHECK(straight_through == 128);
     CHECK(left[0] == 1.0f);
     CHECK(left[127] == 1.0f);
+}
+
+ADLPLUG_TEST(resampling_settings)
+{
+    // Every named setting is still one the resampler takes by name, and a design
+    // made from one is recognised as it.
+    for (const char *name : resampling_preset_names) {
+        mp::resample::Design design;
+        CHECK(resampling_preset(name, design));
+        CHECK(resampling_preset_of(design) == name);
+    }
+    // A name that is none of them leaves the design as it was.
+    mp::resample::Design untouched;
+    CHECK(!resampling_preset("no such setting", untouched));
+    CHECK(untouched == mp::resample::Design{});
+
+    // A design changed by hand is none of them, even one field away from one.
+    mp::resample::Design custom;
+    custom.attenuation_db = 130.0;
+    CHECK(resampling_preset_of(custom).empty());
+
+    // A project keeps the settings as they were, bit for bit: numbers no preset
+    // has, a bandwidth that has no exact binary form, and every field that no
+    // preset changes.
+    Resampling_Settings rs;
+    rs.own_filter = false;
+    rs.design.method = mp::resample::Method::refine;
+    rs.design.window = mp::resample::Window::dpss;
+    rs.design.phase = mp::resample::Phase::minimum;
+    rs.design.attenuation_db = 131.25;
+    rs.design.passband_ripple_db = 0.001;
+    rs.design.bandwidth = 0.9731;
+    rs.design.taps = 96;
+    rs.design.max_taps = 1u << 24;
+    rs.design.cepstrum = 64;
+    rs.design.phase_floor_db = -200.5;
+    rs.design.remez_max_taps = 2049;
+    rs.design.refine_rounds = 80;
+    rs.design.refine_patience = 9;
+    rs.design.measure_points = 1u << 20;
+    rs.design.stages = 3;
+    rs.design.verify = true;
+    CHECK(Resampling_Settings::from_properties(rs.to_properties()) == rs);
+
+    // The largest counts there are come back as themselves too.
+    Resampling_Settings largest;
+    largest.design.max_taps = 0xffffffffu;
+    largest.design.measure_points = 0xffffffffu;
+    CHECK(Resampling_Settings::from_properties(largest.to_properties()) == largest);
+
+    // A project from before there was a choice has none of it, and gets the
+    // defaults. A field that is no value of its kind keeps its default as well.
+    CHECK(Resampling_Settings::from_properties(PropertySet()) == Resampling_Settings{});
+    PropertySet odd = Resampling_Settings{}.to_properties();
+    odd.setValue("method", "shiny");
+    odd.setValue("bandwidth", "0.9x");
+    odd.setValue("taps", "-3");
+    odd.setValue("max_taps", "4294967296");
+    CHECK(Resampling_Settings::from_properties(odd) == Resampling_Settings{});
 }
 
 ADLPLUG_TEST(semaphore)

@@ -88,7 +88,8 @@ Generic_Main_Component<T>::~Generic_Main_Component()
     // the pointee is not const here.
     // NOLINTNEXTLINE(misc-const-correctness)
     for (DialogWindow *dialog : {dlg_new_program_.getComponent(), dlg_edit_program_.getComponent(),
-                                 dlg_about_.getComponent(), dlg_bank_information_.getComponent()})
+                                 dlg_about_.getComponent(), dlg_bank_information_.getComponent(),
+                                 dlg_resampling_.getComponent()})
         delete dialog;
 
     midi_kb_state_.removeListener(this);
@@ -166,6 +167,7 @@ template <class T>
 void Generic_Main_Component<T>::request_state_from_processor()
 {
     write_to_processor(Messages::User::RequestChipSettings{});
+    write_to_processor(Messages::User::RequestResampling{});
     write_to_processor(Messages::User::RequestFullBankState{});
 
     Messages::User::RequestSelections selections;
@@ -738,6 +740,11 @@ void Generic_Main_Component<T>::build_chip_menu(PopupMenu &menu)
         modes.addItem(chan_alloc_first_id + i, parameter.choices[i], true, i == chosen);
     menu.addSeparator();
     menu.addSubMenu("Channel allocation", modes);
+
+    // How the chip's samples become the host's rate. It is no parameter -- every
+    // change designs a filter -- so it opens an editor of its own rather than
+    // being a choice here.
+    menu.addItem(resampling_id, "Resampling...");
 }
 
 template <class T>
@@ -763,6 +770,11 @@ void Generic_Main_Component<T>::apply_chip_menu_choice(int selection)
         parameter.endChangeGesture();
     };
 
+    if (selection == resampling_id) {
+        open_resampling_editor();
+        return;
+    }
+
     if (selection >= chan_alloc_first_id) {
         const int mode = selection - chan_alloc_first_id;
         if (mode != chip_settings_.chan_alloc + 1)
@@ -772,6 +784,51 @@ void Generic_Main_Component<T>::apply_chip_menu_choice(int selection)
         if (static_cast<unsigned>(selection - 1) != chip_settings_.emulator)
             choose(*parameter_block_->p_emulator, selection - 1);
     }
+}
+
+template <class T>
+void Generic_Main_Component<T>::open_resampling_editor()
+{
+    if (DialogWindow *open = dlg_resampling_.getComponent()) {
+        open->toFront(true);
+        return;
+    }
+
+    auto editor = std::make_unique<Resampling_Editor>();
+    editor->set_state(resampling_, resampling_status_);
+
+    const Component::SafePointer<Generic_Main_Component<T>> safe(this);
+    editor->on_apply = [safe](const Resampling_Settings &settings) {
+        if (safe == nullptr)
+            return;
+        Messages::User::SetResampling message;
+        message.settings = settings;
+        safe->write_to_processor(message);
+    };
+    editor->on_close = [safe]() {
+        if (safe == nullptr)
+            return;
+        if (DialogWindow *dialog = safe->dlg_resampling_.getComponent())
+            dialog->exitModalState(0);
+    };
+
+    DialogWindow::LaunchOptions dlgopts;
+    dlgopts.dialogTitle = "Resampling";
+    dlgopts.componentToCentreAround = this;
+    dlgopts.resizable = false;
+    dlgopts.content.set(editor.release(), true);
+    dlg_resampling_ = dlgopts.launchAsync();
+}
+
+template <class T>
+void Generic_Main_Component<T>::receive_resampling(const Resampling_Settings &settings,
+                                                   const Resampling_Status &status)
+{
+    resampling_ = settings;
+    resampling_status_ = status;
+    if (DialogWindow *dialog = dlg_resampling_.getComponent())
+        if (auto *editor = dynamic_cast<Resampling_Editor *>(dialog->getContentComponent()))
+            editor->set_state(settings, status);
 }
 
 template <class T>

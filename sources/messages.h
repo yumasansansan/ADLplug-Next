@@ -18,6 +18,7 @@
 #pragma once
 #include "adl/instrument.h"
 #include "adl/chip_settings.h"
+#include "resampling_settings.h"
 #include "utility/simple_fifo.h"
 #include "utility/counting_bitset.h"
 #include "definitions.h"
@@ -128,6 +129,8 @@ enum class User_Message : unsigned {
     SelectProgram,  // changes selected program number
     SetActivePart,  // sets the active part
     SetBankTitle,  // sets the bank title
+    RequestResampling,  // requests the resampling settings and what became of them
+    SetResampling,  // changes the resampling settings
 #if defined(ADLPLUG_OPL3)
     SelectOptimal4Ops,  // sets the optimal 4op channel count
 #endif
@@ -145,6 +148,15 @@ struct RequestFullBankState {
 
 struct RequestChipSettings {
     static constexpr User_Message tag = User_Message::RequestChipSettings;
+};
+
+struct RequestResampling {
+    static constexpr User_Message tag = User_Message::RequestResampling;
+};
+
+struct SetResampling {
+    static constexpr User_Message tag = User_Message::SetResampling;
+    Resampling_Settings settings;
 };
 
 struct RequestSelections {
@@ -253,6 +265,8 @@ enum class Fx_Message : unsigned {
     NotifyBankTitle,  // notifies bank title when changed
     RequestMeasurement,  // request measurement of a program
     RequestChipSettings,  // request a change of chip settings
+    NotifyResampling,  // notifies the resampling settings and what became of them
+    RequestResampling,  // request a change of the resampling settings
 };
 
 namespace Messages::Fx {
@@ -316,6 +330,17 @@ struct RequestMeasurement {
 struct RequestChipSettings {
     static constexpr Fx_Message tag = Fx_Message::RequestChipSettings;
     Chip_Settings cs;
+};
+
+struct NotifyResampling {
+    static constexpr Fx_Message tag = Fx_Message::NotifyResampling;
+    Resampling_Settings settings;
+    Resampling_Status status;
+};
+
+struct RequestResampling {
+    static constexpr Fx_Message tag = Fx_Message::RequestResampling;
+    Resampling_Settings settings;
 };
 
 }  // namespace Messages::Fx

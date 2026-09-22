@@ -21,6 +21,7 @@
 #include "dsp/vu_monitor.h"
 #include "adl/instrument.h"
 #include "adl/chip_settings.h"
+#include "resampling_settings.h"
 #include "utility/processor_ex.h"
 #include "utility/atomic_bit_set.h"
 #include "utility/chip_resampler.h"
@@ -32,6 +33,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 class Player;
@@ -61,6 +63,7 @@ public:
     std::unique_lock<std::mutex> acquire_player_nonrt();
     // With the player lock held: silences the player and reconfigures its chips.
     void set_chip_settings_nonrt(const Chip_Settings &cs);
+    void set_resampling_nonrt(const Resampling_Settings &settings);
     void panic_nonrt();
 
     bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
@@ -175,6 +178,8 @@ private:
     void create_player(unsigned sample_rate);
     void create_first_player(unsigned sample_rate);
     void recreate_player_keeping_state(unsigned sample_rate);
+    [[nodiscard]] bool player_matches_settings() const;
+    void request_resampling();
     void write_state(MemoryBlock &data);
     void read_state(const XmlElement &root);
     void mark_state_for_notification();
@@ -198,8 +203,18 @@ private:
     // the player is given the host's rate instead and the library interpolates as
     // it did before, and `resampling_why_` is what it said about that.
     Chip_Resampler resampler_;
-    mp::resample::Design resampling_design_;
+    // The settings the user chose, the ones the player was made with, and what
+    // became of those: a state or the editor changes the first, and the player
+    // is made again when they differ from the second (player_matches_settings).
+    Resampling_Settings resampling_;
+    Resampling_Settings resampling_in_use_;
+    Resampling_Status resampling_status_;
     std::string resampling_why_;
+    // The chip's rate the player was made for, which a chip type can change.
+    unsigned chip_rate_in_use_ = 0;
+    // A change the editor asked for that the worker's queue had no room for yet;
+    // the audio thread offers it again on the next block.
+    std::optional<Resampling_Settings> resampling_to_request_;
     // What the host asked for, which a player made without a prepareToPlay()
     // (a chip type that changes the chip's rate) has to be made for again.
     unsigned host_sample_rate_ = 0;
