@@ -1,0 +1,202 @@
+SPDX-FileCopyrightText: Jarek Burczynski
+SPDX-FileCopyrightText: Tatsuyuki Satoh
+SPDX-FileCopyrightText: 2017-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-2.0-or-later AND LGPL-2.1-or-later
+
+MAME: the tables every chip shares are built once
+
+The MAME cores build the tables their chips read each time they make a chip. ym2612_init() builds the power table, the sine table and the table of the LFO's phase modulation; ym2203_init(), ym2608_init() and ym2610_init() in the YM2608 core build the same three, and the last two the ADPCM-A decoder's table as well. Every one of them is a static of its file, shared by every chip, and what goes into it is worked out from constants alone, so each chip after the first writes them over with the values they already hold. On one thread that costs only the time. On two it is a data race: a chip being made on one thread writes the tables while a chip made before it reads them on another, in op_calc(), as it generates.
+
+ThreadSanitizer found it in ADLplug-Next's fuzz target that drives the plugin the way a host does, whose worker thread makes chips of its own to measure how long an instrument's notes sound while the audio thread plays through the chip it already has:
+
+  WARNING: ThreadSanitizer: data race
+    Write of size 4 at 0x55f81f552ae8 by thread T1025:
+      #0 init_tables src/chips/mame/mame_ym2612fm.c:2233:37
+      #1 ym2612_init src/chips/mame/mame_ym2612fm.c:2639:2
+      #2 MameOPN2::setRate(unsigned int, unsigned int) src/chips/mame_opn2.cpp:44:12
+      #3 MameOPN2::MameOPN2(OPNFamily) src/chips/mame_opn2.cpp:30:15
+    Previous read of size 4 at 0x55f81f552ae8 by main thread (mutexes: write M0):
+      #0 op_calc src/chips/mame/mame_ym2612fm.c:1668:10
+      #1 chan_calc src/chips/mame/mame_ym2612fm.c:1728:22
+      #2 ym2612_generate_one_native src/chips/mame/mame_ym2612fm.c:2431:3
+      #3 MameOPN2::nativeGenerate(short*) src/chips/mame_opn2.cpp:74:5
+    Location is global 'tl_tab' of size 26624
+
+The YM2612 core is C, which has no way of its own to do a thing once for every thread, so its tables are built by a function of their own now, ym2612_init_tables(), and ym2612_init() leaves them alone. MameOPN2::setRate() calls it, through a helper of the file's own, from the initialiser of a static in the function, which C++11 requires to be run exactly once however many threads reach it together, making the others wait until it has finished (GCC and Clang do the same by default under the older standards). The YM2608 core is C++ and does the same inside itself: init_tables_once() and Init_ADPCMATable_once() build the tables through such a static, and the inits call them in place of the builders. Either way the tables are written before the first chip exists to read them, and never again.
+
+Nothing else in the library calls ym2612_init(). Code outside it that does must now call ym2612_init_tables() once beforehand, as the header says; the YM2608 core asks nothing new of its callers. The Genesis Plus GX core builds its tables in YM2612GXInit() in the same way, but CMakeLists.txt has that core commented out, and this patch leaves it alone.
+
+For each of the two cores, a program that plays one chip on a thread while another thread makes twenty more reports this race under ThreadSanitizer with the library as it was, and nothing with the patch; and three chips made one after another on one thread, each playing a note for a second, make the same samples before the patch as after it, which is what building the tables once instead of again with the same values should come to. ADLplug-Next keeps a test of its own that plays each emulator of the library on one thread while players of the same emulator are made on another, which its thread sanitizer build runs on every change.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/chips/mame/mame_ym2612fm.c b/src/chips/mame/mame_ym2612fm.c
+--- a/src/chips/mame/mame_ym2612fm.c
++++ b/src/chips/mame/mame_ym2612fm.c
+@@ -2617,6 +2617,17 @@ static void YM2612_save_state(YM2612 *F2612, running_device *device)
+ }
+ #endif /* _STATE_H */
+ 
++/* The tables every chip reads -- the power table, the sine table and the LFO's
++   phase modulation -- are shared by all of them, and depend on nothing but
++   constants. They are built once, by ym2612_init_tables(), before the first chip
++   is made. Building them again for each chip would rewrite memory that a chip
++   already made may be reading on another thread: a data race, even though the
++   values written are the ones already there. */
++void ym2612_init_tables(void)
++{
++	init_tables();
++}
++
+ /* initialize YM2612 emulator(s) */
+ /* void * ym2612_init(void *param, running_device *device, int clock, int rate,
+ 						FM_TIMERHANDLER timer_handler,FM_IRQHANDLER IRQHandler) */
+@@ -2635,8 +2646,7 @@ void * ym2612_init(void *param, int clock, int rate,
+ 	if (F2612 == NULL)
+ 		return NULL;
+ 	memset(F2612, 0x00, sizeof(YM2612));
+-	/* allocate total level table (128kb space) */
+-	init_tables();
++	/* the shared tables are built once, by ym2612_init_tables() */
+ 
+ 	F2612->OPN.ST.param = param;
+ 	F2612->OPN.type = TYPE_YM2612;
+diff --git a/src/chips/mame/mame_ym2612fm.h b/src/chips/mame/mame_ym2612fm.h
+--- a/src/chips/mame/mame_ym2612fm.h
++++ b/src/chips/mame/mame_ym2612fm.h
+@@ -103,6 +103,14 @@ typedef void (*FM_IRQHANDLER)(void *param,int irq);
+ 
+ #if (BUILD_YM2612||BUILD_YM3438)
+ 
++/**
++ * @brief Build the tables every chip shares
++ *
++ * Call it once, before the first ym2612_init(), and never while a chip is
++ * running: every chip reads these tables as it generates.
++ */
++void ym2612_init_tables(void);
++
+ /**
+  * @brief Initialize chip and return the instance
+  * @param param Unused, keep NULL
+diff --git a/src/chips/mame_opn2.cpp b/src/chips/mame_opn2.cpp
+--- a/src/chips/mame_opn2.cpp
++++ b/src/chips/mame_opn2.cpp
+@@ -23,6 +23,14 @@
+ #include <cstdlib>
+ #include <assert.h>
+ 
++// The tables every chip reads are shared by all of them, and have to be built
++// once before the first chip is made and never while one is running.
++static bool buildSharedTables()
++{
++    ym2612_init_tables();
++    return true;
++}
++
+ MameOPN2::MameOPN2(OPNFamily f)
+     : OPNChipBaseT(f)
+ {
+@@ -41,6 +49,11 @@ void MameOPN2::setRate(uint32_t rate, uint32_t clock)
+     if(chip)
+         ym2612_shutdown(chip);
+     uint32_t chipRate = isRunningAtPcmRate() ? rate : nativeRate();
++    // The tables are built by the first chip to get here and by no other: a
++    // static initialised in a function is initialised exactly once even when
++    // several threads arrive at once, and each waits until it has been.
++    static const bool tablesBuilt = buildSharedTables();
++    (void)tablesBuilt;
+     chip = ym2612_init(NULL, (int)clock, (int)chipRate, NULL, NULL);
+     ym2612_reset_chip(chip);
+ }
+diff --git a/src/chips/mamefm/fm.cpp b/src/chips/mamefm/fm.cpp
+--- a/src/chips/mamefm/fm.cpp
++++ b/src/chips/mamefm/fm.cpp
+@@ -1689,6 +1689,20 @@ static int init_tables(void)
+ 
+ 
+ 
++/* The tables every chip reads -- the power table, the sine table and the LFO's
++   phase modulation -- are shared by all of them, and depend on nothing but
++   constants. They are built by the first chip to be made and by no other: a
++   static initialised in a function is initialised exactly once even when
++   several threads arrive at once, and each waits until it has been. Building
++   them again for each chip would rewrite memory that a chip already made may be
++   reading on another thread: a data race, even though the values written are
++   the ones already there. */
++static int init_tables_once(void)
++{
++	static const int built = init_tables();
++	return built;
++}
++
+ static void FMCloseTable( void )
+ {
+ #ifdef SAVE_SAMPLE
+@@ -2313,7 +2327,7 @@ void * ym2203_init(device_t *device, int clock, int rate, FM_TIMERHANDLER timer_
+ 	F2203 = new ym2203_state;
+ 	memset(F2203, 0, sizeof(*F2203));
+ 
+-	if( !init_tables() )
++	if( !init_tables_once() )
+ 	{
+ 		delete F2203;
+ 		return nullptr;
+@@ -2696,6 +2710,20 @@ void Init_ADPCMATable()
+ 	}
+ }
+ 
++/* The ADPCM-A decoder's table is shared by every chip as the FM's tables are,
++   and is built once in the same way (init_tables_once). */
++static bool build_ADPCMATable(void)
++{
++	Init_ADPCMATable();
++	return true;
++}
++
++static void Init_ADPCMATable_once(void)
++{
++	static const bool built = build_ADPCMATable();
++	(void)built;
++}
++
+ #ifdef MAME_EMU_SAVE_H
+ /* FM channel save , internal state only */
+ void FMsave_state_adpcma(device_t *device,ADPCM_CH *adpcm)
+@@ -2997,7 +3025,7 @@ void * ym2608_init(device_t *device, int clock, int rate,
+ 	F2608 = new ym2608_state;
+ 	memset(F2608, 0, sizeof(*F2608));
+ 	/* allocate total level table (128kb space) */
+-	if( !init_tables() )
++	if( !init_tables_once() )
+ 	{
+ 		delete F2608;
+ 		return NULLPTR;
+@@ -3032,7 +3060,7 @@ void * ym2608_init(device_t *device, int clock, int rate,
+ 	/* ADPCM Rhythm */
+ 	F2608->read_byte = InternalReadByte;
+ 
+-	Init_ADPCMATable();
++	Init_ADPCMATable_once();
+ 
+ 	for (unsigned i = 0; i < 6; i++)
+ 	{
+@@ -3700,7 +3728,7 @@ void *ym2610_init(device_t *device, int clock, int rate,
+ 	F2610 = new ym2610_state;
+ 	memset(F2610, 0, sizeof(*F2610));
+ 	/* allocate total level table (128kb space) */
+-	if( !init_tables() )
++	if( !init_tables_once() )
+ 	{
+ 		delete F2610;
+ 		return nullptr;
+@@ -3728,7 +3756,7 @@ void *ym2610_init(device_t *device, int clock, int rate,
+ 	F2610->deltaT.status_change_which_chip = F2610;
+ 	F2610->deltaT.status_change_EOS_bit = 0x80; /* status flag: set bit7 on End Of Sample */
+ 
+-	Init_ADPCMATable();
++	Init_ADPCMATable_once();
+ 
+ 	for (unsigned i = 0; i < 6; i++)
+ 	{

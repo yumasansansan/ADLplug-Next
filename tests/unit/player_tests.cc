@@ -17,6 +17,8 @@
 #include "JuceHeader.h"
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -53,10 +55,10 @@ void set_up(Player &pl, const Instrument &ins)
     pl.ensure_set_instrument(bank, 0, ins);
 }
 
-// The energy of the next tenth of a second the player makes.
-double energy(Player &pl)
+// The energy of the next frames the player makes, a tenth of a second unless
+// told otherwise.
+double energy(Player &pl, unsigned frames = 4410)
 {
-    constexpr unsigned frames = 4410;
     std::vector<float> left(frames), right(frames);
     pl.generate(left.data(), right.data(), frames, 1);
 
@@ -192,4 +194,49 @@ ADLPLUG_TEST(sysex_needs_the_whole_message)
 
     // Nothing was reset: the channel is still turned down where it was put.
     CHECK(energy(player) == turned_down);
+}
+
+// A player plays on one thread while another thread makes players, for each
+// emulator a build has. What an emulator's chips share -- tables worked out from
+// constants, or anything else kept once for every chip -- a chip made after the
+// first must leave alone, because a chip already playing on another thread is
+// reading it. That is what the plugin does -- its worker makes chips of its own
+// to measure an instrument while the audio thread plays -- and what two instances
+// of the plugin in one host do. It is the thread sanitizer that sees a chip that
+// writes it; without it, the test sees only that every player played.
+ADLPLUG_TEST(players_made_while_another_plays)
+{
+    Instrument ins;
+    if (!first_instrument(ins))
+        return;
+
+    const std::vector<std::string> emulators = Player::enumerate_emulators();
+    CHECK(!emulators.empty());
+    for (unsigned emu = 0; emu < emulators.size(); ++emu) {
+        // The number of an emulator the build leaves out, between two it has.
+        if (emulators[emu].empty())
+            continue;
+
+        Player playing;
+        set_up(playing, ins);
+        playing.set_emulator(emu);
+        CHECK(playing.emulator() == emu);
+        playing.play_midi(note_on, 3);
+
+        // Short blocks until the note is heard, by when the chip has read what it
+        // shares: the low-level emulators are slow, and slower still under a
+        // sanitizer.
+        double heard = 0;
+        std::thread audio([&playing, &heard] {
+            for (unsigned block = 0; block < 400 && heard == 0; ++block)
+                heard = energy(playing, 256);
+        });
+        for (unsigned made = 0; made < 3; ++made) {
+            Player another;
+            another.init(44100);
+            another.set_emulator(emu);
+        }
+        audio.join();
+        CHECK(heard > 0);
+    }
 }

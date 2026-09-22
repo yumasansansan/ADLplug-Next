@@ -826,7 +826,7 @@ void Generic_Main_Component<T>::receive_resampling(const Resampling_Settings &se
 {
     resampling_ = settings;
     resampling_status_ = status;
-    if (DialogWindow *dialog = dlg_resampling_.getComponent())
+    if (const DialogWindow *dialog = dlg_resampling_.getComponent())
         if (auto *editor = dynamic_cast<Resampling_Editor *>(dialog->getContentComponent()))
             editor->set_state(settings, status);
 }

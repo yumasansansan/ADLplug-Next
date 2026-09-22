@@ -1,0 +1,133 @@
+SPDX-FileCopyrightText: 2017-2018 Alexey Khokholov (Nuke.YKT)
+SPDX-FileCopyrightText: 2017-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+Nuked OPN2: the chip type is the chip's own
+
+OPN2_SetChipType() keeps the type -- whether the chip is a YM2612, with its DAC's distortion, or a YM3438, and whether its status can be read from every port -- in one variable of the file, which every chip reads as it generates. NukedOPN2 sets it each time it makes a chip, for the Nuked OPN2 (3438) and the Nuked OPN2 (2612) emulators alike, so the chip made last decides what every chip is: a YM3438 that is playing when a YM2612 is made goes on as a YM2612. And the variable is written on one thread while chips on others read it, which is a data race.
+
+A test of ADLplug-Next's found it under ThreadSanitizer. It plays each emulator of the library on one thread while players of the same emulator are made on another:
+
+  WARNING: ThreadSanitizer: data race
+    Write of size 4 at 0x55555650f750 by main thread:
+      #0 OPN2_SetChipType src/chips/nuked/ym3438.c:1244:15
+      #1 NukedOPN2::NukedOPN2(OPNFamily, bool) src/chips/nuked_opn2.cpp:28:5
+      #2 OPN2::reset(int, unsigned long, OPNFamily, void*) src/opnmidi_opn2.cpp:632:24
+    Previous read of size 4 at 0x55555650f750 by thread T2:
+      #0 OPN2_ChOutput src/chips/nuked/ym3438.c:1010:9
+      #1 OPN2_Clock src/chips/nuked/ym3438.c:1322:5
+      #2 OPN2_Generate src/chips/nuked/ym3438.c:1550:9
+    Location is global 'chip_type' of size 4
+
+It is heard on one thread as well. A second of a note from a YM3438 chip made on its own, and again with a YM2612 chip made after it: without this patch the second is, sample for sample, what a YM2612 chip makes of the note; with it, it is what the YM3438 made on its own. Two instances of a plugin in one host, each playing one of the two emulators, change each other's sound in this way.
+
+The type is a field of ym3438_t now, and OPN2_SetChipType() takes the chip it is for. OPN2_Reset() clears the chip as it did but keeps the type, which is what the chip is rather than a state it is in, so the type is set once, before the first reset. NukedOPN2 makes the chip zeroed, sets its type and then resets it. A chip on its own sounds as it did, a YM3438 and a YM2612 alike, sample for sample; and a program that plays one chip on a thread while another thread makes chips of the other type reports the race under ThreadSanitizer without the patch, and nothing with it.
+
+OPN2_SetChipType() is the core's own function, so a caller of it outside the library has to pass the chip now; NukedOPN2 is the only one in it.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/chips/nuked/ym3438.c b/src/chips/nuked/ym3438.c
+--- a/src/chips/nuked/ym3438.c
++++ b/src/chips/nuked/ym3438.c
+@@ -242,8 +242,6 @@ static const Bit16u panlawtable[] =
+     4858, 4050, 3240, 2431, 1620, 810, 0
+ };
+ 
+-static Bit32u chip_type = ym3438_mode_readmode;
+-
+ void OPN2_DoIO(ym3438_t *chip)
+ {
+     /* Write signal check */
+@@ -1007,7 +1005,7 @@ void OPN2_ChOutput(ym3438_t *chip)
+     chip->mol = 0;
+     chip->mor = 0;
+ 
+-    if (chip_type & ym3438_mode_ym2612)
++    if (chip->chip_type & ym3438_mode_ym2612)
+     {
+         out_en = ((cycles & 3) == 3) || test_dac;
+         /* YM2612 DAC emulation(not verified) */
+@@ -1211,9 +1209,12 @@ void OPN2_KeyOn(ym3438_t*chip)
+ 
+ void OPN2_Reset(ym3438_t *chip, Bit32u rate, Bit32u clock)
+ {
+-    Bit32u i, rateratio;
++    Bit32u i, rateratio, chip_type;
+     rateratio = (Bit32u)chip->rateratio;
++    /* The type is what the chip is, which a reset does not change. */
++    chip_type = chip->chip_type;
+     memset(chip, 0, sizeof(ym3438_t));
++    chip->chip_type = chip_type;
+     for (i = 0; i < 24; i++)
+     {
+         chip->eg_out[i] = 0x3ff;
+@@ -1239,9 +1240,9 @@ void OPN2_Reset(ym3438_t *chip, Bit32u rate, Bit32u clock)
+     }
+ }
+ 
+-void OPN2_SetChipType(Bit32u type)
++void OPN2_SetChipType(ym3438_t *chip, Bit32u type)
+ {
+-    chip_type = type;
++    chip->chip_type = type;
+ }
+ 
+ void OPN2_Clock(ym3438_t *chip, Bit16s *buffer)
+@@ -1418,7 +1419,7 @@ Bit32u OPN2_ReadIRQPin(ym3438_t *chip)
+ 
+ Bit8u OPN2_Read(ym3438_t *chip, Bit32u port)
+ {
+-    if ((port & 3) == 0 || (chip_type & ym3438_mode_readmode))
++    if ((port & 3) == 0 || (chip->chip_type & ym3438_mode_readmode))
+     {
+         if (chip->mode_test_21[6])
+         {
+@@ -1448,7 +1449,7 @@ Bit8u OPN2_Read(ym3438_t *chip, Bit32u port)
+             chip->status = (chip->busy << 7) | (chip->timer_b_overflow_flag << 1)
+                  | chip->timer_a_overflow_flag;
+         }
+-        if (chip_type & ym3438_mode_ym2612)
++        if (chip->chip_type & ym3438_mode_ym2612)
+         {
+             chip->status_time = 300000;
+         }
+diff --git a/src/chips/nuked/ym3438.h b/src/chips/nuked/ym3438.h
+--- a/src/chips/nuked/ym3438.h
++++ b/src/chips/nuked/ym3438.h
+@@ -222,11 +222,17 @@ typedef struct
+     Bit32u writebuf_last;
+     Bit64u writebuf_lasttime;
+     opn2_writebuf writebuf[OPN_WRITEBUF_SIZE];
++
++    /* The ym3438_mode_ flags of this chip (OPN2_SetChipType) */
++    Bit32u chip_type;
+ } ym3438_t;
+ 
+ /* EXTRA, original was "void OPN2_Reset(ym3438_t *chip)" */
+ void OPN2_Reset(ym3438_t *chip, Bit32u rate, Bit32u clock);
+-void OPN2_SetChipType(Bit32u type);
++/* EXTRA, original was "void OPN2_SetChipType(Bit32u type)", which gave every
++   chip the one type: the type is the chip's own now. Set it before the first
++   OPN2_Reset(), which keeps it. */
++void OPN2_SetChipType(ym3438_t *chip, Bit32u type);
+ void OPN2_Clock(ym3438_t *chip, Bit16s *buffer);
+ void OPN2_Write(ym3438_t *chip, Bit32u port, Bit8u data);
+ void OPN2_SetTestPin(ym3438_t *chip, Bit32u value);
+diff --git a/src/chips/nuked_opn2.cpp b/src/chips/nuked_opn2.cpp
+--- a/src/chips/nuked_opn2.cpp
++++ b/src/chips/nuked_opn2.cpp
+@@ -25,8 +25,10 @@
+ NukedOPN2::NukedOPN2(OPNFamily f, bool ym3438)
+     : OPNChipBaseT(f), m_isym3438(ym3438)
+ {
+-    OPN2_SetChipType(m_isym3438 ? ym3438_mode_readmode : ym3438_mode_ym2612);
+-    chip = new ym3438_t;
++    // The type is the chip's own, set before the first reset, which keeps it.
++    ym3438_t *chip_r = new ym3438_t();
++    OPN2_SetChipType(chip_r, m_isym3438 ? ym3438_mode_readmode : ym3438_mode_ym2612);
++    chip = chip_r;
+     NukedOPN2::setRate(m_rate, m_clock);
+ }
+ 

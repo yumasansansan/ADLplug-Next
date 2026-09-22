@@ -141,3 +141,7 @@ adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0014-a-number-of-chips-the-library-refuses-is-not-one-it-keeps.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0015-the-counter-the-interpolation-starts-from-is-set-before-it-is-read.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0016-mame-the-tables-every-chip-shares-are-built-once.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0017-nuked-opn2-the-chip-type-is-the-chips-own.patch")
