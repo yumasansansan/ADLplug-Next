@@ -24,13 +24,13 @@ set -euo pipefail
 llvm_major=23
 
 # Windows, macOS and the AlmaLinux container: LLVM's release archives.
-llvm_release=23.1.1
+llvm_release=23.1.2
 windows_archive=clang+llvm-$llvm_release-x86_64-pc-windows-msvc.tar.zst
-windows_sha256=c8a12d754b5050c5668b56a5425c806792d46c70f7244b1216046164aa4b6462
+windows_sha256=ceaee048142fece144752c6f6431cb0905a7a6160f78ab8cf5cf0b6216f99418
 macos_archive=LLVM-$llvm_release-macOS-ARM64.tar.zst
-macos_sha256=2c4a0fdd1ec6a32d4fd57ff32aa714ec8b3c71bf02a24ec38608a4f23f8aca89
+macos_sha256=3da0e91b5dfe3a5ec795ad2be79b3f5e6f28c8b23edcd3847fad7742b25e0507
 linux_archive=LLVM-$llvm_release-Linux-X64.tar.zst
-linux_sha256=b7ddbabd70fa1d206948bc83f59e59aa84eaf4cd09b6b89cc3ece28177710a6f
+linux_sha256=6382de1c1a210ce5a5cc49d18bc8444d137742e7cbf9b19f4ae602bb1ab52534
 
 # The Linux archive is built on Ubuntu 22.04, and its LLD needs that system's
 # ICU 70 (libicuuc.so.70, libicui18n.so.70), through the libxml2 linked into
@@ -106,9 +106,14 @@ release_url() {  # archive
 # Extracts a release archive into a directory, leaving out the static
 # libraries at the top of lib/, which are for programs built on LLVM and take
 # up most of the space. The compiler runtime lies deeper, in lib/clang/.
+#
+# From 23.1.2 on, LLVM compresses the archives with a window of 1 GiB (--long=30
+# in its .github/workflows/release-binaries.yml), and zstd decompresses a window
+# larger than 128 MiB only when it is told it may: without --long=30 it stops at
+# the first frame and asks for it.
 extract() {  # archive directory tar static-library-suffix
   mkdir -p "$2"
-  zstd --decompress --stdout "$1" |
+  zstd --decompress --long=30 --stdout "$1" |
     "$3" -x -f - -C "$2" --strip-components 1 --no-wildcards-match-slash --exclude "*/lib/*$4"
   rm -f "$1"
 }
