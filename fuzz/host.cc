@@ -41,13 +41,13 @@
 //             the value it is given -- a host should send a number from nought to
 //             one, and these reach what happens when it does not
 //   11xxxxxx  what else a host does: prepare the plugin again (which is where it
-//             carries its state over), a bypassed block -- or, with the third bit
-//             of x, a block whose player another thread holds, as the worker does
-//             while it measures an instrument, and with the fourth bit that block
-//             not bypassed -- reset, or with the third bit of x a block of as many
-//             channels as the byte after it says, whose channels are nowhere when
-//             the highest bit of that byte is set, and all notes off on every
-//             channel
+//             carries its state over; once at most), a bypassed block -- or, with
+//             the third bit of x, a block whose player another thread holds, as
+//             the worker does while it measures an instrument, and with the fourth
+//             bit that block not bypassed -- reset, or with the third bit of x a
+//             block of as many channels as the byte after it says, whose channels
+//             are nowhere when the highest bit of that byte is set, and all notes
+//             off on every channel
 //
 // What is checked: the sanitizers, that every sample that comes out is a finite
 // number, and that the count of the notes sounding on a channel is the number of
@@ -83,11 +83,21 @@ namespace {
 // whatever rate it asks for, and at a rate too low for a single sample of that,
 // the blocks it asks for are none. What those milliseconds cost still follows
 // the chips and the emulator core that automation may put in, which this says
-// nothing about: libFuzzer is given a minute an input (fuzz/CMakeLists.txt), so
-// that a block which costs more than that is told of rather than worked on.
+// nothing about: libFuzzer is given a minute an input, ten under the memory
+// sanitizer (fuzz/CMakeLists.txt), so that a block which costs more than that is
+// told of rather than worked on.
 constexpr unsigned frames_max = 4096;
 constexpr double seconds_max = 0.1;
 constexpr unsigned records_max = 512;
+
+// How many times one input may have the plugin prepared again. Each time carries
+// the state from the old player to the new one, writing it and reading it back,
+// and the default bank alone makes that state large: measured under the address
+// sanitizer on a desktop, an input of sixteen of them took 30 seconds on OPN2,
+// and nothing else bounded how many an input could have. One is enough for what
+// the record is there to reach: the plugin is prepared before the first record,
+// so the one is a prepare after a prepare, which carries the state over.
+constexpr unsigned prepares_max = 1;
 
 // What hosts ask for. The first of each is what an input that says nothing gets,
 // and the last is nothing at all: a host that has not settled its audio, or is
@@ -300,6 +310,7 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
     unsigned frames_left = (wanted > 0.0)
         ? static_cast<unsigned>(std::min<double>(wanted, frames_max)) : 0u;
     unsigned records_left = records_max;
+    unsigned prepares_left = prepares_max;
 
     while (!input.done() && records_left-- > 0) {
         const std::uint8_t record = input.byte();
@@ -354,8 +365,11 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
             case 0:
                 // A host stops and starts the plugin again, which is where it
                 // carries its state from the old player to the new one.
-                processor.releaseResources();
-                processor.prepareToPlay(rate, block);
+                if (prepares_left > 0) {
+                    --prepares_left;
+                    processor.releaseResources();
+                    processor.prepareToPlay(rate, block);
+                }
                 break;
             case 1: {
                 // A bypassed block, and with one bit more, a block whose player

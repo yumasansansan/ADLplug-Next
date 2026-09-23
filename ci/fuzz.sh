@@ -108,8 +108,18 @@ for manifest in "${manifests[@]}"; do
     failed=("$earlier/$target/"crash-* "$earlier/$target/"oom-* "$earlier/$target/"timeout-*)
     if [ ${#failed[@]} -gt 0 ]; then
       echo "== $target: ${#failed[@]} inputs that failed in an earlier run"
+      # They are replayed with the flags of the manifest, the time an input may
+      # take among them: without it libFuzzer gives each input twenty minutes, and
+      # one that ran out of the target's time would pass. The directories of seed
+      # and regression inputs stay behind, since libFuzzer would fuzz them.
+      flags=()
+      for argument in "${arguments[@]}"; do
+        if [[ $argument == -* ]]; then
+          flags+=("$argument")
+        fi
+      done
       code=0
-      timeout --kill-after=60s "$guard" "$fuzzer" "${failed[@]}" || code=$?
+      timeout --kill-after=60s "$guard" "$fuzzer" ${flags[@]+"${flags[@]}"} "${failed[@]}" || code=$?
       if [ "$code" -ne 0 ]; then
         if was_stopped "$code"; then
           echo "error: $target was still replaying the inputs that failed in an earlier run after $guard seconds, and was stopped" >&2

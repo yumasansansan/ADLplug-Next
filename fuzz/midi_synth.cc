@@ -44,13 +44,21 @@
 //             is restored. The numbers go in as they come: a project can hold any
 //             of them, and it is the plugin that settles what the library can run
 //
+// Some of these make every chip again: a reset, the number of chips, and in the
+// settings the emulator, the number of chips and the chip type of OPN2. The
+// chips they make come out of what the input may have made, and one that would
+// make more than is left ends the input there, as the end of its audio does.
+//
 // What is checked: the sanitizers, and that every sample is a finite number. A
 // chip that is asked for silence answers with silence, not with a NaN that
 // spreads through the mix of a host.
 //
-// The audio and the events are capped, so that one input is a millisecond or
-// two of work for an ordinary core. The low-level cores are a hundred times
-// slower than that, and the cap keeps even those at a fraction of a second.
+// The audio, the events and the chips an input has made are capped, so that one
+// input is a millisecond or two of work for an ordinary core. The low-level
+// cores are a hundred times slower than that at the audio, and slower still at
+// being made: each one made runs the chip's reset for tens of thousands of
+// clocks, twice, which an input asking for a hundred of them, or asking again
+// and again, would make into minutes.
 
 #include "fuzz.h"
 #include "adl/player.h"
@@ -60,6 +68,7 @@
 #include <fstream>
 #include <iterator>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace {
@@ -68,6 +77,16 @@ namespace {
 constexpr unsigned frames_max = 4096;
 constexpr unsigned frames_at_once = 1024;
 constexpr unsigned records_max = 1024;
+
+// The chips an input may have made, counted as chips of an ordinary core, a chip
+// of a low-level core counting as many. Making a chip is work the cap on the
+// audio does not see: measured under the address sanitizer, making 96 chips took
+// 24 seconds on the YMF262-LLE core and under a second on each core that is not
+// a low-level one. So an input may have two hundred and fifty-six chips of an
+// ordinary core made, more than any one number of chips the library takes, and
+// four of a low-level core.
+constexpr unsigned chips_made_max = 256;
+constexpr unsigned low_level_chip_weight = 64;
 
 // The bank of instruments that the notes play, which CMake names. It is read
 // once: the file is the same for every input, and the target for bank files is
@@ -113,6 +132,28 @@ private:
     std::size_t at_ = 0;
 };
 
+// What making `chips` chips of the emulator numbered `emulator` counts as. The
+// low-level cores are the ones the library names so. A number that is no
+// emulator of the build makes no chip, and counts as an ordinary core would.
+unsigned chips_made_cost(unsigned emulator, unsigned chips)
+{
+    static const std::vector<std::string> names = Player::enumerate_emulators();
+    const bool low_level =
+        emulator < names.size() && names[emulator].find("LLE") != std::string::npos;
+    return chips * (low_level ? low_level_chip_weight : 1u);
+}
+
+// Takes the making of `chips` chips of the emulator numbered `emulator` from what
+// the input may still have made, when that is enough.
+bool afford_chips(unsigned &chips_left, unsigned emulator, unsigned chips)
+{
+    const unsigned cost = chips_made_cost(emulator, chips);
+    if (cost > chips_left)
+        return false;
+    chips_left -= cost;
+    return true;
+}
+
 // A value that the input gives as one more than itself, so that a zero leaves
 // the setting alone.
 bool given(std::uint8_t byte, unsigned &value) noexcept
@@ -123,15 +164,24 @@ bool given(std::uint8_t byte, unsigned &value) noexcept
     return true;
 }
 
-void apply_settings(Player &pl, Input &input)
+// False when a setting would make more chips than the input may still have
+// made, which ends the input.
+bool apply_settings(Player &pl, Input &input, unsigned &chips_left)
 {
     // The numbers go in as they come: a saved project holds an emulator and a
     // volume model that the plugin did not write, and both reach the library.
     unsigned value = 0;
-    if (given(input.byte(), value))
+    if (given(input.byte(), value)) {
+        if (!afford_chips(chips_left, value, pl.num_chips()))
+            return false;
         pl.set_emulator(value);
-    if (given(input.byte(), value))
-        pl.set_num_chips(1u + (value & 1u));
+    }
+    if (given(input.byte(), value)) {
+        const unsigned chips = 1u + (value & 1u);
+        if (!afford_chips(chips_left, pl.emulator(), chips))
+            return false;
+        pl.set_num_chips(chips);
+    }
 
     const std::uint8_t flags = input.byte();
     pl.set_soft_pan_enabled((flags & 4u) != 0);
@@ -150,9 +200,13 @@ void apply_settings(Player &pl, Input &input)
     if (given(input.byte(), value))
         pl.set_num_4ops(value);
 #elif defined(ADLPLUG_OPN2)
-    if (given(input.byte(), value))
+    if (given(input.byte(), value)) {
+        if (!afford_chips(chips_left, pl.emulator(), pl.num_chips()))
+            return false;
         pl.set_chip_type(value);
+    }
 #endif
+    return true;
 }
 
 // Generates `frames` frames, in the pieces the plugin generates them in, and
@@ -172,7 +226,7 @@ void generate(Player &pl, unsigned frames)
     }
 }
 
-void play(Player &pl, Input &input)
+void play(Player &pl, Input &input, unsigned &chips_left)
 {
     unsigned frames_left = frames_max;
     unsigned records_left = records_max;
@@ -213,6 +267,8 @@ void play(Player &pl, Input &input)
         default:
             switch (value & 7u) {
             case 0:
+                if (!afford_chips(chips_left, pl.emulator(), pl.num_chips()))
+                    return;
                 pl.reset();
                 break;
             case 1:
@@ -221,9 +277,13 @@ void play(Player &pl, Input &input)
             case 2: {
                 // The number of chips as the next byte has it. A project can
                 // hold any number and the plugin settles what the library can
-                // run, so the number goes in as it comes; the audio left to the
-                // input shrinks with it, since every chip is generated.
+                // run, so the number goes in as it comes; making them comes out
+                // of the chips the input may have made, and the audio left to
+                // the input shrinks with the number, since every chip is
+                // generated.
                 const unsigned chips = input.byte();
+                if (!afford_chips(chips_left, pl.emulator(), chips))
+                    return;
                 pl.set_num_chips(chips);
                 frames_left = std::min(frames_left, frames_max / std::max(1u, chips));
                 break;
@@ -240,7 +300,8 @@ void play(Player &pl, Input &input)
                 break;
             }
             default:
-                apply_settings(pl, input);
+                if (!apply_settings(pl, input, chips_left))
+                    return;
                 break;
             }
             break;
@@ -265,7 +326,8 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
     pl.play_midi(nullptr, 0);
     FUZZ_CHECK(!pl.play_sysex(nullptr, 0));
 
-    apply_settings(pl, input);
-    play(pl, input);
+    unsigned chips_left = chips_made_max;
+    if (apply_settings(pl, input, chips_left))
+        play(pl, input, chips_left);
     return 0;
 }

@@ -40,7 +40,7 @@
 //   12  a measurement as the worker sends one back, of the instrument the plugin
 //       holds or of another, with the two times it found (two bytes each)
 //   13  the global parameters (two bytes: the volume model, and what else is
-//       global to the chip), 14 prepare the plugin again
+//       global to the chip), 14 prepare the plugin again (once at most)
 //   15  with the low bit clear, the best number of four-operator channels (OPL3;
 //       nothing on OPN2). With it set, the rest of the input as the bytes of a
 //       file the user opens, read and sent the way the editor does it: a bank
@@ -115,8 +115,16 @@ using Native_Instrument = OPN2_Instrument;
 // the user opens, because what the editor does with one is send these messages;
 // the state of a project and the configuration belong to the targets that take
 // those.
+//
+// Preparing the plugin again writes its state three times and reads it once,
+// and the default bank alone makes that state large: an input that prepared
+// four times took 13 seconds under the address sanitizer on a desktop, and 63
+// under the memory sanitizer on CI, past the minute an input may take. One is
+// enough for what the record is there to reach: the plugin is prepared before
+// the first record, so the one is a prepare after a prepare, which carries the
+// state over.
 constexpr unsigned records_max = 512;
-constexpr unsigned prepares_max = 4;
+constexpr unsigned prepares_max = 1;
 
 // How many instruments the check that reads every program may look at while the
 // records run; the check after the last record reads them all.

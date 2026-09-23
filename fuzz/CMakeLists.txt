@@ -70,14 +70,22 @@ set(ADLplug_FUZZ_BIG_INPUT "64M")
 # something of libFuzzer that the others do not. They come after the arguments
 # every target gets, so a target that names one of those again has the say.
 #
-# Every manifest says -timeout=60. An input is meant to be a few milliseconds of
-# work, or a second or two for the targets that play a whole measurement, so a
-# minute of one means something has gone wrong with it rather than that it is
-# long. libFuzzer would otherwise work on it for twenty minutes, which is its
-# own default, and then hand back a job that spent itself on the one input: that
-# is how a rate of 16 Hz, which the resampler of both libraries never came back
-# from, took a whole fuzzing job of CI (patches/libADLMIDI/0009-*, and
+# Every manifest says -timeout=60, but for the memory sanitizer's (below). An
+# input is meant to be a few milliseconds of work, or a second or two for the
+# targets that play a whole measurement, so a minute of one means something has
+# gone wrong with it rather than that it is long. libFuzzer would otherwise work
+# on it for twenty minutes, which is its own default, and then hand back a job
+# that spent itself on the one input: that is how a rate of 16 Hz, which the
+# resampler of both libraries never came back from, took a whole fuzzing job of
+# CI (patches/libADLMIDI/0009-*, and
 # fuzz/regressions/<chip>/host/sixteen-samples-a-second, which is the input).
+#
+# A build with the memory sanitizer says -timeout=600 instead: the same minute at
+# the speed that build really runs, as ci/fuzz.sh gives the runs of such a build
+# half an hour where the others have ten minutes. On CI's runners, under the
+# memory sanitizer, one input of the measurement target took 66 seconds, and one
+# that made 96 chips of the YMF262-LLE core took 147; the address sanitizer's
+# build on a desktop takes 5 and 24 over the same two.
 #
 # LONG_RUNS_ONLY marks a target whose every input is heavy enough that the
 # fuzzing of a push would get through too few of them to be worth the minute.
@@ -148,7 +156,11 @@ function(adlplug_fuzz_target name)
       else()
         target_link_options(${target} PRIVATE -fsanitize=fuzzer)
       endif()
-      set(arguments "-timeout=60")
+      if("memory" IN_LIST ADLplug_SANITIZER_LIST)
+        set(arguments "-timeout=600")
+      else()
+        set(arguments "-timeout=60")
+      endif()
       if(arg_DICTIONARY)
         list(APPEND arguments "-dict=${arg_DICTIONARY}")
       endif()
