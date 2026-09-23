@@ -28,7 +28,9 @@
 // that takes and holds what the filter produced beyond them until the next call.
 // Nothing here allocates or waits once prepare() has returned, which is what lets
 // pull() run on the audio thread (sources/utility/realtime.h); prepare() itself
-// designs a filter and allocates for it, and belongs where the player is made.
+// designs a filter -- or takes the one MediaPerch keeps for that ratio and those
+// settings, which every instance of the plugin in the process shares -- and
+// allocates for it, and belongs where the player is made.
 class Chip_Resampler {
 public:
     // Designs the filter for the pair of rates, and says why when it cannot.
@@ -82,9 +84,10 @@ public:
 
     // There is no filter until prepare() says so. A player that starts again is
     // prepared again with it, which is where the stream starts from nothing: a
-    // cascade has no way to forget a stream without designing it again, and the
-    // one place that wants it forgotten is the one place that has just made a
-    // player to go with it.
+    // cascade forgets a stream only by being configured again, which finds the
+    // filter it had rather than designing it anew, and the one place that wants
+    // the stream forgotten is the one place that has just made a player to go
+    // with it.
     void unprepare() noexcept
     {
         active_ = false;
