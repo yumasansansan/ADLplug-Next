@@ -46,7 +46,10 @@ public:
 private:
     void run();
     void handle_message(const Buffered_Message &msg);
-    static void measure(std::uint32_t full_id, const Instrument &ins, Messages::Worker::MeasurementResult &body);
+    // Measures the instrument into `body`, giving the measurement up as soon as
+    // `quit` is set: false then says there is nothing to send.
+    static bool measure(std::uint32_t full_id, const Instrument &ins, const std::atomic<bool> &quit,
+                        Messages::Worker::MeasurementResult &body);
 
     AdlplugAudioProcessor &proc_;
     std::thread thread_;

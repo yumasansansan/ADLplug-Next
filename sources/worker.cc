@@ -133,9 +133,18 @@ void Worker::run()
             if (quit)
                 break;
 
+            // A measurement plays the instrument for up to a hundred seconds,
+            // and the worker is stopped by whoever needs it gone -- a host that
+            // prepares the plugin again or closes it waits on that in
+            // stop_worker(). So the measurement stops when the worker is told
+            // to, and nothing is sent for it; the message it would have gone
+            // into was never finished, so the queue holds nothing of it.
             const auto it = measure_requests_.begin();
             Messages::Worker::MeasurementResult result;
-            measure(it->first, it->second, result);
+            if (!measure(it->first, it->second, quit_, result)) {
+                quit = true;
+                break;
+            }
             Messages::set_body(msg, result);
             Messages::finish_write(mq_send, msg);
             measure_requests_.erase(it);
@@ -185,7 +194,8 @@ void Worker::handle_message(const Buffered_Message &msg)
     }
 }
 
-void Worker::measure(std::uint32_t full_id, const Instrument &ins, Messages::Worker::MeasurementResult &body)
+bool Worker::measure(std::uint32_t full_id, const Instrument &ins, const std::atomic<bool> &quit,
+                     Messages::Worker::MeasurementResult &body)
 {
     const Bank_Id id = Bank_Id::from_integer(full_id >> 7);
     const unsigned program = full_id & 127;
@@ -194,7 +204,11 @@ void Worker::measure(std::uint32_t full_id, const Instrument &ins, Messages::Wor
           id.percussive ? 'P' : 'M', id.msb, id.lsb, program);
 
     Measurer::DurationInfo result {};
-    Measurer::ComputeDurations(ins, result);
+    if (!Measurer::ComputeDurations(ins, result, &quit)) {
+        trace("Gave up measuring %c%u:%u:%u: the worker is stopping",
+              id.percussive ? 'P' : 'M', id.msb, id.lsb, program);
+        return false;
+    }
 
     trace("Finished measuring %c%u:%u:%u: %llu ms on, %llu ms off",
           id.percussive ? 'P' : 'M', id.msb, id.lsb, program,
@@ -206,4 +220,5 @@ void Worker::measure(std::uint32_t full_id, const Instrument &ins, Messages::Wor
     body.instrument = ins;
     body.ms_sound_kon = saturate_to<std::uint16_t>(result.ms_sound_kon);
     body.ms_sound_koff = saturate_to<std::uint16_t>(result.ms_sound_koff);
+    return true;
 }

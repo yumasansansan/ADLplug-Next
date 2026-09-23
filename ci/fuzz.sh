@@ -18,8 +18,9 @@
 # takes it. A target runs with the arguments that CMake listed beside it
 # (build/<preset>/fuzz/*.args: its dictionary, seed inputs and regression
 # inputs), on a corpus of its own in <corpora>/<target>/, which it grows and
-# which may carry over from an earlier run. An input that fails is written to
-# <crashes>/<target>/.
+# which may carry over from an earlier run. Once a target has run, that corpus
+# is merged down to the fewest inputs that reach what all of it reached. An
+# input that fails is written to <crashes>/<target>/.
 #
 # Given <earlier crashes>, each target first runs once on the inputs under
 # <earlier crashes>/<target>/ that failed in an earlier run. One that still
@@ -99,6 +100,16 @@ for manifest in "${manifests[@]}"; do
   mapfile -t arguments < "$manifest"
   mkdir -p "$corpora/$target" "$crashes/$target"
 
+  # The flags of the manifest, the time an input may take among them, for the
+  # runs below that are not the fuzzing itself. The directories of seed and
+  # regression inputs stay out of those, since libFuzzer would fuzz them.
+  flags=()
+  for argument in "${arguments[@]}"; do
+    if [[ $argument == -* ]]; then
+      flags+=("$argument")
+    fi
+  done
+
   if [ -n "$earlier" ]; then
     # What libFuzzer writes beside a failing input, and what it names it: crash-,
     # oom- and timeout- are the ones that failed, and slow-unit- is an input that
@@ -108,16 +119,9 @@ for manifest in "${manifests[@]}"; do
     failed=("$earlier/$target/"crash-* "$earlier/$target/"oom-* "$earlier/$target/"timeout-*)
     if [ ${#failed[@]} -gt 0 ]; then
       echo "== $target: ${#failed[@]} inputs that failed in an earlier run"
-      # They are replayed with the flags of the manifest, the time an input may
-      # take among them: without it libFuzzer gives each input twenty minutes, and
-      # one that ran out of the target's time would pass. The directories of seed
-      # and regression inputs stay behind, since libFuzzer would fuzz them.
-      flags=()
-      for argument in "${arguments[@]}"; do
-        if [[ $argument == -* ]]; then
-          flags+=("$argument")
-        fi
-      done
+      # They are replayed with the flags of the manifest: without the time an
+      # input may take, libFuzzer gives each input twenty minutes, and one that
+      # ran out of the target's time would pass.
       code=0
       timeout --kill-after=60s "$guard" "$fuzzer" ${flags[@]+"${flags[@]}"} "${failed[@]}" || code=$?
       if [ "$code" -ne 0 ]; then
@@ -144,6 +148,32 @@ for manifest in "${manifests[@]}"; do
       echo "error: $target failed; the input is in $crashes/$target/" >&2
     fi
     status=1
+    continue
+  fi
+
+  # libFuzzer replays the whole corpus it is given before it looks at the time
+  # it was asked to run for, and every run adds to that corpus what it found,
+  # so a corpus that only grows makes each run start later than the last: some
+  # targets had come to take longer replaying theirs than a short run was asked
+  # to fuzz for. The merge costs one more pass over the corpus here, and leaves
+  # the next run the inputs its coverage needs rather than every input ever
+  # kept. It happens beside the corpus, not in it, so that a job stopped in the
+  # middle keeps the corpus it had; a merge that does not finish loses nothing
+  # either.
+  echo "== $target: merging the corpus down"
+  merged=$(mktemp -d)
+  code=0
+  timeout --kill-after=60s "$guard" "$fuzzer" -merge=1 ${flags[@]+"${flags[@]}"} \
+      "$merged" "$corpora/$target" || code=$?
+  kept=("$corpora/$target"/*)
+  if [ "$code" -eq 0 ]; then
+    rm -rf "$corpora/$target"
+    mv "$merged" "$corpora/$target"
+    now=("$corpora/$target"/*)
+    echo "== $target: ${#kept[@]} inputs merged down to ${#now[@]}"
+  else
+    rm -rf "$merged"
+    echo "== $target: the merge did not finish (status $code), and the corpus of ${#kept[@]} inputs carries over as it is"
   fi
 done
 exit $status

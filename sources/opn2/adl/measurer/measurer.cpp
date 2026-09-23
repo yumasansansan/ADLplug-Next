@@ -30,6 +30,7 @@
 #include "../instrument.h"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -230,8 +231,12 @@ struct TinySynth
 
 namespace Measurer {
 
-void ComputeDurations(const Instrument &in, DurationInfo &result)
+bool ComputeDurations(const Instrument &in, DurationInfo &result, const std::atomic<bool> *stop)
 {
+    // Whether whoever asked for the measurement has stopped wanting it, which is
+    // asked once in every period of each loop below.
+    const auto stopped = [stop] { return stop != nullptr && stop->load(); };
+
     DefaultOPN2 chip(OPNChip_OPN2);
     AudioHistory<double> audioHistory;
 
@@ -282,6 +287,8 @@ void ComputeDurations(const Instrument &in, DurationInfo &result)
 
     for (unsigned period = 0; period < max_period_on; ++period, ++windows_passed_on)
     {
+        if (stopped())
+            return false;
         for (unsigned i = 0; i < samples_per_interval;)
         {
             const std::size_t blocksize = std::min<std::size_t>(samples_per_interval - i, audioBufferLength);
@@ -351,6 +358,8 @@ void ComputeDurations(const Instrument &in, DurationInfo &result)
              ((period < peak_amplitude_time) || (period == 0)) && (period < max_period_on);
              ++period)
         {
+            if (stopped())
+                return false;
             for (unsigned i = 0; i < samples_per_interval;)
             {
                 const std::size_t blocksize = std::min<std::size_t>(samples_per_interval - i, audioBufferLength);
@@ -366,6 +375,8 @@ void ComputeDurations(const Instrument &in, DurationInfo &result)
     // Now, for up to 60 seconds, measure mean amplitude.
     for (unsigned period = 0; period < max_period_off; ++period)
     {
+        if (stopped())
+            return false;
         for (unsigned i = 0; i < samples_per_interval;)
         {
             const std::size_t blocksize = std::min<std::size_t>(samples_per_interval - i, audioBufferLength);
@@ -410,6 +421,7 @@ void ComputeDurations(const Instrument &in, DurationInfo &result)
     result.ms_sound_kon  = static_cast<std::uint64_t>(static_cast<double>(quarter_amplitude_time) * 1000.0 / interval);
     result.ms_sound_koff = static_cast<std::uint64_t>(static_cast<double>(keyoff_out_time) * 1000.0 / interval);
     result.nosound = (peak_amplitude_value < 0.5) || ((sound_min >= -1) && (sound_max <= 1));
+    return true;
 }
 
 }  // namespace Measurer

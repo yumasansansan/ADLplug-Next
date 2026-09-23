@@ -28,6 +28,7 @@ set(ADLplug_UNIT_TEST_SOURCES
   "unit/bank_tests.cc"
   "unit/chip_settings_tests.cc"
   "unit/fifo_tests.cc"
+  "unit/measurer_tests.cc"
   "unit/player_tests.cc"
   "unit/text_tests.cc"
   "unit/utility_tests.cc")
@@ -52,7 +53,9 @@ set(ADLplug_UNIT_TESTED_SOURCES
   "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/instrument_properties.cc"
   # The player: it hands the System Exclusive messages to the library and, for
   # OPL3, sets the MT-32 defaults inside it.
-  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/player.cc")
+  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/player.cc"
+  # The measurer, which the worker runs and a stop can cut short.
+  "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/measurer/measurer.cpp")
 
 # Under the sanitizers, the tests get their environment from the top
 # (adlplug_sanitizer_test_environment in CMakeLists.txt), and a test shows that

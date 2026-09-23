@@ -27,6 +27,7 @@
  */
 
 #pragma once
+#include <atomic>
 #include <cstdint>
 struct Instrument;
 
@@ -45,5 +46,11 @@ namespace Measurer
         bool nosound = false;
     };
 
-    void ComputeDurations(const Instrument &in, DurationInfo &result);
+    // Measures how long the instrument sounds while a note is held and once it
+    // is released, by playing it for up to forty seconds and listening for up
+    // to sixty more. Given `stop`, it looks at it once in every hundred and
+    // fiftieth of a second it plays, and gives the measurement up as soon as it
+    // is set: false then says that `result` holds nothing to use.
+    bool ComputeDurations(const Instrument &in, DurationInfo &result,
+                          const std::atomic<bool> *stop = nullptr);
 }
