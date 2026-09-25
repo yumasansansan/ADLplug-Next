@@ -95,15 +95,16 @@ std::vector<std::uint8_t> Pak_File_Reader::read_content(std::uint32_t offset, st
     // a gigabyte taken for it before a byte had been read. The content is read in
     // pieces, into itself, and grows with what the stream really gives, so that a
     // size larger than the stream holds costs no more than what is there. The
-    // room doubles rather than following the pieces, so that a bank of any size
-    // is copied as few times as a vector ever copies it. A stream that gives less
-    // than the pack said is no answer, as it was before.
+    // room grows as a vector's does, by a factor when it runs out, so that a bank
+    // of any size is copied as few times as a vector ever copies it. It once
+    // asked for twice its room at every piece, needed or not, which came to 2 GiB
+    // by the sixteenth piece, a megabyte of content (fuzz/parsers.cc found it). A
+    // stream that gives less than the pack said is no answer, as it was before.
     constexpr std::size_t piece_size = std::size_t{64} * 1024;
     std::vector<std::uint8_t> content;
     while (content.size() < size) {
         const std::size_t have = content.size();
         const auto want = static_cast<int>(std::min<std::size_t>(piece_size, size - have));
-        content.reserve(std::max(have + static_cast<std::size_t>(want), 2 * content.capacity()));
         content.resize(have + static_cast<std::size_t>(want));
         if (zlib_stream.read(content.data() + have, want) != want)
             return {};

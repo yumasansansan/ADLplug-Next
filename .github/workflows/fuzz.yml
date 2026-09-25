@@ -8,11 +8,20 @@
 #
 # The long fuzzing. Once a day, and whenever it is started by hand, every fuzz
 # target of both plugins runs with libFuzzer, on Ubuntu (ci/fuzz.sh --with-long),
-# in each of the two sanitizer builds: the one with the address sanitizer and the
-# one with the thread sanitizer, which no build can have both of. That includes
-# the targets whose every input is heavy, which the short runs of a minute in CI
-# leave out (.github/workflows/ci.yml). How long each target runs is twenty
-# minutes for the daily run and the run's own choice when it is started by hand.
+# in each of the three sanitizer builds: the one with the address sanitizer, the
+# one with the thread sanitizer and the one with the memory sanitizer, no two of
+# which a build can have. That includes the targets whose every input is heavy,
+# which the short runs of a minute in CI leave out (.github/workflows/ci.yml).
+# How long each target runs is twenty minutes for the daily run and the run's own
+# choice when it is started by hand.
+#
+# The targets of a build are fuzzed by two jobs side by side: one takes the two
+# whose corpora take the longest to replay, the measurement of an instrument and
+# the synth that MIDI drives (ADLplug_FUZZ_HEAVY below), and the other takes every
+# other target. One job fuzzed all seven in turn until the memory sanitizer's
+# builds outgrew the time a job is allowed: a target replays its corpus before it
+# is fuzzed and again when the corpus is merged down, and under that sanitizer one
+# replay of either of those two took from twenty minutes to more than fifty.
 #
 # The build is the fuzz targets alone, with every coverage feature libFuzzer can
 # steer by (ci/build.sh --fuzz-only). These runs are where the fuzzer has the
@@ -69,21 +78,33 @@ defaults:
 
 jobs:
   fuzz:
-    name: ${{ matrix.preset }} (ubuntu-26.04)
+    name: ${{ matrix.preset }}, ${{ matrix.part }} (ubuntu-26.04)
     runs-on: ubuntu-26.04
-    # What each choice is allowed: the targets run one after another after a build,
-    # so ten times one target's time and half an hour for the build and the corpus
-    # is room for the seven targets there are and for a few more, and still stops a
-    # job that hangs after a time that has to do with what was asked of it. The
-    # table is worked out here because an expression of GitHub's cannot multiply;
-    # every choice above is a key of it, and none may go past the six hours that a
-    # job of a hosted runner may take at the most.
+    # What each choice is allowed: a job's targets run one after another after a
+    # build, and each replays its corpus when it starts and again when the corpus is
+    # merged down, which under the memory sanitizer can take longer than the time it
+    # is fuzzed. Ten times one target's time and half an hour for the build is room
+    # for the five targets of the one part and for the two slow ones of the other,
+    # and still stops a job that hangs after a time that has to do with what was
+    # asked of it. Measured on the last run that fuzzed all seven in one job, for
+    # twenty minutes each, with the memory sanitizer, the slowest of the builds:
+    # ADLplug-Next's two heavy targets came to some three hours with the build, and
+    # its other five to some two and a quarter, where the table allows 230 minutes.
+    # The table is worked out here because an expression of GitHub's cannot
+    # multiply; every choice above is a key of it, and none may go past the six
+    # hours that a job of a hosted runner may take at the most.
     timeout-minutes: >-
       ${{ fromJSON('{"1": 40, "5": 80, "10": 130, "15": 180, "20": 230, "30": 330}')[github.event.inputs.minutes || '20'] }}
     strategy:
       fail-fast: false
       matrix:
         preset: [adl-sanitize, opn-sanitize, adl-tsan, opn-tsan, adl-msan, opn-msan]
+        part: [heavy, rest]
+    env:
+      # The targets of the heavy part, which the other part leaves out. A name
+      # here that is no target of the build fails both jobs (ci/fuzz.sh), so that
+      # a target renamed cannot fall out of the fuzzing without a word.
+      ADLplug_FUZZ_HEAVY: ADLplug_fuzz_measurement,ADLplug_fuzz_midi_synth
 
     steps:
       - name: Check out
@@ -122,17 +143,53 @@ jobs:
             exit 0
           fi
           echo "Carrying over from run $last."
-          gh run download "$last" --repo "$GITHUB_REPOSITORY" \
-            --name "fuzz-corpora-${{ matrix.preset }}" --dir fuzz-run/corpora \
+          # A target's corpus and the inputs that failed on it are in the artifacts
+          # of the job that fuzzed it: those of either part of the build, or, from
+          # a run from before the targets were split between two jobs, the build's
+          # one pair. With a pattern, gh puts each artifact in a directory of its
+          # own name. This job takes its own targets' from all of them and leaves
+          # every other target's alone, so that no job carries along a copy of what
+          # another one grows, and a target moved from one part to the other keeps
+          # its corpus.
+          gh run download "$last" --repo "$GITHUB_REPOSITORY" --dir fuzz-run/kept/corpora \
+            --name "fuzz-corpora-${{ matrix.preset }}" --pattern "fuzz-corpora-${{ matrix.preset }}-*" \
             || echo "Run $last kept no corpus: the corpus starts from the seed inputs."
-          gh run download "$last" --repo "$GITHUB_REPOSITORY" \
-            --name "fuzz-crashes-${{ matrix.preset }}" --dir fuzz-run/earlier \
+          gh run download "$last" --repo "$GITHUB_REPOSITORY" --dir fuzz-run/kept/crashes \
+            --name "fuzz-crashes-${{ matrix.preset }}" --pattern "fuzz-crashes-${{ matrix.preset }}-*" \
             || echo "Run $last kept no inputs that failed."
+          shopt -s nullglob
+          for manifest in "build/${{ matrix.preset }}/fuzz/"*.args; do
+            target=$(basename "$manifest" .args)
+            if [[ ",$ADLplug_FUZZ_HEAVY," == *",$target,"* ]]; then
+              part=heavy
+            else
+              part=rest
+            fi
+            if [ "$part" != "${{ matrix.part }}" ]; then
+              continue
+            fi
+            for kept in fuzz-run/kept/corpora/*/"$target"; do
+              mkdir -p "fuzz-run/corpora/$target"
+              cp -R "$kept/." "fuzz-run/corpora/$target/"
+            done
+            for kept in fuzz-run/kept/crashes/*/"$target"; do
+              mkdir -p "fuzz-run/earlier/$target"
+              cp -R "$kept/." "fuzz-run/earlier/$target/"
+            done
+          done
+          rm -rf fuzz-run/kept
 
       - name: Fuzz each target
         env:
           ADLplug_FUZZ_MINUTES: ${{ github.event.inputs.minutes || '20' }}
-        run: bash ci/fuzz.sh --with-long "${{ matrix.preset }}" "$((ADLplug_FUZZ_MINUTES * 60))" fuzz-run/corpora fuzz-run/crashes fuzz-run/earlier
+        run: |
+          if [ "${{ matrix.part }}" = heavy ]; then
+            select=--only
+          else
+            select=--skip
+          fi
+          bash ci/fuzz.sh --with-long "$select" "$ADLplug_FUZZ_HEAVY" "${{ matrix.preset }}" \
+            "$((ADLplug_FUZZ_MINUTES * 60))" fuzz-run/corpora fuzz-run/crashes fuzz-run/earlier
 
       # What a run found is kept whatever became of the job, its own time limit
       # included: a job that the limit stops counts as cancelled, and that is the
@@ -141,7 +198,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: fuzz-corpora-${{ matrix.preset }}
+          name: fuzz-corpora-${{ matrix.preset }}-${{ matrix.part }}
           path: fuzz-run/corpora/
           if-no-files-found: ignore
           retention-days: 30
@@ -150,7 +207,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: fuzz-crashes-${{ matrix.preset }}
+          name: fuzz-crashes-${{ matrix.preset }}-${{ matrix.part }}
           path: fuzz-run/crashes/
           if-no-files-found: ignore
           retention-days: 90

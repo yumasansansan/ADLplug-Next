@@ -83,6 +83,8 @@ adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0008-a-parameter-tells-its-listeners-without-waiting.patch")
 adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0009-asking-which-thread-this-is-takes-no-lock.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0010-a-hex-character-reference-the-text-ends-in-ends-there.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0001-esfmu-the-rhythm-volume-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libADLMIDI"

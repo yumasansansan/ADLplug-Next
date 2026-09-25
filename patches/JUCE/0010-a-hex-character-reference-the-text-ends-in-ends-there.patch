@@ -1,0 +1,43 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+A hexadecimal character reference that the text ends in ends there
+
+XmlDocument::readEntity() reads a hexadecimal character reference -- &#x and hex digits up to a semicolon -- by taking digits until the semicolon, stopping at the first character that is not one, and then stepping over one character, which is the semicolon when the reference is whole. When the text ends in the middle of the reference, the character it stops at is the terminator, and the step takes the input past it: readChildElements(), which called readEntity(), then goes on reading text from beyond the end of the string. The decimal branch beside it already looks for the end of the input and returns there; the hexadecimal one did not.
+
+ADLplug-Next's fuzz target for the state of a project found it with seven bytes, <k>>&#X, and AddressSanitizer stopped at the read past the end:
+
+  ERROR: AddressSanitizer: heap-buffer-overflow on address 0x...
+  READ of size 1 at 0x... thread T0
+      #0 juce::CharPointer_UTF8::getDerefAndIncrement() const modules/juce_core/text/juce_CharPointer_UTF8.h:555:35
+      #1 juce::CharPointer_UTF8::operator*() const modules/juce_core/text/juce_CharPointer_UTF8.h:89:16
+      #2 juce::XmlDocument::readChildElements(juce::XmlElement&) modules/juce_core/xml/juce_XmlDocument.cpp:649:41
+      #3 juce::XmlDocument::readNextElement(bool) modules/juce_core/xml/juce_XmlDocument.cpp:470:21
+      #4 juce::XmlDocument::parseDocumentElement(juce::CharPointer_UTF8, bool) modules/juce_core/xml/juce_XmlDocument.cpp:231:45
+  0x... is located 0 bytes after 31-byte region
+
+ThreadSanitizer, where the memory past the end had already been freed, reported the same read as a use after free at the same line.
+
+The hexadecimal branch now does what the decimal one does: at the end of the input it says so and returns, leaving the input on the terminator, where the reading of the element that holds the reference comes to the end and says that too. A reference that is whole, or cut short by any other character, is read as it was. A reference in the value of an attribute is read by the same function (readQuotedString() calls it), and is mended by the same change.
+
+ADLplug-Next keeps the input as a regression, and a build of it without this patch still fails on it.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_core/xml/juce_XmlDocument.cpp b/modules/juce_core/xml/juce_XmlDocument.cpp
+--- a/modules/juce_core/xml/juce_XmlDocument.cpp
++++ b/modules/juce_core/xml/juce_XmlDocument.cpp
+@@ -720,6 +720,12 @@ void XmlDocument::readEntity (String& result)
+ 
+             while (input[0] != ';')
+             {
++                if (input[0] == 0)
++                {
++                    setLastError ("unexpected end of input", true);
++                    return;
++                }
++
+                 auto hexValue = CharacterFunctions::getHexDigitValue (input[0]);
+ 
+                 if (hexValue < 0 || ++numChars > 8)

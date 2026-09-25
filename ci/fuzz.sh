@@ -7,20 +7,25 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-#   ci/fuzz.sh [--with-long] <preset> <seconds> <corpora> <crashes>
-#              [<earlier crashes>]
+#   ci/fuzz.sh [--with-long] [--only <targets> | --skip <targets>] <preset>
+#              <seconds> <corpora> <crashes> [<earlier crashes>]
 #
 # Runs every fuzz target that a build of <preset> with ADLplug_BUILD_FUZZERS
 # made, each for <seconds> with libFuzzer. A target whose every input is heavy
 # (CMake wrote <target>.long beside its manifest) is left out unless
 # --with-long is given: a minute of it would get through too few inputs to be
 # worth the time, so the fuzzing of a push passes it by and the daily fuzzing
-# takes it. A target runs with the arguments that CMake listed beside it
-# (build/<preset>/fuzz/*.args: its dictionary, seed inputs and regression
-# inputs), on a corpus of its own in <corpora>/<target>/, which it grows and
-# which may carry over from an earlier run. Once a target has run, that corpus
-# is merged down to the fewest inputs that reach what all of it reached. An
-# input that fails is written to <crashes>/<target>/.
+# takes it. --only runs no target but the ones named, and --skip every target
+# but those, each given as names joined by commas: the daily fuzzing splits the
+# targets of a preset between two jobs this way, since one job fuzzing all of
+# them in turn outgrew the time a job may take under the memory sanitizer. A
+# name that is no target of the build is an error, so that a renamed target
+# cannot fall out of every job without a word. A target runs with the arguments
+# that CMake listed beside it (build/<preset>/fuzz/*.args: its dictionary, seed
+# inputs and regression inputs), on a corpus of its own in <corpora>/<target>/,
+# which it grows and which may carry over from an earlier run. Once a target has
+# run, that corpus is merged down to the fewest inputs that reach what all of it
+# reached. An input that fails is written to <crashes>/<target>/.
 #
 # Given <earlier crashes>, each target first runs once on the inputs under
 # <earlier crashes>/<target>/ that failed in an earlier run. One that still
@@ -30,11 +35,12 @@
 # target fails.
 #
 # No run of a target lasts longer than the time it was given and ten minutes
-# more. A target that does not end of its own by then -- one wedged where it
-# cannot say what it found, or one input of which takes forever -- is stopped and
-# counted as a failure, so that the targets after it still run, and the run ends
-# by itself with everything it found kept, instead of standing until the time of
-# the whole job runs out.
+# more, or an hour more in a build with the memory sanitizer, which is slower by
+# a good deal (the guard below). A target that does not end of its own by then
+# -- one wedged where it cannot say what it found, or one input of which takes
+# forever -- is stopped and counted as a failure, so that the targets after it
+# still run, and the run ends by itself with everything it found kept, instead
+# of standing until the time of the whole job runs out.
 set -euo pipefail
 
 # How the stopping of a target shows: the status timeout keeps for the time
@@ -52,9 +58,34 @@ was_stopped() {  # status
 export TSAN_OPTIONS=${TSAN_OPTIONS:-halt_on_error=1:second_deadlock_stack=1}
 
 with_long=0
-if [ "${1:-}" = "--with-long" ]; then
-  with_long=1
-  shift
+only=
+skip=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --with-long)
+      with_long=1
+      shift
+      ;;
+    --only | --skip)
+      if [ -z "${2:-}" ]; then
+        echo "error: $1 takes the names of targets, joined by commas" >&2
+        exit 2
+      fi
+      if [ "$1" = --only ]; then
+        only=$2
+      else
+        skip=$2
+      fi
+      shift 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+if [ -n "$only" ] && [ -n "$skip" ]; then
+  echo "error: --only and --skip do not go together" >&2
+  exit 2
 fi
 
 preset=$1
@@ -76,10 +107,14 @@ earlier=${5:-}
 # plugin's own worker to measure an instrument, which plays it for as long as forty
 # seconds and listens for sixty more, and every one of those samples is carried
 # through the shadow memory and the origins. So the memory sanitizer's builds get
-# half an hour instead of ten minutes: the same work, at the speed it really runs.
+# an hour instead of ten minutes: the same work, at the speed it really runs. Half
+# an hour was what they had first, and with the twenty minutes the daily fuzzing
+# asks for, that was not enough for OPNplug-Next's measurement target: on three
+# runs in a row it was still replaying its corpus of some 180 inputs when it was
+# stopped, before any fuzzing had begun.
 guard=$((seconds + 600))
 if grep -q '^ADLplug_SANITIZERS:STRING=.*\bmemory\b' "build/$preset/CMakeCache.txt" 2>/dev/null; then
-  guard=$((seconds + 1800))
+  guard=$((seconds + 3600))
 fi
 
 shopt -s nullglob
@@ -89,12 +124,30 @@ if [ ${#manifests[@]} -eq 0 ]; then
   exit 1
 fi
 
+# Whether the target named is one of the names joined by commas.
+named() {  # names target
+  [[ ",$1," == *",$2,"* ]]
+}
+
+# Every name given to --only or --skip is a target of the build.
+IFS=, read -r -a given <<< "$only$skip"
+for name in ${given[@]+"${given[@]}"}; do
+  if [ ! -e "build/$preset/fuzz/$name.args" ]; then
+    echo "error: $name is no fuzz target of build/$preset" >&2
+    exit 2
+  fi
+done
+
 status=0
 for manifest in "${manifests[@]}"; do
   fuzzer=${manifest%.args}
   target=$(basename "$fuzzer")
   if [ -e "$fuzzer.long" ] && [ "$with_long" -eq 0 ]; then
     echo "== $target: left to the long runs"
+    continue
+  fi
+  if { [ -n "$only" ] && ! named "$only" "$target"; } || { [ -n "$skip" ] && named "$skip" "$target"; }; then
+    echo "== $target: left to the other job"
     continue
   fi
   mapfile -t arguments < "$manifest"
