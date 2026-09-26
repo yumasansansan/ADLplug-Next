@@ -198,7 +198,8 @@ private:
 
     // The chip's samples become the host's here rather than in the library
     // (sources/utility/chip_resampler.h). The filter is designed when the player
-    // is made, for the chip's rate and the host's; where it cannot be designed --
+    // is made, for the chip's rate and the host's, once a host has said what its
+    // rate is (host_rate_known_); where it cannot be designed --
     // a ratio that does not reduce, which is every host rate against the OPN's --
     // the player is given the host's rate instead and the library interpolates as
     // it did before, and `resampling_why_` is what it said about that.
@@ -218,6 +219,12 @@ private:
     // What the host asked for, which a player made without a prepareToPlay()
     // (a chip type that changes the chip's rate) has to be made for again.
     unsigned host_sample_rate_ = 0;
+    // Whether a host has prepared the processor yet, and so said the rate it
+    // runs at. A player made before that only holds the state until the first
+    // prepareToPlay() replaces it, and plays nothing, so it gets no filter: one
+    // designed for it would be for a rate no host asked for, and thrown away.
+    // The player lock guards it.
+    bool host_rate_known_ = false;
 
     std::unique_ptr<Bank_Manager> bank_manager_;
 

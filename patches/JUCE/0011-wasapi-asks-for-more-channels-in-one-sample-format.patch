@@ -1,0 +1,40 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+WASAPI asks for more channels in shared mode in one sample format rather than seven
+
+WASAPIDeviceBase finds the most channels a device takes, in queryMaxNumChannels(), by asking IAudioClient::IsFormatSupported() for every channel count from AudioChannelSet::maxChannelsOfNamedLayout (64) down to one more than it has found, at every rate the device takes, in each of the seven sample formats of formatsToTry. Every one of those is a call to the Windows audio service. On a Realtek output under Windows 11, whose shared-mode mix format has two channels and which takes eight, that came to 392 calls answered AUDCLNT_E_UNSUPPORTED_FORMAT, for the counts from 64 down to 9, and 1.49 seconds of opening the device -- which a standalone pays before its window appears, and again whenever the device is opened.
+
+In shared mode the sample format adds nothing to the question. The documentation of IsFormatSupported() says that the audio engine supports the mix format, and formats with its rate and channel count that differ only in how samples are represented, since it works in floating point and converts integer samples to it; and that a wider range of formats -- such as a stream with more channels than the mix format, which is how this output takes eight -- comes from a local effects APO. Microsoft's documentation on implementing APOs calls 32-bit floating point the format an APO is required to take. So a channel count the engine does not take in 32-bit floating point it does not take in an integer format either, and each integer format asks the audio service the same question again.
+
+queryMaxNumChannels() now asks, in shared mode, in the floating-point format alone. Exclusive mode, where the device itself answers and a format of fewer bits can be the one it takes, asks in every format as before.
+
+Measured on that output: 56 calls fail now, for the same counts in the one format, and at eight channels the floating-point one succeeds as it did. The device still reports eight channels at most, two by default and 48000 Hz, and opening it takes 0.58 seconds where it took 1.87.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_audio_devices/native/juce_WASAPI_windows.cpp b/modules/juce_audio_devices/native/juce_WASAPI_windows.cpp
+--- a/modules/juce_audio_devices/native/juce_WASAPI_windows.cpp
++++ b/modules/juce_audio_devices/native/juce_WASAPI_windows.cpp
+@@ -844,9 +844,20 @@ private:
+             auto channelMask = channelMaskWithLowestNBitsSet (ch);
+ 
+             for (auto rate : rates)
++            {
+                 for (auto const& sampleFormat: formatsToTry)
++                {
++                    // In shared mode the audio engine takes the stream, turning integer samples
++                    // into the floating point it works in, and what can take more channels than
++                    // its mix format has -- a local effects APO -- works on 32-bit floating point.
++                    // Asking again in each integer format asks the audio service the same thing.
++                    if (! isExclusiveMode (deviceMode) && ! sampleFormat.useFloat)
++                        continue;
++
+                     if (auto format = tryFormat (sampleFormat, clientToUse, deviceMode, ch, rate, channelMask))
+                         result = jmax (static_cast<int> (format->Format.nChannels), result);
++                }
++            }
+         }
+ 
+         return result;

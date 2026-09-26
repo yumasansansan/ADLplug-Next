@@ -232,6 +232,7 @@ void AdlplugAudioProcessor::prepareToPlay(double given_sample_rate, int block_si
     {
         const std::scoped_lock lock(player_lock_);
         const auto rate = static_cast<unsigned>(sample_rate);
+        host_rate_known_ = true;
 
         if (!player_)
             create_first_player(rate);
@@ -1007,8 +1008,10 @@ void AdlplugAudioProcessor::setStateInformation(const void *data, int size)
 
     // A project can carry a resampling of its own, or a chip type that runs at
     // another rate; the player runs with what it was made with, so it is made
-    // again, for the same rate and with the state just read.
-    if (!player_matches_settings())
+    // again, for the same rate and with the state just read. One made before
+    // the host has said its rate holds the state as it is: it plays nothing,
+    // and prepareToPlay() makes the player that does.
+    if (host_rate_known_ && !player_matches_settings())
         recreate_player_keeping_state(host_sample_rate_);
 
     // make the host aware of changed parameters
@@ -1029,7 +1032,10 @@ void AdlplugAudioProcessor::create_player(unsigned sample_rate)
 
     // The rate the chip runs at, and the filter from it to the host's. A filter
     // that cannot be built leaves the player at the host's rate, where the library
-    // interpolates as before; what it said is kept for the editor to show.
+    // interpolates as before; what it said is kept for the editor to show. Before
+    // a host has said its rate there is no filter to design: that player only
+    // holds the state, and the editor hears of neither, since the queue to it is
+    // made by the prepareToPlay() that replaces it.
     const Chip_Settings &settings = parameter_block_->chip_settings();
     const unsigned chip_rate = chip_sample_rate(settings);
     host_sample_rate_ = sample_rate;
@@ -1037,7 +1043,7 @@ void AdlplugAudioProcessor::create_player(unsigned sample_rate)
     resampling_in_use_ = resampling_;
     resampling_why_.clear();
     bool resampling = false;
-    if (resampling_.own_filter)
+    if (resampling_.own_filter && host_rate_known_)
         resampling = resampler_.prepare(chip_rate, sample_rate, midi_interval_max, resampling_.design, resampling_why_);
     else
         resampler_.unprepare();
