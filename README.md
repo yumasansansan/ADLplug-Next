@@ -301,7 +301,7 @@ An option chooses whether ADLplug-Next or OPNplug-Next is built:
 | -DADLplug_ASIO=ON/OFF           | ON on Windows, OFF elsewhere           | Enable ASIO in the standalone (Windows only)                                                  |
 | -DADLplug_CHIP=OPL3/OPN2        | OPL3 (the opn-* presets set OPN2)      | Choose ADLplug-Next (OPL3) or OPNplug-Next (OPN2)                                             |
 | -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | Include the banks of the grey zone (see below)                                                |
-| -DADLplug_ARCH=baseline/avx2    | baseline                               | x86-64 instruction set: baseline (every x86-64 CPU) or avx2 (CPUs with AVX2)                  |
+| -DADLplug_ARCH=baseline/avx2/avx512/native | baseline                    | x86-64 instruction set: baseline (every x86-64 CPU), avx2 (CPUs with AVX2), avx512 (CPUs with AVX-512, using all 512 bits of its width) or native (the CPU of the machine that builds it, and no other; all 512 bits too if that CPU has AVX-512) |
 | -DADLplug_PGO=ON/OFF            | ON                                     | Profile-guided optimisation of Release builds (see below)                                     |
 | -DADLplug_SANITIZERS=<list>     | empty                                  | Build with sanitizers: address, undefined, vptr, thread, memory, realtime (comma-separated; see below) |
 | -DADLplug_MSAN_LIBRARIES=<dir>  | empty                                  | Prefix of the libraries the memory sanitizer needs, which ci/msan-libraries.sh builds          |
@@ -322,8 +322,8 @@ on which code runs most), renders with every emulator core of the build, and
 compiles the plugins with that profile; the profile is made again only when
 the plugin changes. It needs `llvm-profdata` and the profile runtime of LLVM's
 compiler-rt (in the `libclang-rt-<version>-dev` package of apt.llvm.org), and
-a machine that can run the plugin it builds: to build the AVX2 variant on a
-CPU without AVX2, or to build faster, turn it off.
+a machine that can run the plugin it builds: to build the AVX2 or AVX-512
+variant on a CPU without that, or to build faster, turn it off.
 
 `ADLplug_SANITIZERS` builds every target, ADLplug-Next's own code and JUCE and
 the libraries alike, with the sanitizers it names, and stops at the first

@@ -134,6 +134,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  # **Built for the runner that runs them.** A sanitizer build here is made,
+  # tested and fuzzed in one job and never shipped, so it is compiled for the
+  # processor of the runner -- native, AVX-512 at its whole width where the
+  # runner has it -- which is the fastest code that runner can run. Nothing is
+  # carried from one runner to another but inputs. What a native build does not
+  # have is a render reference of its own (tests/render/references.txt), and the
+  # builds above compare the render with those.
   sanitize:
     name: ${{ matrix.preset }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -142,18 +149,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-2025-vs2026, arch: baseline, preset: adl-sanitize, fuzz: false }
-          - { os: windows-2025-vs2026, arch: baseline, preset: opn-sanitize, fuzz: false }
-          - { os: ubuntu-26.04, arch: baseline, preset: adl-sanitize, fuzz: true }
-          - { os: ubuntu-26.04, arch: baseline, preset: opn-sanitize, fuzz: true }
-          - { os: ubuntu-26.04, arch: baseline, preset: adl-tsan, fuzz: true }
-          - { os: ubuntu-26.04, arch: baseline, preset: opn-tsan, fuzz: true }
+          - { os: windows-2025-vs2026, arch: native, preset: adl-sanitize, fuzz: false }
+          - { os: windows-2025-vs2026, arch: native, preset: opn-sanitize, fuzz: false }
+          - { os: ubuntu-26.04, arch: native, preset: adl-sanitize, fuzz: true }
+          - { os: ubuntu-26.04, arch: native, preset: opn-sanitize, fuzz: true }
+          - { os: ubuntu-26.04, arch: native, preset: adl-tsan, fuzz: true }
+          - { os: ubuntu-26.04, arch: native, preset: opn-tsan, fuzz: true }
           # The realtime sanitizer has no fuzz targets of its own: Clang will not
           # link libFuzzer with it. What it watches is reached by the tests instead
           # -- the render of twenty seconds through processBlock, and the replay of
           # every input the fuzz targets once failed on.
-          - { os: ubuntu-26.04, arch: baseline, preset: adl-rtsan, fuzz: false }
-          - { os: ubuntu-26.04, arch: baseline, preset: opn-rtsan, fuzz: false }
+          - { os: ubuntu-26.04, arch: native, preset: adl-rtsan, fuzz: false }
+          - { os: ubuntu-26.04, arch: native, preset: opn-rtsan, fuzz: false }
           - { os: macos-26, arch: arm64, preset: adl-sanitize, fuzz: false }
           - { os: macos-26, arch: arm64, preset: opn-sanitize, fuzz: false }
 
@@ -226,8 +233,9 @@ jobs:
       - name: Set up the toolchain
         run: bash ci/setup.sh
 
+      # For the runner's own processor, as the sanitize jobs are built (see there).
       - name: Build the fuzz targets
-        run: bash ci/build.sh --fuzz-only "${{ matrix.preset }}" baseline
+        run: bash ci/build.sh --fuzz-only "${{ matrix.preset }}" native
 
       # The sanitizer says nothing when it finds nothing, and silence cannot tell
       # that from a check which never ran. One program reads a value that was
@@ -280,8 +288,10 @@ jobs:
       - name: Set up the toolchain
         run: bash ci/setup.sh
 
+      # For the runner's own processor, as the sanitize jobs are built (see there):
+      # what the tests reach of the source does not depend on it.
       - name: Build
-        run: bash ci/build.sh "${{ matrix.preset }}" baseline
+        run: bash ci/build.sh "${{ matrix.preset }}" native
 
       - name: Count what the tests and the corpus reach
         run: bash ci/coverage.sh "${{ matrix.preset }}" --no-hosts

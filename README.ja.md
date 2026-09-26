@@ -200,7 +200,7 @@ cmake --build --preset adl-release     # 上と同様です．
 | -DADLplug_ASIO=ON/OFF           | ON（Windows），OFF（その他）              | スタンドアロンプログラムで ASIO を有効にする（Windows のみ対応）         |
 | -DADLplug_CHIP=OPL3/OPN2        | OPL3（opn-* プリセットを指定すると，OPN2 に設定されます） | ADLplug-Next（OPL3）をビルドするか，OPNplug-Next（OPN2）をビルドするかを切り替える |
 | -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | グレーゾーンのバンクを含める（後述） |
-| -DADLplug_ARCH=baseline/avx2    | baseline                               | x86-64 の命令セット（baseline はすべての x86-64 CPU 向け，avx2 は AVX2 に対応した CPU 向け） |
+| -DADLplug_ARCH=baseline/avx2/avx512/native | baseline                    | x86-64 の命令セット（baseline はすべての x86-64 CPU 向け，avx2 は AVX2 に対応した CPU 向け，avx512 は AVX-512 に対応した CPU 向けで，その 512 ビットの幅をすべて使います．native はビルドしたマシンの CPU 専用で，その CPU が AVX-512 に対応していれば，同じく 512 ビットの幅をすべて使います） |
 | -DADLplug_PGO=ON/OFF            | ON                                     | Release ビルドで，プロファイルに基づく最適化（PGO）を行う（後述） |
 | -DADLplug_SANITIZERS=<list>     | 空                                     | サニタイザ付きでビルドする（address・undefined・vptr・thread・memory・realtime をカンマ区切りで指定，後述） |
 | -DADLplug_MSAN_LIBRARIES=<dir>  | 空                                     | memory サニタイザが必要とするライブラリの置き場所（`ci/msan-libraries.sh` がビルドします，後述） |
@@ -214,7 +214,7 @@ cmake --build --preset adl-release     # 上と同様です．
 | -DADLplug_INSTALL_VST3DIR=<dir> | lib/vst3                               | VST3 プラグインの，インストール先ディレクトリ（Linux） |
 | -DADLplug_INSTALL_LV2DIR=<dir>  | lib/lv2                                | LV2 プラグインの，インストール先ディレクトリ（Linux） |
 
-`ADLplug_PGO` を有効にすると，Release ビルドはコンパイルの前に学習（プロファイルの取得）を行います．ビルドディレクトリの `pgo/instrumented` に，オフラインレンダラと，プロファイル（どの処理がよく使われるかを計測したデータ）を取るためのコードを埋め込んだ VST3 プラグインをビルドし，ビルドに含まれるすべてのエミュレータコアでレンダリングして，そのプロファイルを使ってプラグインをコンパイルします．プロファイルを作り直すのは，プラグインが変わったときだけになります．`llvm-profdata` と LLVM の compiler-rt のプロファイル用ランタイム（apt.llvm.org では `libclang-rt-<version>-dev` パッケージに含まれます）に加えて，ビルドしたプラグインを実行できるマシンが必要です．AVX2 のない CPU で AVX2 版をビルドするときや，ビルドを速く済ませたいときは，無効にしてください．
+`ADLplug_PGO` を有効にすると，Release ビルドはコンパイルの前に学習（プロファイルの取得）を行います．ビルドディレクトリの `pgo/instrumented` に，オフラインレンダラと，プロファイル（どの処理がよく使われるかを計測したデータ）を取るためのコードを埋め込んだ VST3 プラグインをビルドし，ビルドに含まれるすべてのエミュレータコアでレンダリングして，そのプロファイルを使ってプラグインをコンパイルします．プロファイルを作り直すのは，プラグインが変わったときだけになります．`llvm-profdata` と LLVM の compiler-rt のプロファイル用ランタイム（apt.llvm.org では `libclang-rt-<version>-dev` パッケージに含まれます）に加えて，ビルドしたプラグインを実行できるマシンが必要です．AVX2 や AVX-512 のない CPU で，それらの版をビルドするときや，ビルドを速く済ませたいときは，無効にしてください．
 
 `ADLplug_SANITIZERS` を指定すると，ADLplug-Next 自身のコード，JUCE，ライブラリのすべてを，指定したサニタイザ付きでビルドします．未定義の操作が見つかった時点で止まります．`adl-sanitize`・`opn-sanitize` のプリセットが，address・undefined・vptr のサニタイザと RelWithDebInfo を指定します（例: `cmake --preset adl-sanitize`）．vptr は，オブジェクトが，コードの想定しているクラスのものであるかを確かめる検査で，undefined には含まれません．Windows の Clang にはないため，Windows ではこれを除いてビルドします．誤りを見つけるためのビルドなので，演奏には向きません．動作は数倍遅くなります．
 

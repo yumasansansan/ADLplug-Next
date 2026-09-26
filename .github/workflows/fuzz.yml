@@ -26,7 +26,11 @@
 # The build is the fuzz targets alone, with every coverage feature libFuzzer can
 # steer by (ci/build.sh --fuzz-only). These runs are where the fuzzer has the
 # time to use them; the plugin, which one of those features keeps from being
-# loaded at all, is built and tested by the jobs of every push instead.
+# loaded at all, is built and tested by the jobs of every push instead. It is
+# built for the processor of the runner that fuzzes with it -- native, AVX-512
+# at its whole width where the runner has it -- since each job builds what it
+# runs and nothing but the corpus and the failed inputs goes from one runner to
+# another.
 #
 # A run carries on from the corpus that the last decided run grew and kept as an
 # artifact -- the last one that fuzzed at all, which is one the schedule or a
@@ -123,7 +127,7 @@ jobs:
         run: bash ci/setup.sh
 
       - name: Build
-        run: bash ci/build.sh --fuzz-only "${{ matrix.preset }}" baseline
+        run: bash ci/build.sh --fuzz-only "${{ matrix.preset }}" native
 
       - name: Carry over the corpus and the inputs that failed
         env:

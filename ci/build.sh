@@ -8,11 +8,12 @@
 # (LICENSES/GPL-3.0-or-later.txt).
 #
 #   ci/build.sh [--fuzz-only | --generated-only] <preset>
-#               <baseline|avx2|arm64> [<cmake option>...]
+#               <baseline|avx2|avx512|native|arm64> [<cmake option>...]
 #
 # Configures a CMake preset, with the developer tools and the tests, for the
-# given instruction set (arm64 stands for the macOS build, which has no choice)
-# and any further options, such as emulator cores to leave out.
+# given instruction set (arm64 stands for the macOS build, which has no choice;
+# native is the runner's own, for a build that is run where it is made and
+# never shipped) and any further options, such as emulator cores to leave out.
 #
 # With --fuzz-only, it configures the fuzz targets with the whole coverage that
 # libFuzzer can steer by and builds those targets and nothing else. A plugin of
@@ -59,7 +60,7 @@ if [ "$fuzz_only" -eq 1 ]; then
   args+=(-DADLplug_BUILD_FUZZERS=ON -DADLplug_FUZZ_FULL_COVERAGE=ON)
 fi
 case $arch in
-  baseline | avx2) args+=("-DADLplug_ARCH=$arch") ;;
+  baseline | avx2 | avx512 | native) args+=("-DADLplug_ARCH=$arch") ;;
   arm64) ;;
   *) echo "error: unknown instruction set '$arch'" >&2; exit 2 ;;
 esac
