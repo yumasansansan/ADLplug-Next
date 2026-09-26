@@ -49,6 +49,8 @@ set(ADLplug_UNIT_TESTED_SOURCES
   # emulators that they carry (ui/utility/image.cc).
   "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/chip_settings.cc"
   "${PROJECT_SOURCE_DIR}/sources/ui/utility/image.cc"
+  # The knobs' skins, whose small ones are drawn into one image.
+  "${PROJECT_SOURCE_DIR}/sources/ui/utility/knobman_skin.cc"
   "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/instrument.cc"
   "${PROJECT_SOURCE_DIR}/sources/${ADLplug_CHIP_DIRECTORY}/adl/instrument_properties.cc"
   # The player: it hands the System Exclusive messages to the library and, for

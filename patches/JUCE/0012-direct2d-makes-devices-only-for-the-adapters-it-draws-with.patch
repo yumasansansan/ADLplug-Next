@@ -1,0 +1,38 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+Direct2D makes devices only for the adapters it can draw with
+
+DxgiAdapters::updateAdapters() makes a Direct3D 11 device and a Direct2D device, in DxgiAdapter::create(), for every adapter IDXGIFactory::EnumAdapters1() lists, and it does so when a program first draws. Only two of them are ever drawn with: the adapter that has the window's monitor among its outputs, which getAdapterForHwnd() finds and which falls back to the first adapter, and the first adapter, which getDefaultAdapter() gives the images. The other uses of the list follow from those two -- Direct2DDeviceResources::findAdapter() finds the adapter of a device made on one of them, and the VBlank threads look at the adapters' outputs -- so an adapter that is not the first and drives no display gets devices that nothing uses.
+
+Every system lists at least one such adapter, the Microsoft Basic Render Driver, which is the software rasteriser. On a laptop with an Intel Iris Xe under Windows 11 there are three: the Intel GPU with the laptop's display, the same GPU a second time with no outputs, and the Basic Render Driver. Timed in a fresh process, in adapter order and the way DxgiAdapter::create() makes them, the first adapter's devices took 29 to 36 ms and 6 to 7 ms, the second's 21 to 25 ms and 1.6 to 1.9 ms, and the third's 4.5 to 5.6 ms and 0.3 ms: 28 to 32 ms of a standalone's startup for devices that are never used.
+
+updateAdapters() now leaves out an adapter other than the first that has no output. The first adapter is kept whatever it is, since getDefaultAdapter() is where images and a window on no known monitor go, and an adapter that drives a display is kept, since a window may be on it. Measured on that laptop, updateAdapters() makes one adapter's devices where it made three.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_graphics/native/juce_DirectX_windows.cpp b/modules/juce_graphics/native/juce_DirectX_windows.cpp
+--- a/modules/juce_graphics/native/juce_DirectX_windows.cpp
++++ b/modules/juce_graphics/native/juce_DirectX_windows.cpp
+@@ -154,6 +154,20 @@ void DxgiAdapters::updateAdapters()
+         if (factory->EnumAdapters1 (i, dxgiAdapter.resetAndGetPointerAddress()) == DXGI_ERROR_NOT_FOUND)
+             break;
+ 
++        // Only two adapters are ever drawn with: the one with a window's monitor among its
++        // outputs (getAdapterForHwnd), and the first one (getDefaultAdapter), which images
++        // use. An adapter that drives no display and is not the first -- the software
++        // rasteriser, which every system lists, or a GPU that only renders -- would get a
++        // Direct3D device and a Direct2D device that nothing uses, and those take up to tens
++        // of milliseconds to make.
++        if (i != 0)
++        {
++            ComSmartPtr<IDXGIOutput> output;
++
++            if (FAILED (dxgiAdapter->EnumOutputs (0, output.resetAndGetPointerAddress())))
++                continue;
++        }
++
+         if (const auto adapter = DxgiAdapter::create (d2dFactory, dxgiAdapter))
+         {
+             adapterArray.add (adapter);

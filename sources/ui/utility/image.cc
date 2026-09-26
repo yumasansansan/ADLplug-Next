@@ -21,30 +21,86 @@
 
 namespace Image_Utils {
 
-Image make_text_icon(const String &text)
-{
-    // Twice the height the editor shows the emulator icons at, so the label
-    // stays sharp on high-density displays; opaque, so it reads on any
-    // background.
-    constexpr int height = 40;
-    constexpr float padding = 10.0f;
-    constexpr float corner = 6.0f;
-    const Font font(FontOptions(26.0f, Font::bold));
-    const int width = static_cast<int>(std::ceil(GlyphArrangement::getStringWidth(font, text) + 2.0f * padding));
+namespace {
 
-    Image image(Image::ARGB, std::max(width, height), height, true);
+// Twice the height the editor shows the emulator icons at, so the label stays
+// sharp on high-density displays; opaque, so it reads on any background.
+constexpr int icon_height = 40;
+constexpr float icon_padding = 10.0f;
+constexpr float icon_corner = 6.0f;
+
+Font icon_font()
+{
+    return Font(FontOptions(26.0f, Font::bold));
+}
+
+int icon_width(const Font &font, const String &text)
+{
+    const auto width = static_cast<int>(
+        std::ceil(GlyphArrangement::getStringWidth(font, text) + 2.0f * icon_padding));
+    return std::max(width, icon_height);
+}
+
+// The label of `text` in `bounds`, which are those of the whole label.
+void draw_text_icon(Graphics &g, const Font &font, const String &text, Rectangle<int> bounds)
+{
+    const Rectangle<float> frame = bounds.toFloat().reduced(1.0f);
+    g.setColour(Colour(0xff4f5d64));
+    g.fillRoundedRectangle(frame, icon_corner);
+    g.setColour(Colour(0xffa3b3ba));
+    g.drawRoundedRectangle(frame, icon_corner, 2.0f);
+    g.setColour(Colours::white);
+    g.setFont(font);
+    g.drawText(text, bounds, Justification::centred, false);
+}
+
+}  // namespace
+
+Image make_text_icon(const String &text, const ImageType &type)
+{
+    const Font font = icon_font();
+    const Image image(type.create(Image::ARGB, icon_width(font, text), icon_height, true));
     {
         Graphics g(image);
-        const Rectangle<float> frame = image.getBounds().toFloat().reduced(1.0f);
-        g.setColour(Colour(0xff4f5d64));
-        g.fillRoundedRectangle(frame, corner);
-        g.setColour(Colour(0xffa3b3ba));
-        g.drawRoundedRectangle(frame, corner, 2.0f);
-        g.setColour(Colours::white);
-        g.setFont(font);
-        g.drawText(text, image.getBounds(), Justification::centred, false);
+        draw_text_icon(g, font, text, image.getBounds());
     }
     return image;
+}
+
+std::vector<Image> make_text_icons(const StringArray &texts, const ImageType &type)
+{
+    // One row of the image a label, and a gap of two pixels between the rows,
+    // as the cells of the knobs' small skins are laid out. Direct2D does not
+    // draw a label below the first row quite as it draws one at the corner of
+    // a target: measured, up to 112 of a label's 3560 pixels differ from
+    // make_text_icon's, by one or two levels. The software renderer draws them
+    // alike (tests/unit/utility_tests.cc).
+    std::vector<Image> icons;
+    if (texts.isEmpty())
+        return icons;
+
+    const Font font = icon_font();
+    std::vector<int> widths;
+    int widest = 0;
+    for (const String &text : texts) {
+        widths.push_back(icon_width(font, text));
+        widest = std::max(widest, widths.back());
+    }
+    constexpr int gap = 2;
+    constexpr int pitch = icon_height + gap;
+    const Image atlas(type.create(Image::ARGB, widest, pitch * texts.size() - gap, true));
+    {
+        Graphics g(atlas);
+        for (int i = 0; i < texts.size(); ++i)
+            draw_text_icon(g, font, texts[i],
+                           {0, i * pitch, widths[static_cast<std::size_t>(i)], icon_height});
+    }
+
+    icons.reserve(widths.size());
+    for (int i = 0; i < texts.size(); ++i)
+        icons.push_back(
+            atlas.getClippedImage({0, i * pitch, widths[static_cast<std::size_t>(i)], icon_height}));
+    return icons;
 }
 
 Rectangle<int> get_image_solid_area(const Image &img)

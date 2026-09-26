@@ -87,6 +87,11 @@ Emulator_Icons::Emulator_Icons()
     const Image icon_nuked2 = load(Res::emu_nuked2);
     const Image icon_esfmu = load(Res::emu_esfmu);
 
+    // The labels are gathered and drawn together, into one image, afterwards
+    // (Image_Utils::make_text_icons).
+    StringArray labels;
+    std::vector<std::size_t> labelled;
+
     images.resize(static_cast<std::size_t>(defaults.choices.size()));
     for (std::size_t i = 0; i < images.size(); ++i) {
         const String &name = defaults.choices[static_cast<int>(i)];
@@ -114,10 +119,15 @@ Emulator_Icons::Emulator_Icons()
             // hold only the logos whose origin and license are known
             // (REUSE.toml): ymfm has none, and the ones that ADLplug had for
             // DOSBox, Opal, Java and MAME could not be traced.
-            images[i] = Image_Utils::make_text_icon(name.upToFirstOccurrenceOf(" ", false, false));
+            labels.add(name.upToFirstOccurrenceOf(" ", false, false));
+            labelled.push_back(i);
             break;
         }
     }
+
+    const std::vector<Image> drawn = Image_Utils::make_text_icons(labels);
+    for (std::size_t k = 0; k < labelled.size() && k < drawn.size(); ++k)
+        images[labelled[k]] = drawn[k];
 }
 
 PropertySet Chip_Settings::to_properties() const

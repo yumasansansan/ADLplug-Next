@@ -14,6 +14,8 @@
 #include "utility/field_bitops.h"
 #include "utility/fourcc.h"
 #include "utility/semaphore.h"
+#include "ui/utility/image.h"
+#include "ui/utility/knobman_skin.h"
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -300,4 +302,95 @@ ADLPLUG_TEST(semaphore)
     woken.wait();
     CHECK(posted.load());
     poster.join();
+}
+
+ADLPLUG_TEST(knob_skin_scaled)
+{
+    // A strip of frames the way a knob's skin is one: a picture in each frame,
+    // on a transparent border that load() crops away. The small skins are drawn
+    // into one image rather than rescaled a frame at a time, and every frame has
+    // to come out as Image::rescaled makes it.
+    //
+    // **In software images**, which draw a bitmap the same wherever it goes in
+    // the target. Direct2D's high-quality scaling does not: the 64 frames of the
+    // knob's small skin, each drawn alone 3, 8 and 64 pixels from a target's
+    // corner, came out 147, 290 and 1558 pixels different of 55680 from the same
+    // frames drawn at the corner. So on Windows the small skins are not
+    // rescaled()'s to the pixel, and could not be with more than one frame in a
+    // target; what this checks there is where the frames go and how they are
+    // scaled, which is the same code whatever the image type.
+    constexpr int frame_count = 64;
+    constexpr int width = 50;
+    constexpr int height = 40;
+    const Image strip(Image::ARGB, width, height * frame_count, true, SoftwareImageType{});
+    {
+        Graphics g(strip);
+        for (int i = 0; i < frame_count; ++i) {
+            // juce::, since <windows.h> has a Rectangle of its own.
+            const juce::Rectangle<float> face(4.0f, static_cast<float>(i * height) + 3.0f,
+                                              static_cast<float>(width) - 9.0f,
+                                              static_cast<float>(height) - 7.0f);
+            g.setColour(Colour::fromHSV(static_cast<float>(i) / frame_count, 0.7f, 0.9f, 1.0f));
+            g.fillEllipse(face);
+            const float angle = static_cast<float>(i) * 0.1f;
+            const juce::Point<float> centre = face.getCentre();
+            g.setColour(Colours::white.withAlpha(0.8f));
+            g.drawLine(centre.x, centre.y, centre.x + 15.0f * std::cos(angle),
+                       centre.y + 15.0f * std::sin(angle), 2.0f);
+        }
+    }
+    Km_Skin skin;
+    skin.load(strip, frame_count);
+    CHECK(skin.frames.size() == static_cast<std::size_t>(frame_count));
+
+    for (const double ratio : {0.7, 0.5}) {
+        const Km_Skin_Ptr small = skin.scaled(ratio);
+        CHECK(small->frames.size() == skin.frames.size());
+        for (std::size_t i = 0; i < skin.frames.size() && i < small->frames.size(); ++i) {
+            const Image &got = small->frames[i];
+            const int want_width = static_cast<int>(std::lround(skin.frames[i].getWidth() * ratio));
+            const int want_height = static_cast<int>(std::lround(skin.frames[i].getHeight() * ratio));
+            CHECK(got.getWidth() == want_width && got.getHeight() == want_height);
+            const Image want = skin.frames[i].rescaled(want_width, want_height,
+                                                       Graphics::highResamplingQuality);
+            const Image::BitmapData got_pixels(got, Image::BitmapData::readOnly);
+            const Image::BitmapData want_pixels(want, Image::BitmapData::readOnly);
+            int differing = 0;
+            for (int y = 0; y < want_height; ++y)
+                for (int x = 0; x < want_width; ++x)
+                    if (got_pixels.getPixelColour(x, y) != want_pixels.getPixelColour(x, y))
+                        ++differing;
+            CHECK(differing == 0);
+        }
+    }
+}
+
+ADLPLUG_TEST(text_icons)
+{
+    // The emulators' labels are drawn into one image, and each has to come out
+    // as make_text_icon draws it alone: the same size, and pixel for pixel in
+    // software images (see knob_skin_scaled for why software).
+    StringArray texts;
+    texts.add("DOSBox");
+    texts.add("Opal");
+    texts.add("Java");
+    texts.add("MAME");
+    texts.add("ymfm");
+    texts.add("W");
+    const std::vector<Image> together = Image_Utils::make_text_icons(texts, SoftwareImageType{});
+    CHECK(together.size() == static_cast<std::size_t>(texts.size()));
+    for (int i = 0; i < texts.size() && static_cast<std::size_t>(i) < together.size(); ++i) {
+        const Image &got = together[static_cast<std::size_t>(i)];
+        const Image want = Image_Utils::make_text_icon(texts[i], SoftwareImageType{});
+        CHECK(got.getWidth() == want.getWidth() && got.getHeight() == want.getHeight());
+        const Image::BitmapData got_pixels(got, Image::BitmapData::readOnly);
+        const Image::BitmapData want_pixels(want, Image::BitmapData::readOnly);
+        int differing = 0;
+        for (int y = 0; y < want.getHeight(); ++y)
+            for (int x = 0; x < want.getWidth(); ++x)
+                if (got_pixels.getPixelColour(x, y) != want_pixels.getPixelColour(x, y))
+                    ++differing;
+        CHECK(differing == 0);
+    }
+    CHECK(Image_Utils::make_text_icons(StringArray()).empty());
 }

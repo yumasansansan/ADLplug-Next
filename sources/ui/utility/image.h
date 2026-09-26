@@ -17,13 +17,21 @@
 
 #pragma once
 #include "JuceHeader.h"
+#include <vector>
 
 namespace Image_Utils {
 
-Rectangle<int> get_image_solid_area(const Image &img);
+// juce::, for a translation unit that has <windows.h>, which has a Rectangle.
+juce::Rectangle<int> get_image_solid_area(const Image &img);
 
 // A small label to stand in for an icon that does not exist, such as the logo
-// of an emulator core that has none.
-Image make_text_icon(const String &text);
+// of an emulator core that has none, in an image of the given type.
+Image make_text_icon(const String &text, const ImageType &type = NativeImageType());
+
+// The labels make_text_icon draws for all of `texts`, drawn into one image
+// through one Graphics and handed out as parts of it: one image and one
+// Graphics, where a label apiece was one of each (see Km_Skin::scaled).
+std::vector<Image> make_text_icons(const StringArray &texts,
+                                   const ImageType &type = NativeImageType());
 
 }  // namespace Image_Utils
