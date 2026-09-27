@@ -210,9 +210,9 @@ if(NOT ADLplug_BUILD_TOOLS)
   return()
 endif()
 
-# References are kept per system and instruction set: where the target has FMA
-# instructions, Clang fuses multiply-adds, and the systems' maths libraries
-# differ. Debug and Release builds share a key.
+# References are kept per system, processor and instruction set: where the
+# target has FMA instructions, Clang fuses multiply-adds, and the systems'
+# maths libraries differ. Debug and Release builds share a key.
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   set(ADLplug_RENDER_SYSTEM "macos")
 else()
@@ -229,7 +229,8 @@ endif()
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
   set(ADLplug_RENDER_KEY "${ADLplug_RENDER_SYSTEM}-x86_64-${ADLplug_ARCH}")
 else()
-  string(TOLOWER "${ADLplug_RENDER_SYSTEM}-${CMAKE_SYSTEM_PROCESSOR}" ADLplug_RENDER_KEY)
+  string(TOLOWER "${ADLplug_RENDER_SYSTEM}-${CMAKE_SYSTEM_PROCESSOR}-${ADLplug_ARCH}"
+    ADLplug_RENDER_KEY)
 endif()
 
 set(ADLplug_RENDER_REFERENCES "${CMAKE_CURRENT_SOURCE_DIR}/render/references.txt")

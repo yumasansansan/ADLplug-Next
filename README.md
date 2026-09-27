@@ -51,9 +51,9 @@ which the copyright lines of ADLplug-Next's code carry.
 
 Every push and pull request to the repository is built by GitHub Actions
 (GitHub's service that builds and tests automatically) on Windows, Linux and
-macOS, in Debug and Release. For x86-64 (64-bit Intel and AMD CPUs), two
-builds are made: one that runs on every x86-64 CPU (baseline), and one for
-CPUs with AVX2.
+macOS, in Debug and Release. The builds for x86-64 (64-bit Intel and AMD
+CPUs) are for CPUs with AVX2, and the builds for macOS are for Apple Silicon
+(M1 and later).
 
 A push to the `main` branch also packages the Release builds, and builds the
 rpm packages and the builds that leave some emulator cores (the programs that
@@ -74,10 +74,11 @@ version.
 Each archive of the
 [Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly)
 pre-release (zip, tar.xz) has both plugins, ADLplug-Next and OPNplug-Next.
-The builds with `avx2`, `amd64v3` or `x86_64_v3` in their names need a CPU
-with AVX2 (x86-64-v3); as of 2026, most CPUs from about the last ten years
-have it. On a CPU without it, a DAW or other host (the software that loads
-plugins) crashes, even while it scans for plugins.
+Every x86-64 build (`avx2`, `amd64v3` or `x86_64_v3` in its name) needs a CPU
+with AVX2 (x86-64-v3): Intel from Haswell (2013) on and AMD from Zen (2017) on,
+which as of 2026 is most CPUs from about the last ten years. On a CPU without
+it, a DAW or other host (the software that loads plugins) crashes, even while
+it scans for plugins.
 
 - Windows 11 or later (x86-64): extract the zip archive. The plugins and the
   standalone programs need the
@@ -97,12 +98,10 @@ plugins) crashes, even while it scans for plugins.
   - `.lv2`: `~/Library/Audio/Plug-Ins/LV2`
   - `.aaxplugin`: `/Library/Application Support/Avid/Audio/Plug-Ins`
 - Ubuntu 26.04 or later: install the deb packages, for example
-  `sudo apt install ./adlplug-next_*_amd64.deb`. The `amd64v3` packages are
-  the AVX2 builds; install them only on a CPU with AVX2.
+  `sudo apt install ./adlplug-next_*_amd64v3.deb`.
 - RHEL 10 or later, AlmaLinux 10 or later, and openSUSE: install the rpm
-  packages, for example `sudo dnf install ./adlplug-next-*.x86_64.rpm` or
-  `sudo zypper install ./adlplug-next-*.x86_64.rpm`. The `x86_64_v3`
-  packages are the AVX2 builds; install them only on a CPU with AVX2.
+  packages, for example `sudo dnf install ./adlplug-next-*.x86_64_v3.rpm` or
+  `sudo zypper install ./adlplug-next-*.x86_64_v3.rpm`.
 - Other Linux systems (x86-64): extract the tar.xz archive, and copy the
   `.vst3` folders to `~/.vst3` and the `.lv2` folders to `~/.lv2`.
 
@@ -230,8 +229,9 @@ every change makes a new filter, which takes a moment.
 This section is about building the plugins from their source code. To use the
 plugins that are distributed, see [Installing](#installing).
 
-ADLplug-Next supports Windows 11 or later (x86-64), Ubuntu 26.04 or later
-(x86-64) and macOS 26 or later (Apple Silicon). On Linux the user interface
+ADLplug-Next supports Windows 11 or later (x86-64 with AVX2), Ubuntu 26.04 or
+later (x86-64 with AVX2) and macOS 26 or later (Apple Silicon, M1 and later).
+On Linux the user interface
 runs on X11, which means XWayland in a Wayland session: JUCE (the framework
 the plugins are made with) has no Wayland backend.
 
@@ -301,7 +301,7 @@ An option chooses whether ADLplug-Next or OPNplug-Next is built:
 | -DADLplug_ASIO=ON/OFF           | ON on Windows, OFF elsewhere           | Enable ASIO in the standalone (Windows only)                                                  |
 | -DADLplug_CHIP=OPL3/OPN2        | OPL3 (the opn-* presets set OPN2)      | Choose ADLplug-Next (OPL3) or OPNplug-Next (OPN2)                                             |
 | -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | Include the banks of the grey zone (see below)                                                |
-| -DADLplug_ARCH=baseline/avx2/avx512/native | baseline                    | x86-64 instruction set: baseline (every x86-64 CPU), avx2 (CPUs with AVX2), avx512 (CPUs with AVX-512, using all 512 bits of its width) or native (the CPU of the machine that builds it, and no other; all 512 bits too if that CPU has AVX-512) |
+| -DADLplug_ARCH=avx2/avx512/apple-m1/native | avx2 on x86-64, apple-m1 on Apple Silicon | Instruction set: avx2 (x86-64 CPUs with AVX2, the least this project builds for), avx512 (x86-64 CPUs with AVX-512, using all 512 bits of its width), apple-m1 (Apple M1 and later) or native (the CPU of the machine that builds it, and no other; all 512 bits too if that CPU has AVX-512) |
 | -DADLplug_PGO=ON/OFF            | ON                                     | Profile-guided optimisation of Release builds (see below)                                     |
 | -DADLplug_SANITIZERS=<list>     | empty                                  | Build with sanitizers: address, undefined, vptr, thread, memory, realtime (comma-separated; see below) |
 | -DADLplug_MSAN_LIBRARIES=<dir>  | empty                                  | Prefix of the libraries the memory sanitizer needs, which ci/msan-libraries.sh builds          |

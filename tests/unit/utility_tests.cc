@@ -370,6 +370,14 @@ ADLPLUG_TEST(text_icons)
     // The emulators' labels are drawn into one image, and each has to come out
     // as make_text_icon draws it alone: the same size, and pixel for pixel in
     // software images (see knob_skin_scaled for why software).
+    //
+    // **Text is JUCE's font machinery, and that is JUCE's to shut down.** The
+    // first text drawn makes the list of typefaces, a singleton that holds
+    // FreeType and fontconfig's configuration on Linux, and it goes away only
+    // with JUCE, when the last ScopedJuceInitialiser_GUI does. A program that
+    // never shuts JUCE down keeps it to the end, which LeakSanitizer reports
+    // as leaked, from inside fontconfig: the sanitizer jobs did.
+    const ScopedJuceInitialiser_GUI juce_gui;
     StringArray texts;
     texts.add("DOSBox");
     texts.add("Opal");

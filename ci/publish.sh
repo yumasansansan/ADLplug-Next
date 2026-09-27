@@ -99,18 +99,18 @@ assemble() {  # artifacts assets notes
     cat << 'EOF'
 ## Files
 
-- `*-windows-x86_64.zip`, `*-windows-x86_64-avx2.zip`: VST3, LV2, AAX and standalone, for Windows 11 or later.
-- `*-linux-x86_64.tar.xz`, `*-linux-x86_64-avx2.tar.xz`: VST3, LV2 and standalone, for Linux.
-- `*-macos-arm64.zip`: VST3, AU, LV2, AAX and standalone, for macOS 26 or later on Apple Silicon.
-- `adlplug-next_*.deb`, `opnplug-next_*.deb`: packages for Ubuntu 26.04 or later; `amd64v3` is the AVX2 build.
-- `adlplug-next-*.rpm`, `opnplug-next-*.rpm`: packages for RHEL and AlmaLinux 10 or later and openSUSE; `x86_64_v3` is the AVX2 build.
+- `*-windows-x86_64-avx2.zip`: VST3, LV2, AAX and standalone, for Windows 11 or later.
+- `*-linux-x86_64-avx2.tar.xz`: VST3, LV2 and standalone, for Linux.
+- `*-macos-arm64.zip`: VST3, AU, LV2, AAX and standalone, for macOS 26 or later on Apple Silicon (M1 and later).
+- `adlplug-next_*_amd64v3.deb`, `opnplug-next_*_amd64v3.deb`: packages for Ubuntu 26.04 or later.
+- `adlplug-next-*.x86_64_v3.rpm`, `opnplug-next-*.x86_64_v3.rpm`: packages for RHEL and AlmaLinux 10 or later and openSUSE.
 - `SHA256SUMS`: the SHA-256 of every file.
 
 Each archive and package has the licenses of the binaries, and each plugin the terms of its instrument banks.
 
 ## Requirements and cautions
 
-- The AVX2 builds (`x86_64-avx2`, `amd64v3`, `x86_64_v3`) need a processor with AVX2 (x86-64-v3). A host that loads one on another processor crashes, even while it scans for plugins.
+- Every x86-64 build (`x86_64-avx2`, `amd64v3`, `x86_64_v3`) needs a processor with AVX2 (x86-64-v3): Intel Haswell, AMD Zen or later. A host that loads one on another processor crashes, even while it scans for plugins.
 - Windows needs the [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) (x64).
 - On Linux, the user interface runs on X11: Xwayland in a Wayland session.
 - The macOS files are not notarized. Remove the quarantine before use, for example `xattr -dr com.apple.quarantine ADLplug-Next.vst3`.

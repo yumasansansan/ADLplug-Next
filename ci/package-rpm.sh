@@ -7,7 +7,7 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-#   ci/package-rpm.sh <preset> <baseline|avx2> <directory>
+#   ci/package-rpm.sh <preset> <avx2> <directory>
 #
 # Makes the rpm package of a Release build of ci/build.sh, for RHEL and
 # AlmaLinux 10 or later and openSUSE, in the AlmaLinux container of CI
@@ -15,8 +15,8 @@
 # texts of the banks and the licenses (ci/licenses.py); rpmbuild compiles
 # nothing and sets no build flags. Those systems keep their libraries in lib64,
 # and so do their LV2 hosts look there: the build has to be configured with
-# -DADLplug_INSTALL_LV2DIR=lib64/lv2. The AVX2 build is the x86_64_v3 package
-# of the same name.
+# -DADLplug_INSTALL_LV2DIR=lib64/lv2. The package is x86_64_v3: it needs AVX2,
+# as every x86-64 build of this project does.
 set -euo pipefail
 
 preset=$1
@@ -43,7 +43,6 @@ package=$(tr '[:upper:]' '[:lower:]' <<< "$name")
 
 note=
 case $arch in
-  baseline) target=x86_64 ;;
   avx2) target=x86_64_v3 note=" It needs a processor with AVX2 (x86-64-v3)." ;;
   *) echo "error: unknown instruction set '$arch'" >&2; exit 2 ;;
 esac

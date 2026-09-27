@@ -110,7 +110,26 @@ option(ADLplug_COVERAGE
 option(ADLplug_GREYZONE_BANKS "Include the instrument banks of the grey zone, for which no license or permission of their authors is known" OFF)
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
-set(ADLplug_ARCH "baseline" CACHE STRING "Instruction set of x86-64 builds (baseline, avx2, avx512, native)")
+# The instruction sets a processor has here, the first of them the default
+# (see "Instruction set" below). arm64 outside Apple's systems has no build
+# yet, and so no default: which processors one should run on is still to be
+# chosen, and until it is, a build there says native.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+  set(ADLplug_ARCHES avx2 avx512 native)
+  set(ADLplug_ARCH_DEFAULT avx2)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|ARM64|aarch64)$" AND APPLE)
+  set(ADLplug_ARCHES apple-m1 native)
+  set(ADLplug_ARCH_DEFAULT apple-m1)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|ARM64|aarch64)$")
+  set(ADLplug_ARCHES native)
+  set(ADLplug_ARCH_DEFAULT "")
+else()
+  set(ADLplug_ARCHES "")
+  set(ADLplug_ARCH_DEFAULT "")
+endif()
+set(ADLplug_ARCH "${ADLplug_ARCH_DEFAULT}" CACHE STRING
+  "Instruction set: avx2 (the default), avx512 or native on x86-64; apple-m1 (the default) or native on Apple's arm64; native on other arm64")
+set_property(CACHE ADLplug_ARCH PROPERTY STRINGS ${ADLplug_ARCHES})
 set(ADLplug_SANITIZERS "" CACHE STRING "Sanitizers to build with, comma-separated (address, undefined, vptr, thread, memory, realtime)")
 set(ADLplug_MSAN_LIBRARIES "" CACHE PATH "Prefix of the libraries a memory-sanitizer build needs and no system ships: a C++ standard library built with that sanitizer, and a libFuzzer built against it (ci/msan-libraries.sh writes them)")
 
@@ -166,15 +185,27 @@ endif()
 # --------------------------------------------------------------------------
 # Instruction set
 #
-# x86-64 builds come in four kinds: baseline (x86-64, which every such
-# processor runs), avx2 (x86-64-v3: AVX2, BMI2, FMA and the rest of that
-# level), avx512 (x86-64-v4: AVX-512 F, BW, CD, DQ and VL on top) and native
-# (whatever the machine building it has, for a build that stays on it). The
-# baseline is passed explicitly too, so a compiler configured with another
-# default still builds it. Like LTO, this is set before any dependency is
-# added, so JUCE and the emulator cores get it as well; the cores are where a
-# wider instruction set pays off. ThinLTO takes the choice from the bitcode,
-# so the link needs no flag of its own.
+# x86-64 builds come in three kinds: avx2 (x86-64-v3: AVX2, BMI1 and BMI2,
+# FMA, F16C, LZCNT and MOVBE -- Haswell, Zen and later), which is the least
+# this project builds for and the default, avx512 (x86-64-v4: AVX-512 F, BW,
+# CD, DQ and VL on top) and native (whatever the machine building it has, for a
+# build that stays on it, which has to be x86-64-v3 at least). There was an
+# SSE2 baseline below avx2, the default, with avx2 as a second build beside
+# it; it went, as it went in MediaPerch, whose libraries this links. Nothing
+# checks the processor when a plugin loads: a build run where its instruction
+# set is missing stops at the first instruction it lacks.
+#
+# arm64 builds are for Apple's processors, M1 and later, and say so:
+# apple-m1 is -mcpu=apple-m1, which is Clang's own choice for macOS on arm64
+# and is stated so that a compiler configured with another default still
+# builds this one; native is the machine's own. arm64 on Windows or Linux may
+# come to have builds of its own, and an instruction set with them; until then
+# it has native alone.
+#
+# Like LTO, this is set before any dependency is added, so JUCE and the
+# emulator cores get it as well; the cores are where a wider instruction set
+# pays off. ThinLTO takes the choice from the bitcode, so the link needs no
+# flag of its own.
 #
 # Wherever there is AVX-512, its whole width is used, because otherwise it is
 # not: for x86-64-v4 and for every Intel processor with it, from Skylake-SP to
@@ -188,6 +219,27 @@ endif()
 # for, the configure compiles a loop that wants 512-bit vectors with the flags
 # it is about to use, and stops if no zmm register appears in the assembly: a
 # build that uses half of AVX-512 is not what either option is for.
+
+if(ADLplug_ARCH STREQUAL "baseline")
+  message(FATAL_ERROR
+    "ADLplug_ARCH=baseline is gone: x86-64-v3, avx2, is the least ADLplug-Next builds for. "
+    "This build directory remembers the old value; configure it with --fresh, or with "
+    "-DADLplug_ARCH=avx2.")
+endif()
+if(NOT ADLplug_ARCH IN_LIST ADLplug_ARCHES)
+  if(ADLplug_ARCHES STREQUAL "native")
+    message(FATAL_ERROR
+      "No instruction set has been chosen for ADLplug-Next on ${CMAKE_SYSTEM_PROCESSOR} "
+      "outside Apple's systems yet, so a build here says which it is: -DADLplug_ARCH=native.")
+  elseif(ADLplug_ARCHES)
+    message(FATAL_ERROR
+      "ADLplug_ARCH=${ADLplug_ARCH} is not an instruction set of ${CMAKE_SYSTEM_PROCESSOR} "
+      "here; it has: ${ADLplug_ARCHES}")
+  else()
+    message(FATAL_ERROR
+      "ADLplug-Next builds for x86-64 and arm64, and this is ${CMAKE_SYSTEM_PROCESSOR}.")
+  endif()
+endif()
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
   # A loop that wants the widest vectors there are, for the two questions below
@@ -207,9 +259,7 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
   endif()
 
   set(ADLplug_wide_vectors OFF)
-  if(ADLplug_ARCH STREQUAL "baseline")
-    set(ADLplug_arch_flags -march=x86-64)
-  elseif(ADLplug_ARCH STREQUAL "avx2")
+  if(ADLplug_ARCH STREQUAL "avx2")
     set(ADLplug_arch_flags -march=x86-64-v3)
   elseif(ADLplug_ARCH STREQUAL "avx512")
     set(ADLplug_arch_flags -march=x86-64-v4 -mprefer-vector-width=512)
@@ -225,6 +275,15 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
     if(NOT ADLplug_native_status EQUAL 0)
       message(FATAL_ERROR "${CMAKE_C_COMPILER} could not say what -march=native is on this machine:\n${ADLplug_native_errors}")
     endif()
+    # x86-64-v3 at the least, as avx2 is: a machine without all of it is one
+    # this project does not build for.
+    foreach(ADLplug_feature IN ITEMS AVX2 FMA BMI BMI2 F16C LZCNT MOVBE)
+      if(NOT ADLplug_native_macros MATCHES "#define __${ADLplug_feature}__ ")
+        message(FATAL_ERROR
+          "ADLplug_ARCH=native: this machine has no ${ADLplug_feature}, and x86-64-v3 is the "
+          "least ADLplug-Next builds for.")
+      endif()
+    endforeach()
     if(ADLplug_native_macros MATCHES "#define __AVX512F__ ")
       list(APPEND ADLplug_arch_flags -mprefer-vector-width=512)
       set(ADLplug_wide_vectors ON)
@@ -232,8 +291,6 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
     else()
       message(STATUS "ADLplug_ARCH=native: this machine has no AVX-512, so there is no wider vector to ask for")
     endif()
-  else()
-    message(FATAL_ERROR "unsupported ADLplug_ARCH ${ADLplug_ARCH} (baseline, avx2, avx512, native)")
   endif()
 
   if(ADLplug_wide_vectors)
@@ -249,8 +306,13 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
   endif()
 
   add_compile_options(${ADLplug_arch_flags})
-elseif(NOT ADLplug_ARCH STREQUAL "baseline")
-  message(FATAL_ERROR "ADLplug_ARCH=${ADLplug_ARCH} applies to x86-64 builds only")
+else()
+  # arm64: Apple M1 and later, or the machine's own.
+  if(ADLplug_ARCH STREQUAL "apple-m1")
+    add_compile_options(-mcpu=apple-m1)
+  else()
+    add_compile_options(-mcpu=native)
+  endif()
 endif()
 
 # --------------------------------------------------------------------------

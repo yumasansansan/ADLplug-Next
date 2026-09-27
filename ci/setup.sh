@@ -151,6 +151,19 @@ setup_linux() {
     echo "deb-src [signed-by=$keyring] https://apt.llvm.org/$codename/ llvm-toolchain-$codename-$llvm_major main"
   } | sudo tee /etc/apt/sources.list.d/apt.llvm.org.list > /dev/null
 
+  # **The C++ library's headers, of the GCC its runtime comes from.** Clang
+  # compiles against the headers of the newest GCC it finds them for, and an
+  # image may carry the headers of an older GCC than the one its libstdc++6
+  # was built from: a program then sees only what the older headers declare,
+  # while it runs on the newer library. The development package of the
+  # runtime's own GCC closes the gap, whichever GCC that is.
+  local runtime
+  runtime=$(dpkg-query --show --showformat '${source:Package}' libstdc++6)
+  case "$runtime" in
+    gcc-[0-9]*) ;;
+    *) echo "error: libstdc++6 was built from '$runtime', not from a gcc-<N> source package" >&2; exit 1 ;;
+  esac
+
   sudo apt-get update -qq
   # libclang-rt has the profile runtime that the instrumented build of
   # profile-guided optimisation links (cmake/PGO.cmake). clang-tidy is the
@@ -160,6 +173,7 @@ setup_linux() {
   sudo apt-get install -y -qq --no-install-recommends \
     "clang-$llvm_major" "lld-$llvm_major" "llvm-$llvm_major" "libclang-rt-$llvm_major-dev" \
     "clang-tidy-$llvm_major" "clang-tools-$llvm_major" \
+    "libstdc++-${runtime#gcc-}-dev" \
     "${linux_packages[@]}"
   llvm_from=apt
   llvm_bin=/usr/lib/llvm-$llvm_major/bin

@@ -7,9 +7,10 @@
 # (LICENSES/GPL-3.0-or-later.txt).
 #
 # Builds and tests ADLplug-Next and OPNplug-Next with Clang and LLD on Windows,
-# Linux and macOS, in Debug and Release; x86-64 builds are made both for the
-# baseline instruction set and for AVX2. The checkout is plain git, and
-# ci/setup.sh installs a pinned toolchain.
+# Linux and macOS, in Debug and Release; x86-64 builds are made for AVX2
+# (x86-64-v3), the least this project builds for, and the macOS builds for
+# Apple M1 and later. The checkout is plain git, and ci/setup.sh installs a
+# pinned toolchain.
 #
 # The sanitize jobs build both plugins on all three systems with the address,
 # undefined and vptr sanitizers and run the tests, leaving out the programs
@@ -82,13 +83,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-2025-vs2026, ubuntu-26.04]
-        arch: [baseline, avx2]
+        arch: [avx2]
         preset: [adl-debug, adl-release, opn-debug, opn-release]
         include:
-          - { os: macos-26, arch: arm64, preset: adl-debug }
-          - { os: macos-26, arch: arm64, preset: adl-release }
-          - { os: macos-26, arch: arm64, preset: opn-debug }
-          - { os: macos-26, arch: arm64, preset: opn-release }
+          - { os: macos-26, arch: apple-m1, preset: adl-debug }
+          - { os: macos-26, arch: apple-m1, preset: adl-release }
+          - { os: macos-26, arch: apple-m1, preset: opn-debug }
+          - { os: macos-26, arch: apple-m1, preset: opn-release }
 
     steps:
       - name: Check out
@@ -161,8 +162,8 @@ jobs:
           # every input the fuzz targets once failed on.
           - { os: ubuntu-26.04, arch: native, preset: adl-rtsan, fuzz: false }
           - { os: ubuntu-26.04, arch: native, preset: opn-rtsan, fuzz: false }
-          - { os: macos-26, arch: arm64, preset: adl-sanitize, fuzz: false }
-          - { os: macos-26, arch: arm64, preset: opn-sanitize, fuzz: false }
+          - { os: macos-26, arch: native, preset: adl-sanitize, fuzz: false }
+          - { os: macos-26, arch: native, preset: opn-sanitize, fuzz: false }
 
     steps:
       - name: Check out
@@ -337,7 +338,7 @@ jobs:
       # targets: a build with the tests carries the program that replays a saved
       # input through each of them, which compiles every one of those sources.
       - name: What the build generates
-        run: bash ci/build.sh --generated-only "${{ matrix.preset }}" baseline
+        run: bash ci/build.sh --generated-only "${{ matrix.preset }}" avx2
 
       - name: Look at every file of ours
         run: bash ci/tidy.sh "${{ matrix.preset }}"
@@ -415,7 +416,7 @@ jobs:
         run: bash ci/setup.sh
 
       - name: Build
-        run: bash ci/build.sh "${{ matrix.preset }}" baseline ${{ matrix.options }}
+        run: bash ci/build.sh "${{ matrix.preset }}" avx2 ${{ matrix.options }}
 
       - name: Test
         run: bash ci/test.sh "${{ matrix.preset }}"
@@ -430,7 +431,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [baseline, avx2]
+        arch: [avx2]
         preset: [adl-release, opn-release]
 
     steps:

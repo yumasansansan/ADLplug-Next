@@ -8,12 +8,13 @@
 # (LICENSES/GPL-3.0-or-later.txt).
 #
 #   ci/build.sh [--fuzz-only | --generated-only] <preset>
-#               <baseline|avx2|avx512|native|arm64> [<cmake option>...]
+#               <avx2|avx512|apple-m1|native> [<cmake option>...]
 #
 # Configures a CMake preset, with the developer tools and the tests, for the
-# given instruction set (arm64 stands for the macOS build, which has no choice;
-# native is the runner's own, for a build that is run where it is made and
-# never shipped) and any further options, such as emulator cores to leave out.
+# given instruction set (ADLplug_ARCH: avx2 and avx512 for x86-64, apple-m1
+# for macOS on arm64, and native, the runner's own, for a build that is run
+# where it is made and never shipped) and any further options, such as
+# emulator cores to leave out.
 #
 # With --fuzz-only, it configures the fuzz targets with the whole coverage that
 # libFuzzer can steer by and builds those targets and nothing else. A plugin of
@@ -35,7 +36,7 @@
 #
 # The configuration checks the toolchain (cmake/LLVMToolchain.cmake), and this
 # script shows what it checked, in the log and, in GitHub Actions, in the
-# summary of the job. Before building, it checks the -march flags of the
+# summary of the job. Before building, it checks the -march and -mcpu flags of the
 # compile commands, and ThinLTO in those of Release builds, whose every compile
 # and link option it lists (ci/flags.py). Then it builds, with every command
 # shown in full, those of the builds that the build starts included (the
@@ -60,8 +61,7 @@ if [ "$fuzz_only" -eq 1 ]; then
   args+=(-DADLplug_BUILD_FUZZERS=ON -DADLplug_FUZZ_FULL_COVERAGE=ON)
 fi
 case $arch in
-  baseline | avx2 | avx512 | native) args+=("-DADLplug_ARCH=$arch") ;;
-  arm64) ;;
+  avx2 | avx512 | apple-m1 | native) args+=("-DADLplug_ARCH=$arch") ;;
   *) echo "error: unknown instruction set '$arch'" >&2; exit 2 ;;
 esac
 # A memory-sanitizer build needs two libraries that no system ships, and they are
@@ -110,8 +110,8 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   } >> "$GITHUB_STEP_SUMMARY"
 fi
 
-echo "== -march flags in the compile commands"
-grep -o -E -- '-march=[a-z0-9-]+' "build/$preset/compile_commands.json" | sort | uniq -c || echo "(none)"
+echo "== -march and -mcpu flags in the compile commands"
+grep -o -E -- '-m(arch|cpu)=[a-z0-9.-]+' "build/$preset/compile_commands.json" | sort | uniq -c || echo "(none)"
 
 # Release builds are made with ThinLTO throughout, and a compile command
 # without it would mean code left out of link-time optimisation with nothing

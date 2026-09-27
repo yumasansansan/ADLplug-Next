@@ -41,7 +41,7 @@ DyTect は，Yuma Kakei（GitHub では yumasansansan）のアーティスト名
 
 [![CI](https://github.com/yumasansansan/ADLplug-Next/actions/workflows/ci.yml/badge.svg)](https://github.com/yumasansansan/ADLplug-Next/actions/workflows/ci.yml)
 
-リポジトリへのすべての push とプルリクエストは，GitHub Actions（GitHub 上で自動的にビルドやテストを行う仕組み）によって，Windows，Linux，macOS 上で，Debug と Release の両方でビルドされます．x86-64（Intel・AMD の 64 ビット CPU）向けには，すべての x86-64 CPU で動く版（baseline）と，AVX2 に対応した CPU 向けの版の，2 種類がビルドされます．
+リポジトリへのすべての push とプルリクエストは，GitHub Actions（GitHub 上で自動的にビルドやテストを行う仕組み）によって，Windows，Linux，macOS 上で，Debug と Release の両方でビルドされます．x86-64（Intel・AMD の 64 ビット CPU）向けのビルドは AVX2 に対応した CPU 向けで，macOS 向けのビルドは Apple Silicon（M1 以降）向けです．
 
 `main` ブランチへの push では，加えて Release ビルドのパッケージ化，rpm パッケージのビルド，一部のエミュレータコア（音源チップを再現するプログラム）を除いたビルドが行われます．すべてのジョブが成功すると，[Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly) プレリリース（正式リリース前の，最新の開発版）が置き換えられます．各システム向けのアーカイブと，Ubuntu 向け，および RHEL・AlmaLinux・openSUSE 向けのパッケージが生成されます（[インストール方法](#インストール方法) を参照）．
 
@@ -49,7 +49,7 @@ DyTect は，Yuma Kakei（GitHub では yumasansansan）のアーティスト名
 
 ## インストール方法
 
-[Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly) プレリリースのアーカイブファイル（zip，tar.xz など）には，ADLplug-Next／OPNplug-Next の，両方のプラグインが入っています．名前に `avx2`，`amd64v3`，`x86_64_v3` を含むビルドには，AVX2（x86-64-v3）に対応した CPU が必要です（2026 年現在で，およそ 10 年以内の CPU は，おおむね対応しています）．対応していない CPU では，DAW などのホスト（プラグインを読み込むソフト）が，プラグインをスキャンする段階でもクラッシュします．
+[Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly) プレリリースのアーカイブファイル（zip，tar.xz など）には，ADLplug-Next／OPNplug-Next の，両方のプラグインが入っています．x86-64 向けのビルド（名前に `avx2`，`amd64v3`，`x86_64_v3` を含むもの）には，すべて AVX2（x86-64-v3）に対応した CPU が必要です（Intel は Haswell（2013 年）以降，AMD は Zen（2017 年）以降で，2026 年現在で，およそ 10 年以内の CPU は，おおむね対応しています）．対応していない CPU では，DAW などのホスト（プラグインを読み込むソフト）が，プラグインをスキャンする段階でもクラッシュします．
 
 - Windows 11 以降（x86-64）: zip アーカイブを展開してください．プラグインとスタンドアロンのプログラムを動かすには，x64 用の [Microsoft Visual C++ 再頒布可能パッケージ](https://learn.microsoft.com/ja-jp/cpp/windows/latest-supported-vc-redist) が必要です．プラグイン（名前が `.vst3` などで終わるフォルダ）は，フォルダごと次の場所にコピーしてください．
   - `.vst3`: `C:\Program Files\Common Files\VST3`
@@ -60,8 +60,8 @@ DyTect は，Yuma Kakei（GitHub では yumasansansan）のアーティスト名
   - `.component`（AU）: `~/Library/Audio/Plug-Ins/Components`
   - `.lv2`: `~/Library/Audio/Plug-Ins/LV2`
   - `.aaxplugin`: `/Library/Application Support/Avid/Audio/Plug-Ins`
-- Ubuntu 26.04 以降: deb パッケージをインストールしてください（例: `sudo apt install ./adlplug-next_*_amd64.deb`）．`amd64v3` のパッケージは AVX2 版なので，AVX2 に対応した CPU でのみインストールしてください．
-- RHEL 10 以降，AlmaLinux 10 以降，openSUSE: rpm パッケージをインストールしてください（例: `sudo dnf install ./adlplug-next-*.x86_64.rpm` または `sudo zypper install ./adlplug-next-*.x86_64.rpm`）．`x86_64_v3` のパッケージは AVX2 版なので，AVX2 に対応した CPU でのみインストールしてください．
+- Ubuntu 26.04 以降: deb パッケージをインストールしてください（例: `sudo apt install ./adlplug-next_*_amd64v3.deb`）．
+- RHEL 10 以降，AlmaLinux 10 以降，openSUSE: rpm パッケージをインストールしてください（例: `sudo dnf install ./adlplug-next-*.x86_64_v3.rpm` または `sudo zypper install ./adlplug-next-*.x86_64_v3.rpm`）．
 - その他の Linux（x86-64）: tar.xz アーカイブを展開し，`.vst3` のフォルダを `~/.vst3` に，`.lv2` のフォルダを `~/.lv2` にコピーしてください．
 
 Linux では，画面の表示に X11 を使います（Wayland の環境でも，Xwayland を通して表示されます）．AAX プラグインには PACE 社による署名がないため，Pro Tools Developer でのみ読み込むことができます．各アーカイブとパッケージには，プラグインのライセンスの文書と，音色バンク（音色をまとめたデータ）の利用条件を記した `<プラグイン名>-banks.txt`（`ADLplug-Next-banks.txt` など）が含まれています．
@@ -160,7 +160,7 @@ OPN2 と OPNA はこちらになります．
 
 ここからは，ソースコードからプラグインをビルドする方法の説明です．配布されているプラグインを使うだけなら，[インストール方法](#インストール方法) を参照してください．
 
-ADLplug-Next は Windows 11 以降（x86-64），Ubuntu 26.04 以降（x86-64），および macOS 26 以降（Apple Silicon）に対応しています．Linux では，JUCE（プラグインの開発に使っているフレームワーク）に Wayland 用のバックエンドがないため，X11 上で動作します（Wayland セッションでは，XWayland 上で動作します）．
+ADLplug-Next は Windows 11 以降（AVX2 に対応した x86-64），Ubuntu 26.04 以降（AVX2 に対応した x86-64），および macOS 26 以降（Apple Silicon，M1 以降）に対応しています．Linux では，JUCE（プラグインの開発に使っているフレームワーク）に Wayland 用のバックエンドがないため，X11 上で動作します（Wayland セッションでは，XWayland 上で動作します）．
 
 次の依存関係（ビルドに必要なソフトウェア）をインストールしてください．
 - CMake 3.29 以降と Ninja
@@ -200,7 +200,7 @@ cmake --build --preset adl-release     # 上と同様です．
 | -DADLplug_ASIO=ON/OFF           | ON（Windows），OFF（その他）              | スタンドアロンプログラムで ASIO を有効にする（Windows のみ対応）         |
 | -DADLplug_CHIP=OPL3/OPN2        | OPL3（opn-* プリセットを指定すると，OPN2 に設定されます） | ADLplug-Next（OPL3）をビルドするか，OPNplug-Next（OPN2）をビルドするかを切り替える |
 | -DADLplug_GREYZONE_BANKS=ON/OFF | OFF                                    | グレーゾーンのバンクを含める（後述） |
-| -DADLplug_ARCH=baseline/avx2/avx512/native | baseline                    | x86-64 の命令セット（baseline はすべての x86-64 CPU 向け，avx2 は AVX2 に対応した CPU 向け，avx512 は AVX-512 に対応した CPU 向けで，その 512 ビットの幅をすべて使います．native はビルドしたマシンの CPU 専用で，その CPU が AVX-512 に対応していれば，同じく 512 ビットの幅をすべて使います） |
+| -DADLplug_ARCH=avx2/avx512/apple-m1/native | x86-64 では avx2，Apple Silicon では apple-m1 | 命令セット（avx2 は AVX2 に対応した x86-64 CPU 向けで，このプロジェクトがビルドする最低ラインです．avx512 は AVX-512 に対応した x86-64 CPU 向けで，その 512 ビットの幅をすべて使います．apple-m1 は Apple M1 以降向けです．native はビルドしたマシンの CPU 専用で，その CPU が AVX-512 に対応していれば，同じく 512 ビットの幅をすべて使います） |
 | -DADLplug_PGO=ON/OFF            | ON                                     | Release ビルドで，プロファイルに基づく最適化（PGO）を行う（後述） |
 | -DADLplug_SANITIZERS=<list>     | 空                                     | サニタイザ付きでビルドする（address・undefined・vptr・thread・memory・realtime をカンマ区切りで指定，後述） |
 | -DADLplug_MSAN_LIBRARIES=<dir>  | 空                                     | memory サニタイザが必要とするライブラリの置き場所（`ci/msan-libraries.sh` がビルドします，後述） |

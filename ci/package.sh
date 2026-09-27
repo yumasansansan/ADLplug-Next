@@ -7,7 +7,7 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-#   ci/package.sh <preset> <baseline|avx2|arm64> <directory>
+#   ci/package.sh <preset> <avx2|apple-m1> <directory>
 #
 # Packs a Release build of ci/build.sh for the Nightly release, which CI makes
 # on a push to main (.github/workflows/ci.yml), into <directory>:
@@ -16,8 +16,8 @@
 #    (ci/licenses.py) and version.txt, which ci/publish.sh merges with the
 #    other chip's into the archive of the system;
 #  - on Linux, the deb package for Ubuntu 26.04 or later of what the
-#    build installs under /usr. The AVX2 build is the amd64v3 variant of the
-#    same package.
+#    build installs under /usr, as the amd64v3 variant: it needs AVX2, as
+#    every x86-64 build of this project does.
 set -euo pipefail
 
 preset=$1
@@ -52,9 +52,8 @@ case "$(uname -s)" in
   *) echo "error: unknown system $(uname -s)" >&2; exit 2 ;;
 esac
 case $arch in
-  baseline) machine=x86_64 ;;
   avx2) machine=x86_64-avx2 ;;
-  arm64) machine=arm64 ;;
+  apple-m1) machine=arm64 ;;
   *) echo "error: unknown instruction set '$arch'" >&2; exit 2 ;;
 esac
 
