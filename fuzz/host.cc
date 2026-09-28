@@ -146,21 +146,36 @@ void check_notes(const AdlplugAudioProcessor &processor)
     }
 }
 
+// The buffers a block is played into, in both precisions a host may ask for.
+// The blocks take turns, so that every input plays through 32-bit processing and
+// 64-bit processing alike, and without the input having to say which.
+struct Buffers {
+    std::vector<float> left32;
+    std::vector<float> right32;
+    std::vector<double> left64;
+    std::vector<double> right64;
+    bool wide = false;
+
+    explicit Buffers(std::size_t frames)
+        : left32(frames), right32(frames), left64(frames), right64(frames) {}
+};
+
 // One block, of `frames` samples out of the buffers, the way a host gives the
 // plugin fewer samples than the most it said it would.
-void play_block(AdlplugAudioProcessor &processor, std::vector<float> &left,
-                std::vector<float> &right, juce::MidiBuffer &midi, unsigned frames,
-                bool bypassed)
+template <class Sample>
+void play_block_in(AdlplugAudioProcessor &processor, std::vector<Sample> &left,
+                   std::vector<Sample> &right, juce::MidiBuffer &midi, unsigned frames,
+                   bool bypassed)
 {
-    std::fill_n(left.begin(), frames, 0.0f);
-    std::fill_n(right.begin(), frames, 0.0f);
+    std::fill_n(left.begin(), frames, Sample {});
+    std::fill_n(right.begin(), frames, Sample {});
     // The samples are written through this, by the processor the buffer is handed
     // to. The check looks for a write through the array itself, finds none, and
     // offers a pointee that is const -- which the buffer could not be given
     // either, since it refers to the samples to write them.
     // NOLINTNEXTLINE(misc-const-correctness)
-    float *channels[2] {left.data(), right.data()};
-    juce::AudioBuffer<float> buffer(channels, 2, static_cast<int>(frames));
+    Sample *channels[2] {left.data(), right.data()};
+    juce::AudioBuffer<Sample> buffer(channels, 2, static_cast<int>(frames));
 
     if (bypassed)
         processor.processBlockBypassed(buffer, midi);
@@ -173,13 +188,24 @@ void play_block(AdlplugAudioProcessor &processor, std::vector<float> &left,
     check_notes(processor);
 }
 
+void play_block(AdlplugAudioProcessor &processor, Buffers &buffers, juce::MidiBuffer &midi,
+                unsigned frames, bool bypassed)
+{
+    buffers.wide = !buffers.wide;
+    if (buffers.wide)
+        play_block_in(processor, buffers.left64, buffers.right64, midi, frames, bypassed);
+    else
+        play_block_in(processor, buffers.left32, buffers.right32, midi, frames, bypassed);
+}
+
 // A block of as many channels as the host gave. The plugin is a stereo one and
 // says so, but the buffer is the host's: none at all, or one channel, is what a
 // host that has not read the plugin's answer hands over, and the samples of the
 // channels it did give must still be numbers.
-void play_block_of_channels(AdlplugAudioProcessor &processor, std::vector<float> &left,
-                            std::vector<float> &right, juce::MidiBuffer &midi, unsigned frames,
-                            unsigned channels, bool nowhere)
+template <class Sample>
+void play_block_of_channels_in(AdlplugAudioProcessor &processor, std::vector<Sample> &left,
+                               std::vector<Sample> &right, juce::MidiBuffer &midi, unsigned frames,
+                               unsigned channels, bool nowhere)
 {
     // A host with nothing to process may hand over a buffer whose channels are
     // nowhere at all: no samples, and no address to put them at.
@@ -190,7 +216,7 @@ void play_block_of_channels(AdlplugAudioProcessor &processor, std::vector<float>
     // the plugin plays in, it writes, so a sample that still holds this is one the
     // plugin left alone, and a host that hands over one channel would have been
     // given silence where it asked for sound.
-    constexpr float untouched = 12345.0f;
+    constexpr Sample untouched = 12345;
     std::fill_n(left.begin(), frames, untouched);
     std::fill_n(right.begin(), frames, untouched);
 
@@ -199,8 +225,9 @@ void play_block_of_channels(AdlplugAudioProcessor &processor, std::vector<float>
     // offers a pointee that is const -- which the buffer could not be given
     // either, since it refers to the samples to write them.
     // NOLINTNEXTLINE(misc-const-correctness)
-    float *pointers[2] {nowhere ? nullptr : left.data(), nowhere ? nullptr : right.data()};
-    juce::AudioBuffer<float> buffer(pointers, static_cast<int>(channels), static_cast<int>(frames));
+    Sample *pointers[2] {nowhere ? nullptr : left.data(), nowhere ? nullptr : right.data()};
+    juce::AudioBuffer<Sample> buffer(pointers, static_cast<int>(channels),
+                                     static_cast<int>(frames));
     processor.processBlock(buffer, midi);
 
     for (unsigned i = 0; i < frames; ++i) {
@@ -219,13 +246,25 @@ void play_block_of_channels(AdlplugAudioProcessor &processor, std::vector<float>
     check_notes(processor);
 }
 
+void play_block_of_channels(AdlplugAudioProcessor &processor, Buffers &buffers,
+                            juce::MidiBuffer &midi, unsigned frames, unsigned channels,
+                            bool nowhere)
+{
+    buffers.wide = !buffers.wide;
+    if (buffers.wide)
+        play_block_of_channels_in(processor, buffers.left64, buffers.right64, midi, frames,
+                                  channels, nowhere);
+    else
+        play_block_of_channels_in(processor, buffers.left32, buffers.right32, midi, frames,
+                                  channels, nowhere);
+}
+
 // A block while another thread holds the player, which is what the worker does
 // while it measures an instrument or reconfigures the chips. A host may ask for
 // a block at any moment, bypassed or not, and a plugin that could not take the
 // player for one has to come back from it all the same.
-void play_block_with_the_player_held(AdlplugAudioProcessor &processor, std::vector<float> &left,
-                                    std::vector<float> &right, juce::MidiBuffer &midi,
-                                    unsigned frames, bool bypassed)
+void play_block_with_the_player_held(AdlplugAudioProcessor &processor, Buffers &buffers,
+                                     juce::MidiBuffer &midi, unsigned frames, bool bypassed)
 {
     std::binary_semaphore held {0};
     std::binary_semaphore done {0};
@@ -236,7 +275,7 @@ void play_block_with_the_player_held(AdlplugAudioProcessor &processor, std::vect
     });
 
     held.acquire();
-    play_block(processor, left, right, midi, frames, bypassed);
+    play_block(processor, buffers, midi, frames, bypassed);
     done.release();
     holder.join();
 }
@@ -299,8 +338,7 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
 
     // The buffers hold a sample even when the block is none, so that the pointers
     // a buffer is made of are pointers: what the plugin is told is still nothing.
-    std::vector<float> left(std::max<std::size_t>(1, buffered));
-    std::vector<float> right(std::max<std::size_t>(1, buffered));
+    Buffers buffers(std::max<std::size_t>(1, buffered));
     juce::MidiBuffer midi;
     // A rate that is no rate asks for no audio: the plugin keeps a rate of its own
     // for one, and the samples of a tenth of a second of it are none. The test is
@@ -333,7 +371,7 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
                                                   1u + (value & 0x1fu) * 32u, frames_left});
                 if (frames == 0)
                     return 0;
-                play_block(processor, left, right, midi, frames, false);
+                play_block(processor, buffers, midi, frames, false);
                 frames_left -= frames;
             }
             else {
@@ -376,9 +414,9 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
                 // another thread holds.
                 const unsigned frames = std::min(static_cast<unsigned>(buffered), frames_left);
                 if ((value & 4u) == 0)
-                    play_block(processor, left, right, midi, frames, true);
+                    play_block(processor, buffers, midi, frames, true);
                 else
-                    play_block_with_the_player_held(processor, left, right, midi, frames,
+                    play_block_with_the_player_held(processor, buffers, midi, frames,
                                                     (value & 8u) == 0);
                 break;
             }
@@ -392,7 +430,7 @@ int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
                     // plugin asked for -- and with its highest bit, one whose
                     // channels are nowhere.
                     const std::uint8_t how = input.byte();
-                    play_block_of_channels(processor, left, right, midi,
+                    play_block_of_channels(processor, buffers, midi,
                                            std::min(static_cast<unsigned>(buffered), frames_left),
                                            how % 3u, (how & 0x80u) != 0);
                 }

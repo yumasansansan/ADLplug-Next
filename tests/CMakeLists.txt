@@ -259,7 +259,7 @@ endif()
 # default emulator plays; the comparison with references.txt is a test of its
 # own, so a changed reference does not hide the other results.
 add_test(NAME render
-  COMMAND ADLplug_render "${plugin}" "${render_out}/render.f32" ${sequence}
+  COMMAND ADLplug_render "${plugin}" "${render_out}/render.f64" ${sequence}
     --state "${render_out}/render.state" --save-hashes "${render_out}/render.hashes"
     --require-emulator "${default_emulator}" --require-sound)
 set_tests_properties(render PROPERTIES FIXTURES_SETUP render TIMEOUT 900)
@@ -279,11 +279,11 @@ set_tests_properties(render.reference PROPERTIES FIXTURES_REQUIRED render)
 
 # Opening the editor after rendering changes neither the output nor the state.
 add_test(NAME render.editor
-  COMMAND ADLplug_render "${plugin}" "${render_out}/editor.f32" ${sequence} --editor
+  COMMAND ADLplug_render "${plugin}" "${render_out}/editor.f64" ${sequence} --editor
     --expect-output-of "${render_out}/render.hashes" --expect-state-of "${render_out}/render.hashes")
 # The state saved after the warm-up comes back the same after being restored.
 add_test(NAME render.restore
-  COMMAND ADLplug_render "${plugin}" "${render_out}/restore.f32" ${sequence}
+  COMMAND ADLplug_render "${plugin}" "${render_out}/restore.f64" ${sequence}
     --restore "${render_out}/render.state" --expect-state-of "${render_out}/render.hashes")
 set_tests_properties(render.editor render.restore PROPERTIES FIXTURES_REQUIRED render TIMEOUT 900)
 set_tests_properties(render.editor PROPERTIES LABELS gui)
@@ -292,21 +292,21 @@ set_tests_properties(render.editor PROPERTIES LABELS gui)
 # prepared again, and so does the state: Audio Unit hosts expect it, and auval
 # checks it on macOS.
 add_test(NAME render.prepare_again
-  COMMAND ADLplug_render "${plugin}" "${render_out}/prepare_again.f32" 2 1000 --prepare-again)
+  COMMAND ADLplug_render "${plugin}" "${render_out}/prepare_again.f64" 2 1000 --prepare-again)
 set_tests_properties(render.prepare_again PROPERTIES TIMEOUT 300)
 
 # The parameters of upstream ADLplug 1 come first, in their order and with
 # their IDs: projects saved with the plugins of upstream refer to them, and the
 # VST3 plugin maps them for hosts that replace those plugins with it.
 add_test(NAME render.upstream_parameters
-  COMMAND ADLplug_render "${plugin}" "${render_out}/upstream_parameters.f32" 1 0
+  COMMAND ADLplug_render "${plugin}" "${render_out}/upstream_parameters.f64" 1 0
     --upstream-parameters "${ADLplug_CHIP}")
 set_tests_properties(render.upstream_parameters PROPERTIES TIMEOUT 300)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   # Only Windows can capture the hosted editor so far (tools/render).
   add_test(NAME render.snapshot
-    COMMAND ADLplug_render "${plugin}" "${render_out}/snapshot.f32" 2 1000
+    COMMAND ADLplug_render "${plugin}" "${render_out}/snapshot.f64" 2 1000
       --snapshot "${render_out}/${ADLplug_NAME}.png")
   set_tests_properties(render.snapshot PROPERTIES TIMEOUT 300 LABELS gui)
 endif()
@@ -336,7 +336,7 @@ foreach(core IN LISTS cores)
     # Release only: the low-level cores are too slow in Debug builds.
     if(CMAKE_BUILD_TYPE STREQUAL "Release")
       add_test(NAME render.core.${core_index}
-        COMMAND ADLplug_render "${plugin}" "${render_out}/core${core_index}.f32" 2 1000
+        COMMAND ADLplug_render "${plugin}" "${render_out}/core${core_index}.f64" 2 1000
           --emulator ${core_index} --require-emulator "${core_name}" --require-sound)
       set_tests_properties(render.core.${core_index} PROPERTIES TIMEOUT 600 LABELS core)
     endif()
@@ -359,14 +359,14 @@ foreach(core IN LISTS cores)
   if(NOT core_substitute IN_LIST fallback_cores)
     list(APPEND fallback_cores ${core_substitute})
     add_test(NAME render.fallback.to.${core_substitute}
-      COMMAND ADLplug_render "${plugin}" "${render_out}/fallback-to-${core_substitute}.f32" ${fallback_sequence}
+      COMMAND ADLplug_render "${plugin}" "${render_out}/fallback-to-${core_substitute}.f64" ${fallback_sequence}
         --emulator ${core_substitute} --require-sound
         --save-hashes "${render_out}/fallback-to-${core_substitute}.hashes")
     set_tests_properties(render.fallback.to.${core_substitute} PROPERTIES
       FIXTURES_SETUP fallback-to-${core_substitute} TIMEOUT 600 LABELS fallback)
   endif()
   add_test(NAME render.fallback.${core_index}
-    COMMAND ADLplug_render "${plugin}" "${render_out}/fallback${core_index}.f32" ${fallback_sequence}
+    COMMAND ADLplug_render "${plugin}" "${render_out}/fallback${core_index}.f64" ${fallback_sequence}
       --emulator ${core_index} --expect-output-of "${render_out}/fallback-to-${core_substitute}.hashes")
   set_tests_properties(render.fallback.${core_index} PROPERTIES
     FIXTURES_REQUIRED fallback-to-${core_substitute} TIMEOUT 600 LABELS fallback)

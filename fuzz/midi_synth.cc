@@ -213,12 +213,12 @@ bool apply_settings(Player &pl, Input &input, unsigned &chips_left)
 // looks at every sample.
 void generate(Player &pl, unsigned frames)
 {
-    static std::vector<float> left(frames_at_once), right(frames_at_once);
+    static std::vector<double> left(frames_at_once), right(frames_at_once);
 
     while (frames > 0) {
         const unsigned now = std::min(frames, frames_at_once);
-        std::fill_n(left.begin(), now, 0.0f);
-        std::fill_n(right.begin(), now, 0.0f);
+        std::fill_n(left.begin(), now, 0.0);
+        std::fill_n(right.begin(), now, 0.0);
         pl.generate(left.data(), right.data(), now, 1);
         for (unsigned i = 0; i < now; ++i)
             FUZZ_CHECK(std::isfinite(left[i]) && std::isfinite(right[i]));

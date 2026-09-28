@@ -89,6 +89,8 @@ adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0011-wasapi-asks-for-more-channels-in-one-sample-format.patch")
 adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0012-direct2d-makes-devices-only-for-the-adapters-it-draws-with.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0013-the-standalone-processes-in-double-precision-when-the-processor-can.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0001-esfmu-the-rhythm-volume-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libADLMIDI"
@@ -117,6 +119,8 @@ adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0013-a-note-with-one-chip-channel-has-no-second-one-to-read.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0014-dosbox-a-rhythm-mode-drum-is-panned-by-its-own-channel.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0015-a-generation-writes-doubles-through-pointers-to-doubles.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-psg-a-noise-table-that-does-not-overflow.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
@@ -151,3 +155,5 @@ adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0016-mame-the-tables-every-chip-shares-are-built-once.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0017-nuked-opn2-the-chip-type-is-the-chips-own.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0018-a-generation-writes-doubles-through-pointers-to-doubles.patch")

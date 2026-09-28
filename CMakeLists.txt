@@ -1175,13 +1175,25 @@ if(ADLplug_COVERAGE)
   message(STATUS "Coverage: this project's own sources count what runs")
 endif()
 
+# Type-based alias analysis on Windows as on the other systems. For an MSVC target
+# the driver passes -relaxed-aliasing unless told otherwise, because MSVC does no
+# such analysis and code written for it may read memory as another type than it
+# was written as; this project's own code does not, and every other system has
+# compiled it with the analysis all along. Only its own sources: JUCE's Windows
+# code is compiled as JUCE ships it. The chip libraries get it too, in
+# cmake/ADLMIDI.cmake, for the same reason.
+set(ADLplug_OWN_OPTIMISATION_FLAGS "")
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+  set(ADLplug_OWN_OPTIMISATION_FLAGS -fstrict-aliasing)
+endif()
+
 # Gives source files the settings above. Source file properties belong to the
 # directory that sets them, so tests/ calls this again for what it compiles.
 function(adlplug_own_sources)
   if(ADLplug_OWN_COMPILE_DEFINITIONS)
     set_source_files_properties(${ARGN} PROPERTIES COMPILE_DEFINITIONS "${ADLplug_OWN_COMPILE_DEFINITIONS}")
   endif()
-  set(options ${ADLplug_WARNING_FLAGS} ${ADLplug_COVERAGE_FLAGS})
+  set(options ${ADLplug_WARNING_FLAGS} ${ADLplug_COVERAGE_FLAGS} ${ADLplug_OWN_OPTIMISATION_FLAGS})
   if(options)
     set_source_files_properties(${ARGN} PROPERTIES COMPILE_OPTIONS "${options}")
   endif()

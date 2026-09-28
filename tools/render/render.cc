@@ -8,13 +8,14 @@
 //
 // Offline render of a fixed MIDI sequence through a VST3 build of the plugin.
 //
-//     ADLplug_render <plugin.vst3> <output.f32> [seconds] [warm-up ms]
+//     ADLplug_render <plugin.vst3> <output.f64> [seconds] [warm-up ms]
 //                    [--editor] [--snapshot <file.png>] [--no-teardown]
 //                    [--state <file>] [--restore <file>] [--emulator <number>]
 //                    [--save-hashes <file>] [checks]
 //     ADLplug_render --compare <hashes file> <output hash> <state hash>
 //
-// Writes the plugin's output as interleaved 32-bit float samples and prints a
+// Writes the plugin's output as interleaved binary64 samples, which is what the
+// plug-in is asked to process in, and prints a
 // one-line summary with a hash, so two builds -- Debug against Release with
 // LTO, say -- can be compared sample for sample. Loading through the VST3
 // interface also exercises the shipped module's exports and factory, and the
@@ -472,7 +473,7 @@ int main(int argc, char *argv[])
             args.push_back(arg);
     }
     if (args.size() < 2) {
-        print_line("usage: ADLplug_render <plugin.vst3> <output.f32> [seconds] [warm-up ms] [--editor] "
+        print_line("usage: ADLplug_render <plugin.vst3> <output.f64> [seconds] [warm-up ms] [--editor] "
                    "[--snapshot <file.png>] [--no-teardown] [--state <file>] [--restore <file>] [--emulator <number>] "
                    "[--save-hashes <file>] [--expect-output <hash>] [--expect-state <hash>] [--expect-output-of <file>] "
                    "[--expect-state-of <file>] [--require-emulator <name>] [--require-sound] [--prepare-again] "
@@ -556,6 +557,15 @@ int main(int argc, char *argv[])
         }
 
         plugin->enableAllBuses();
+        // **In binary64, as the plug-in makes its samples.** A 32-bit render
+        // would be the plug-in's output rounded once more than a host that asks
+        // for 64-bit samples hears, and a comparison of accuracy has nothing to
+        // compare below that rounding.
+        if (!plugin->supportsDoublePrecisionProcessing()) {
+            print_line("error: the plug-in does not process in binary64");
+            return 1;
+        }
+        plugin->setProcessingPrecision(juce::AudioProcessor::doublePrecision);
         plugin->prepareToPlay(sample_rate, block_size);
         milestone("prepared");
 
@@ -585,7 +595,7 @@ int main(int argc, char *argv[])
         const int out_channels = plugin->getTotalNumOutputChannels();
         const int buffer_channels = std::max(out_channels, plugin->getTotalNumInputChannels());
 
-        juce::AudioBuffer<float> buffer(buffer_channels, block_size);
+        juce::AudioBuffer<double> buffer(buffer_channels, block_size);
         juce::MidiBuffer midi;
 
         // Warm-up: select the programs, then process a fixed number of silent
@@ -645,7 +655,7 @@ int main(int argc, char *argv[])
         std::size_t next_event = 0;
         const int total = static_cast<int>(sample_rate * seconds);
         std::uint64_t hash = fnv1a64_basis;
-        float peak = 0.0f;
+        double peak = 0.0;
         double sum_squares = 0.0;
         unsigned long long nonfinite = 0;
         int block_index = 0;
@@ -664,14 +674,14 @@ int main(int argc, char *argv[])
 
             for (int i = 0; i < frames; ++i) {
                 for (int c = 0; c < out_channels; ++c) {
-                    const float sample = buffer.getSample(c, i);
-                    const auto bytes = std::bit_cast<std::array<char, sizeof(float)>>(sample);
+                    const double sample = buffer.getSample(c, i);
+                    const auto bytes = std::bit_cast<std::array<char, sizeof(double)>>(sample);
                     out.write(bytes.data(), bytes.size());
                     fnv1a64_add(hash, bytes);
                     if (!std::isfinite(sample))
                         ++nonfinite;
                     peak = std::max(peak, std::abs(sample));
-                    sum_squares += static_cast<double>(sample) * static_cast<double>(sample);
+                    sum_squares += sample * sample;
                 }
             }
 
@@ -687,7 +697,7 @@ int main(int argc, char *argv[])
                       "plugin=%s emulator=%s channels=%d frames=%d peak=%.6f rms=%.6f nonfinite=%llu "
                       "warmup=%d settled=%d state=%016llx fnv1a64=%016llx",
                       plugin_name.c_str(), emulator.c_str(), out_channels, total,
-                      static_cast<double>(peak), std::sqrt(sum_squares / samples_total), nonfinite,
+                      peak, std::sqrt(sum_squares / samples_total), nonfinite,
                       warm_blocks, settled_after, static_cast<unsigned long long>(state),
                       static_cast<unsigned long long>(hash));
         print_line(summary);
@@ -708,7 +718,7 @@ int main(int argc, char *argv[])
             failures.push_back("state " + hash_text(state) + ", expected " + hash_text(*expected_state));
         if (!required_emulator.empty() && emulator != required_emulator)
             failures.push_back("emulator '" + emulator + "', expected '" + required_emulator + "'");
-        if (require_sound && (peak <= 0.0f || nonfinite != 0))
+        if (require_sound && (peak <= 0.0 || nonfinite != 0))
             failures.emplace_back("the output is silent or has samples that are not finite");
         if (prepare_again) {
             plugin->releaseResources();

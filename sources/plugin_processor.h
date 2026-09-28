@@ -74,14 +74,35 @@ public:
     // (ADLplug_SANITIZERS=realtime). It costs nothing in a build without that
     // sanitizer, so it is here to be read as much as to be checked. The definition
     // needs no repeat of it: the attribute belongs to the function's type.
+    //
+    // **Binary64 throughout.** The chips' samples, the resampling, the gain and
+    // the DC filter are all in double: a host that asks for 64-bit samples gets
+    // them as they were made, and one that asks for 32-bit -- AU and LV2 have
+    // nothing else -- gets them rounded once, as they are handed over.
+    bool supportsDoublePrecisionProcessing() const override { return true; }
     void processBlock(AudioBuffer<float> &buffer, MidiBuffer &midi_messages)
+        [[clang::nonblocking]] override;
+    void processBlock(AudioBuffer<double> &buffer, MidiBuffer &midi_messages)
         [[clang::nonblocking]] override;
     void processBlockBypassed(AudioBuffer<float> &buffer, MidiBuffer &midi_messages)
         [[clang::nonblocking]] override;
+    void processBlockBypassed(AudioBuffer<double> &buffer, MidiBuffer &midi_messages)
+        [[clang::nonblocking]] override;
 
-    void process(float *outputs[], unsigned nframes, Midi_Input_Source &midi) [[clang::nonblocking]];
+    // `nframes` frames of the two channels, which are `first_frame` onwards of a
+    // host's block of `block_frames`: the times of the MIDI events are the
+    // block's, and a block played in pieces plays them where they fall.
+    void process(double *outputs[], unsigned nframes, unsigned first_frame, unsigned block_frames,
+                 Midi_Input_Source &midi) [[clang::nonblocking]];
 
 private:
+    template <class Sample>
+    void process_block(AudioBuffer<Sample> &buffer, MidiBuffer &midi_messages)
+        [[clang::nonblocking]];
+    template <class Sample>
+    void process_block_bypassed(AudioBuffer<Sample> &buffer, MidiBuffer &midi_messages)
+        [[clang::nonblocking]];
+
     void process_messages(bool under_lock);
     void process_parameter_changes();
     void apply_parameter_changes();
@@ -237,11 +258,12 @@ private:
     std::unique_ptr<Simple_Fifo> mq_from_worker_;
     std::unique_ptr<Simple_Fifo> mq_to_worker_;
 
-    // The channel a host did not give. The plugin plays in two and says so, but
-    // the buffer is the host's: one that hands over a single channel gets the two
-    // mixed into it, played through this one. Prepared with the block the host
-    // said it would ask for.
-    std::vector<float> spare_channel_;
+    // The two channels in binary64, for a host whose buffer cannot take them as
+    // they are made: one that asks for 32-bit samples, which get rounded once,
+    // from these; and one that hands over a single channel, which gets the two
+    // mixed into it. Prepared with the block the host said it would ask for, and
+    // a block longer than that is played in pieces of it.
+    std::array<std::vector<double>, 2> rendered_;
 
     std::array<Dc_Filter, 2> dc_filter_;
     std::array<Vu_Monitor, 2> vu_monitor_;

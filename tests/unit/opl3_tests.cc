@@ -53,13 +53,13 @@ double note_energy(const Instrument &ins, bool mt32, int from = -1)
     pl.play_midi(note_on, 3);
 
     constexpr unsigned frames = 22050;
-    std::vector<float> left(frames), right(frames);
+    std::vector<double> left(frames), right(frames);
     pl.generate(left.data(), right.data(), frames, 1);
 
     double energy = 0;
     for (std::size_t i = 0; i < frames; ++i) {
-        const auto l = static_cast<double>(left[i]);
-        const auto r = static_cast<double>(right[i]);
+        const double l = left[i];
+        const double r = right[i];
         energy += l * l + r * r;
     }
     return energy;

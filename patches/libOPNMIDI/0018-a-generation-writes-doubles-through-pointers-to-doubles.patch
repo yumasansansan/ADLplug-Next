@@ -1,0 +1,155 @@
+SPDX-FileCopyrightText: 2010-2014 Joel Yliluoma <bisqwit@iki.fi>
+SPDX-FileCopyrightText: 2017-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-3.0-or-later
+
+A generation can be written as doubles through pointers to doubles
+
+opn2_generateFormat() takes the buffers it writes as OPN2_UInt8 *, whatever the format, and its documentation says so: the buffers must be cast into bytes arrays. For OPNMIDI_SampleType_F64 the library casts each address back to double * and stores the sample through it, so a program that keeps its samples as doubles has to hand its double * over as a pointer to bytes -- a reinterpret_cast in its own code, however it is spelt -- for the library to turn back into what it was.
+
+opn2_generateDouble() writes the same samples, those opn2_generateFormat() writes for OPNMIDI_SampleType_F64 and converted by opn2_cvtReal<double>() as they are, through pointers to double: sampleCount / 2 of them to each of left and right, stride samples apart. The generation loop moves out of opn2_generateFormat() into a function the two calls share, which is told where the samples go, so opn2_generateFormat() does what it did, and the new sender copies what SendStereoAudio() copies, from where it copies it. It returns 0 when either buffer is missing, rather than taking the target for one in bytes. The code is C++98, as the library is.
+
+ADLplug-Next's players ask for binary64 samples and keep them as doubles on their way to the host; with this they hand the library their buffers as the doubles they are. libADLMIDI gets the same call from patches/libADLMIDI/0015.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/include/opnmidi.h b/include/opnmidi.h
+--- a/include/opnmidi.h
++++ b/include/opnmidi.h
+@@ -1039,6 +1039,27 @@ extern OPNMIDI_DECLSPEC int  opn2_generate(struct OPN2_MIDIPlayer *device, int s
+  */
+ extern OPNMIDI_DECLSPEC int  opn2_generateFormat(struct OPN2_MIDIPlayer *device, int sampleCount, OPN2_UInt8 *left, OPN2_UInt8 *right, const struct OPNMIDI_AudioFormat *format);
+ 
++/**
++ * @brief Generate PCM stereo audio output as binary64 samples without iteration of MIDI timers
++ *
++ * What opn2_generateFormat() writes for OPNMIDI_SampleType_F64, written through pointers to
++ * doubles rather than through the bytes of the buffers, so that the buffers need not be cast
++ * into bytes arrays. Each of @p left and @p right takes sampleCount / 2 samples, @p stride
++ * samples apart: 1 for a buffer of its own for each channel, 2 for one buffer of interleaved
++ * frames with @p right one sample after @p left.
++ *
++ * Don't use count of frames, use instead count of samples. One frame is two samples.
++ * So, for example, if you want to take 10 frames, you must to request amount of 20 samples!
++ *
++ * @param device Instance of the library
++ * @param sampleCount
++ * @param left Left channel buffer output
++ * @param right Right channel buffer output
++ * @param stride Distance between two samples of a channel, in samples
++ * @return Count of given samples, otherwise, 0 or when catching an error while playing
++ */
++extern OPNMIDI_DECLSPEC int  opn2_generateDouble(struct OPN2_MIDIPlayer *device, int sampleCount, double *left, double *right, unsigned stride);
++
+ /**
+  * @brief Periodic tick handler.
+  * @param device
+diff --git a/src/opnmidi.cpp b/src/opnmidi.cpp
+--- a/src/opnmidi.cpp
++++ b/src/opnmidi.cpp
+@@ -1169,6 +1169,34 @@ static int SendStereoAudio(int         samples_requested,
+     return 0;
+ }
+ 
++static int SendStereoDouble(int        samples_requested,
++                            ssize_t    in_size,
++                            int32_t   *_in,
++                            ssize_t    out_pos,
++                            double    *left,
++                            double    *right,
++                            size_t     stride)
++{
++    if(!in_size)
++        return 0;
++
++    size_t outputOffset = static_cast<size_t>(out_pos);
++    size_t inSamples    = static_cast<size_t>(in_size * 2);
++    size_t maxSamples   = static_cast<size_t>(samples_requested) - outputOffset;
++    size_t toCopy       = std::min(maxSamples, inSamples);
++
++    left  += (outputOffset / 2) * stride;
++    right += (outputOffset / 2) * stride;
++
++    for(size_t i = 0; i < toCopy / 2; ++i)
++    {
++        left[i * stride] = opn2_cvtReal<double>(_in[2 * i]);
++        right[i * stride] = opn2_cvtReal<double>(_in[(2 * i) + 1]);
++    }
++
++    return 0;
++}
++
+ 
+ OPNMIDI_EXPORT int opn2_play(struct OPN2_MIDIPlayer *device, int sampleCount, short *out)
+ {
+@@ -1278,9 +1306,32 @@ OPNMIDI_EXPORT int opn2_generate(struct OPN2_MIDIPlayer *device, int sampleCount
+     return opn2_generateFormat(device, sampleCount, (OPN2_UInt8 *)out, (OPN2_UInt8 *)(out + 1), &opn2_DefaultAudioFormat);
+ }
+ 
+-OPNMIDI_EXPORT int opn2_generateFormat(struct OPN2_MIDIPlayer *device, int sampleCount,
+-                                       OPN2_UInt8 *out_left, OPN2_UInt8 *out_right,
+-                                       const OPNMIDI_AudioFormat *format)
++/*
++    Where the samples of a generation go: the bytes of two buffers, in the
++    format that opn2_generateFormat() is given, or doubles through two
++    pointers of their own type, as opn2_generateDouble() writes them.
++*/
++struct GenerateTarget
++{
++    OPN2_UInt8 *left;
++    OPN2_UInt8 *right;
++    const OPNMIDI_AudioFormat *format;
++    double *leftDouble;
++    double *rightDouble;
++    size_t stride;
++};
++
++static int SendGenerated(int samples_requested, ssize_t in_size, int32_t *in, ssize_t out_pos,
++                         const GenerateTarget &target)
++{
++    if(target.leftDouble)
++        return SendStereoDouble(samples_requested, in_size, in, out_pos,
++                                target.leftDouble, target.rightDouble, target.stride);
++    return SendStereoAudio(samples_requested, in_size, in, out_pos,
++                           target.left, target.right, target.format);
++}
++
++static int GenerateInto(struct OPN2_MIDIPlayer *device, int sampleCount, const GenerateTarget &target)
+ {
+     sampleCount -= sampleCount % 2; //Avoid even sample requests
+     if(sampleCount < 0)
+@@ -1331,7 +1382,7 @@ OPNMIDI_EXPORT int opn2_generateFormat(struct OPN2_MIDIPlayer *device, int sampl
+                     synth.m_chips[card]->generateAndMix32(out_buf, (size_t)in_generatedStereo);
+             }
+             /* Process it */
+-            if(SendStereoAudio(sampleCount, in_generatedStereo, out_buf, gotten_len, out_left, out_right, format) == -1)
++            if(SendGenerated(sampleCount, in_generatedStereo, out_buf, gotten_len, target) == -1)
+                 return 0;
+ 
+             left -= (int)in_generatedPhys;
+@@ -1344,6 +1395,25 @@ OPNMIDI_EXPORT int opn2_generateFormat(struct OPN2_MIDIPlayer *device, int sampl
+     return static_cast<int>(gotten_len);
+ }
+ 
++OPNMIDI_EXPORT int opn2_generateFormat(struct OPN2_MIDIPlayer *device, int sampleCount,
++                                       OPN2_UInt8 *out_left, OPN2_UInt8 *out_right,
++                                       const OPNMIDI_AudioFormat *format)
++{
++    GenerateTarget target = {out_left, out_right, format, NULL, NULL, 0};
++    return GenerateInto(device, sampleCount, target);
++}
++
++OPNMIDI_EXPORT int opn2_generateDouble(struct OPN2_MIDIPlayer *device, int sampleCount,
++                                       double *out_left, double *out_right, unsigned stride)
++{
++    // Without both buffers there is nowhere to write, and the target would
++    // otherwise be taken for the one in bytes.
++    if(!out_left || !out_right)
++        return 0;
++    GenerateTarget target = {NULL, NULL, NULL, out_left, out_right, stride};
++    return GenerateInto(device, sampleCount, target);
++}
++
+ OPNMIDI_EXPORT double opn2_tickEvents(struct OPN2_MIDIPlayer *device, double seconds, double granuality)
+ {
+ #ifndef OPNMIDI_DISABLE_MIDI_SEQUENCER

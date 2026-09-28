@@ -102,7 +102,7 @@ public:
     // volume, and which channels GS makes percussive. True when it acted on the
     // message, which for a reset means that every note has stopped.
     bool play_sysex(const std::uint8_t *msg, unsigned len);
-    void generate(float *left, float *right, unsigned nframes, unsigned stride);
+    void generate(double *left, double *right, unsigned nframes, unsigned stride);
 
     void ensure_get_bank_id(const Bank_Ref &bank, Bank_Id &id)
         { [[maybe_unused]] const bool success = get_bank_id(bank, id); assert(success); }

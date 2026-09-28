@@ -1,0 +1,214 @@
+SPDX-FileCopyrightText: 2010-2014 Joel Yliluoma <bisqwit@iki.fi>
+SPDX-FileCopyrightText: 2015-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-3.0-or-later
+
+A generation can be written as doubles through pointers to doubles
+
+adl_generateFormat() takes the buffers it writes as ADL_UInt8 *, whatever the format, and its documentation says so: the buffers must be cast into bytes arrays. For ADLMIDI_SampleType_F64 the library casts each address back to double * and stores the sample through it, so a program that keeps its samples as doubles has to hand its double * over as a pointer to bytes -- a reinterpret_cast in its own code, however it is spelt -- for the library to turn back into what it was.
+
+adl_generateDouble() writes the same samples, those adl_generateFormat() writes for ADLMIDI_SampleType_F64 and converted by adl_cvtReal<double>() as they are, through pointers to double: sampleCount / 2 of them to each of left and right, stride samples apart. The generation loop moves out of adl_generateFormat() into a function the two calls share, which is told where the samples go, so adl_generateFormat() does what it did, and the new sender copies what SendStereoAudio() copies, from where it copies it. It returns 0 when either buffer is missing, rather than taking the target for one in bytes.
+
+The code is C++98 and adds no template where __WATCOMC__ is defined. There SendStereoAudio() writes only unsigned 16-bit samples, so the new call writes none and returns 0, as adl_generateFormat() does for any other format; with ADLMIDI_HW_OPL it returns 0 as adl_generateFormat() does.
+
+ADLplug-Next's players ask for binary64 samples and keep them as doubles on their way to the host; with this they hand the library their buffers as the doubles they are.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/include/adlmidi.h b/include/adlmidi.h
+--- a/include/adlmidi.h
++++ b/include/adlmidi.h
+@@ -1281,6 +1281,27 @@ extern ADLMIDI_DECLSPEC int  adl_generate(struct ADL_MIDIPlayer *device, int sam
+  */
+ extern ADLMIDI_DECLSPEC int  adl_generateFormat(struct ADL_MIDIPlayer *device, int sampleCount, ADL_UInt8 *left, ADL_UInt8 *right, const struct ADLMIDI_AudioFormat *format);
+ 
++/**
++ * @brief Generate PCM stereo audio output as binary64 samples without iteration of MIDI timers
++ *
++ * What adl_generateFormat() writes for ADLMIDI_SampleType_F64, written through pointers to
++ * doubles rather than through the bytes of the buffers, so that the buffers need not be cast
++ * into bytes arrays. Each of @p left and @p right takes sampleCount / 2 samples, @p stride
++ * samples apart: 1 for a buffer of its own for each channel, 2 for one buffer of interleaved
++ * frames with @p right one sample after @p left.
++ *
++ * Don't use count of frames, use instead count of samples. One frame is two samples.
++ * So, for example, if you want to take 10 frames, you must to request amount of 20 samples!
++ *
++ * @param device Instance of the library
++ * @param sampleCount
++ * @param left Left channel buffer output
++ * @param right Right channel buffer output
++ * @param stride Distance between two samples of a channel, in samples
++ * @return Count of given samples, otherwise, 0 or when catching an error while playing
++ */
++extern ADLMIDI_DECLSPEC int  adl_generateDouble(struct ADL_MIDIPlayer *device, int sampleCount, double *left, double *right, unsigned stride);
++
+ /**
+  * @brief Periodic tick handler.
+  *
+diff --git a/src/adlmidi.cpp b/src/adlmidi.cpp
+--- a/src/adlmidi.cpp
++++ b/src/adlmidi.cpp
+@@ -1561,6 +1561,34 @@ static int SendStereoAudio(int        samples_requested,
+ 
+     return 0;
+ }
++
++static int SendStereoDouble(int        samples_requested,
++                            ssize_t    in_size,
++                            int32_t   *_in,
++                            ssize_t    out_pos,
++                            double    *left,
++                            double    *right,
++                            size_t     stride)
++{
++    if(!in_size)
++        return 0;
++
++    size_t outputOffset = static_cast<size_t>(out_pos);
++    size_t inSamples    = static_cast<size_t>(in_size * 2);
++    size_t maxSamples   = static_cast<size_t>(samples_requested) - outputOffset;
++    size_t toCopy       = std::min(maxSamples, inSamples);
++
++    left  += (outputOffset / 2) * stride;
++    right += (outputOffset / 2) * stride;
++
++    for(size_t i = 0; i < toCopy / 2; ++i)
++    {
++        left[i * stride] = adl_cvtReal<double>(_in[2 * i]);
++        right[i * stride] = adl_cvtReal<double>(_in[(2 * i) + 1]);
++    }
++
++    return 0;
++}
+ #   else // __WATCOMC__
+ 
+ /*
+@@ -1615,6 +1643,28 @@ static int SendStereoAudio(int        samples_requested,
+ 
+     return 0;
+ }
++
++/*
++    Only unsigned 16-bit samples are written by this build, as SendStereoAudio()
++    says, so no doubles either.
++*/
++static int SendStereoDouble(int        samples_requested,
++                            ssize_t    in_size,
++                            int32_t   *_in,
++                            ssize_t    out_pos,
++                            double    *left,
++                            double    *right,
++                            size_t     stride)
++{
++    ADL_UNUSED(samples_requested);
++    ADL_UNUSED(in_size);
++    ADL_UNUSED(_in);
++    ADL_UNUSED(out_pos);
++    ADL_UNUSED(left);
++    ADL_UNUSED(right);
++    ADL_UNUSED(stride);
++    return -1;
++}
+ #   endif // __WATCOM__
+ 
+ #endif // ADLMIDI_HW_OPL
+@@ -1737,18 +1787,34 @@ ADLMIDI_EXPORT int adl_generate(struct ADL_MIDIPlayer *device, int sampleCount,
+     return adl_generateFormat(device, sampleCount, (ADL_UInt8 *)out, (ADL_UInt8 *)(out + 1), &adl_DefaultAudioFormat);
+ }
+ 
+-ADLMIDI_EXPORT int adl_generateFormat(struct ADL_MIDIPlayer *device, int sampleCount,
+-                                      ADL_UInt8 *out_left, ADL_UInt8 *out_right,
+-                                      const ADLMIDI_AudioFormat *format)
++#ifndef ADLMIDI_HW_OPL
++/*
++    Where the samples of a generation go: the bytes of two buffers, in the
++    format that adl_generateFormat() is given, or doubles through two
++    pointers of their own type, as adl_generateDouble() writes them.
++*/
++struct GenerateTarget
++{
++    ADL_UInt8 *left;
++    ADL_UInt8 *right;
++    const ADLMIDI_AudioFormat *format;
++    double *leftDouble;
++    double *rightDouble;
++    size_t stride;
++};
++
++static int SendGenerated(int samples_requested, ssize_t in_size, int32_t *in, ssize_t out_pos,
++                         const GenerateTarget &target)
++{
++    if(target.leftDouble)
++        return SendStereoDouble(samples_requested, in_size, in, out_pos,
++                                target.leftDouble, target.rightDouble, target.stride);
++    return SendStereoAudio(samples_requested, in_size, in, out_pos,
++                           target.left, target.right, target.format);
++}
++
++static int GenerateInto(struct ADL_MIDIPlayer *device, int sampleCount, const GenerateTarget &target)
+ {
+-#ifdef ADLMIDI_HW_OPL
+-    ADL_UNUSED(device);
+-    ADL_UNUSED(sampleCount);
+-    ADL_UNUSED(out_left);
+-    ADL_UNUSED(out_right);
+-    ADL_UNUSED(format);
+-    return 0;
+-#else
+     sampleCount -= sampleCount % 2; //Avoid even sample requests
+ 
+     if(sampleCount < 0)
+@@ -1805,7 +1871,7 @@ ADLMIDI_EXPORT int adl_generateFormat(struct ADL_MIDIPlayer *device, int sampleC
+             }
+ 
+             /* Process it */
+-            if(SendStereoAudio(sampleCount, in_generatedStereo, out_buf, gotten_len, out_left, out_right, format) == -1)
++            if(SendGenerated(sampleCount, in_generatedStereo, out_buf, gotten_len, target) == -1)
+                 return 0;
+ 
+             left -= (int)in_generatedPhys;
+@@ -1816,6 +1882,43 @@ ADLMIDI_EXPORT int adl_generateFormat(struct ADL_MIDIPlayer *device, int sampleC
+     }
+ 
+     return static_cast<int>(gotten_len);
++}
++#endif
++
++ADLMIDI_EXPORT int adl_generateFormat(struct ADL_MIDIPlayer *device, int sampleCount,
++                                      ADL_UInt8 *out_left, ADL_UInt8 *out_right,
++                                      const ADLMIDI_AudioFormat *format)
++{
++#ifdef ADLMIDI_HW_OPL
++    ADL_UNUSED(device);
++    ADL_UNUSED(sampleCount);
++    ADL_UNUSED(out_left);
++    ADL_UNUSED(out_right);
++    ADL_UNUSED(format);
++    return 0;
++#else
++    GenerateTarget target = {out_left, out_right, format, NULL, NULL, 0};
++    return GenerateInto(device, sampleCount, target);
++#endif
++}
++
++ADLMIDI_EXPORT int adl_generateDouble(struct ADL_MIDIPlayer *device, int sampleCount,
++                                      double *out_left, double *out_right, unsigned stride)
++{
++#ifdef ADLMIDI_HW_OPL
++    ADL_UNUSED(device);
++    ADL_UNUSED(sampleCount);
++    ADL_UNUSED(out_left);
++    ADL_UNUSED(out_right);
++    ADL_UNUSED(stride);
++    return 0;
++#else
++    // Without both buffers there is nowhere to write, and the target would
++    // otherwise be taken for the one in bytes.
++    if(!out_left || !out_right)
++        return 0;
++    GenerateTarget target = {NULL, NULL, NULL, out_left, out_right, stride};
++    return GenerateInto(device, sampleCount, target);
+ #endif
+ }
+ 

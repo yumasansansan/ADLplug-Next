@@ -28,7 +28,15 @@
 # instrumented build is told so with the internal ADLplug_PGO_STAGE.
 
 option(ADLplug_PGO "Optimise Release builds with profiles of their own renders (profile-guided optimisation)" ON)
-set(ADLplug_PGO_STAGE "" CACHE INTERNAL "The stage of profile-guided optimisation that this build is")
+# Set only where it is not set yet. The instrumented build is told its stage on
+# the command line of its first configure, and a configure that its build runs
+# by itself, because a list file or a patch changed, is not told it again; an
+# INTERNAL entry set anyway replaces what is there, which turned the
+# instrumented build into a plain one at the first such configure, and the
+# renders then wrote no profile.
+if(NOT DEFINED CACHE{ADLplug_PGO_STAGE})
+  set(ADLplug_PGO_STAGE "" CACHE INTERNAL "The stage of profile-guided optimisation that this build is")
+endif()
 
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
   return()

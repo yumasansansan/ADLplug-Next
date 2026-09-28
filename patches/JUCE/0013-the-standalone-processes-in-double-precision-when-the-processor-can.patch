@@ -1,0 +1,26 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+The standalone processes in double precision when the processor can
+
+StandalonePluginHolder plays its processor through an AudioProcessorPlayer made with the player's default, single precision, and nothing in the standalone wrapper asks it for anything else. So a processor that says supportsDoublePrecisionProcessing() -- and is given 64-bit buffers by a VST3 host that asks for them -- is given 32-bit buffers when it runs as a standalone, and what it makes is rounded to single precision inside the player before the device is handed it.
+
+startPlaying() now asks the player for double precision when the processor supports it, before it hands the processor over, so the player prepares the processor in that precision from the start rather than preparing it twice. The player then converts to the device's buffers once, at the end, as it does for any processor it plays in double precision.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h b/modules/juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h
+--- a/modules/juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h
++++ b/modules/juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h
+@@ -263,6 +263,10 @@ public:
+     //==============================================================================
+     void startPlaying()
+     {
++        // In double precision when the processor can take it, as a host that asks for
++        // 64-bit samples would have it: asked before the processor is handed over, so
++        // that the player prepares it in that precision from the start.
++        player.setDoublePrecisionProcessing (processor->supportsDoublePrecisionProcessing());
+         player.setProcessor (processor.get());
+ 
+        #if JucePlugin_Enable_IAA && JUCE_IOS

@@ -92,23 +92,18 @@ bool Player::play_sysex(const std::uint8_t *msg, unsigned len)
     return opn2_rt_systemExclusive(player_.get(), msg, len) > 0;
 }
 
-void Player::generate(float *left, float *right, unsigned nframes, unsigned stride)
+void Player::generate(double *left, double *right, unsigned nframes, unsigned stride)
 {
-    // The library takes every sample format as a pointer to bytes and, for
-    // this one, casts it back to float * to store each sample. So the buffers
-    // go in as the floats they are, seen as bytes, which is allowed; a buffer
-    // of bytes to copy out of afterwards would instead have the library store
-    // floats in storage of another type, and without their alignment.
-    const OPNMIDI_AudioFormat format {
-        .type = OPNMIDI_SampleType_F32,
-        .containerSize = sizeof(float),
-        .sampleOffset = static_cast<unsigned>(stride * sizeof(float))};
-    // The library takes the bytes of the buffers, and the format of a sample
-    // beside them, which is how it writes floats into them.
-    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
-    opn2_generateFormat(player_.get(), static_cast<int>(2 * nframes),
-                        reinterpret_cast<OPN2_UInt8 *>(left), reinterpret_cast<OPN2_UInt8 *>(right), &format);
-    // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
+    // **Binary64, and not the 32-bit float it was.** The library mixes the
+    // chips into 32-bit integers and makes each one a double with a single
+    // multiply, so from here on the sound is never held in single precision.
+    //
+    // Through pointers to the doubles they are: opn2_generateFormat takes every
+    // sample format as the bytes of the buffers, so the buffers would have to be
+    // handed over as another type than they are, and opn2_generateDouble, which
+    // patches/libOPNMIDI/0018 adds, writes the same samples through pointers of
+    // their own type.
+    opn2_generateDouble(player_.get(), static_cast<int>(2 * nframes), left, right, stride);
 }
 
 std::vector<std::string> Player::enumerate_emulators()

@@ -37,6 +37,7 @@
 #include <memory>
 #include <span>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -194,10 +195,11 @@ void AdlplugAudioProcessor::prepareToPlay(double given_sample_rate, int block_si
 
     ready_.store(false);
 
-    // The channel to play the other half into, for a host that gives the plugin
-    // one channel where it asked for two. As long as the block the host says it
-    // will ask for, which is what it asks for.
-    spare_channel_.assign(static_cast<std::size_t>(std::max(0, block_size)), 0.0f);
+    // The two channels in binary64, for a host whose buffer cannot take them as
+    // they are made (processBlock). As long as the block the host says it will
+    // ask for, which is what it asks for.
+    for (std::vector<double> &channel : rendered_)
+        channel.assign(static_cast<std::size_t>(std::max(0, block_size)), 0.0);
 
     // Stop the worker before replacing the queues it reads and writes.
     if (worker_) {
@@ -329,18 +331,19 @@ struct AdlplugAudioProcessor::Message_Handler_Context
     bool under_lock = false;
 };
 
-void AdlplugAudioProcessor::process(float *outputs[], unsigned nframes, Midi_Input_Source &midi)
+void AdlplugAudioProcessor::process(double *outputs[], unsigned nframes, unsigned first_frame,
+                                    unsigned block_frames, Midi_Input_Source &midi)
 {
-    float *left = outputs[0];
-    float *right = outputs[1];
+    double *left = outputs[0];
+    double *right = outputs[1];
 
     std::unique_lock<std::mutex> lock(player_lock_, std::try_to_lock);
     process_messages(lock.owns_lock());
 
     if (!lock.owns_lock()) {
         // can't use the player while non-rt modifies it
-        std::fill_n(left, nframes, 0.0f);
-        std::fill_n(right, nframes, 0.0f);
+        std::fill_n(left, nframes, 0.0);
+        std::fill_n(right, nframes, 0.0);
         return;
     }
 
@@ -354,13 +357,16 @@ void AdlplugAudioProcessor::process(float *outputs[], unsigned nframes, Midi_Inp
     const int64 time_before_generate = Time::getHighResolutionTicks();
     for (unsigned iframe = 0; iframe != nframes;) {
         const unsigned segment_nframes = std::min(nframes - iframe, midi_interval_max);
-        const bool final_segment = iframe + segment_nframes == nframes;
+        // Where this segment is in the host's block, which is what the times
+        // of its MIDI events count from.
+        const auto position = static_cast<int>(first_frame + iframe);
+        const bool final_segment = first_frame + iframe + segment_nframes == block_frames;
 
         // handle events from MIDI
         Midi_Input_Message msg;
         while ((msg = midi.peek_next_event()) &&
-               (final_segment || msg.time < static_cast<int>(iframe) ||
-                msg.time - static_cast<int>(iframe) < static_cast<int>(midi_interval_max / 2))) {
+               (final_segment || msg.time < position ||
+                msg.time - position < static_cast<int>(midi_interval_max / 2))) {
             handle_midi(msg.data, msg.size);
             midi.get_next_event();
         }
@@ -368,32 +374,37 @@ void AdlplugAudioProcessor::process(float *outputs[], unsigned nframes, Midi_Inp
         // The chip's own samples, resampled here to the host's rate; without a
         // filter this is the player writing into the block as it always did.
         resampler_.pull(&left[iframe], &right[iframe], segment_nframes,
-                        [&pl](float *l, float *r, unsigned n) { pl.generate(l, r, n, 1); });
+                        [&pl](double *l, double *r, unsigned n) { pl.generate(l, r, n, 1); });
         iframe += segment_nframes;
     }
     const int64 time_after_generate = Time::getHighResolutionTicks();
     release_on_audio_thread(lock);
 
-    Dc_Filter &dclf = dc_filter_[0];
-    Dc_Filter &dcrf = dc_filter_[1];
-    Vu_Monitor &lvu = vu_monitor_[0];
-    Vu_Monitor &rvu = vu_monitor_[1];
+    // **The filters and the meters in locals for the length of the loop.** Kept
+    // in the members, they would be stored and loaded again around every sample
+    // written, since a sample is a double too and could be one of them as far as
+    // the compiler knows; in locals they stay in registers, and go back after.
+    Dc_Filter dclf = dc_filter_[0];
+    Dc_Filter dcrf = dc_filter_[1];
+    Vu_Monitor lvu = vu_monitor_[0];
+    Vu_Monitor rvu = vu_monitor_[1];
     double lv_current[2] {};
     const double master_volume = static_cast<double>(pb.p_mastervol->get());
     const double output_gain = Player::output_gain() * master_volume;
 
-    // Only the buffers are single precision.
     for (unsigned i = 0; i < nframes; ++i) {
-        double left_sample = static_cast<double>(left[i]) * output_gain;
-        double right_sample = static_cast<double>(right[i]) * output_gain;
         // filter out the DC component
-        left_sample = dclf.process(left_sample);
-        right_sample = dcrf.process(right_sample);
-        left[i] = static_cast<float>(left_sample);
-        right[i] = static_cast<float>(right_sample);
+        const double left_sample = dclf.process(left[i] * output_gain);
+        const double right_sample = dcrf.process(right[i] * output_gain);
+        left[i] = left_sample;
+        right[i] = right_sample;
         lv_current[0] = lvu.process(left_sample);
         lv_current[1] = rvu.process(right_sample);
     }
+    dc_filter_[0] = dclf;
+    dc_filter_[1] = dcrf;
+    vu_monitor_[0] = lvu;
+    vu_monitor_[1] = rvu;
 
     lv_current_[0].store(lv_current[0], std::memory_order_relaxed);
     lv_current_[1].store(lv_current[1], std::memory_order_relaxed);
@@ -883,8 +894,8 @@ void AdlplugAudioProcessor::send_program_change_from_selection(unsigned part)
     }
 }
 
-void AdlplugAudioProcessor::processBlock(AudioBuffer<float> &buffer,
-                                         MidiBuffer &midi_messages)
+template <class Sample>
+void AdlplugAudioProcessor::process_block(AudioBuffer<Sample> &buffer, MidiBuffer &midi_messages)
 {
     // The plugin is a stereo one and says so (isBusesLayoutSupported), but the
     // buffer is the host's. With no channel at all there is nowhere to play.
@@ -897,30 +908,47 @@ void AdlplugAudioProcessor::processBlock(AudioBuffer<float> &buffer,
     Midi_Input_Source::Buffer_Cursor midi_cursor {.current = midi_messages.begin(), .end = midi_messages.end()};
     Midi_Input_Source midi_source(midi_cursor);
 
-    if (channels >= 2) {
-        float *outputs[2] {buffer.getWritePointer(0), buffer.getWritePointer(1)};
-        process(outputs, nframes, midi_source);
-    }
-    else {
-        // One channel: the plugin plays its two, the second into a channel of its
-        // own, and mixes them into the one it was given -- half of each, so that
-        // what was in the middle keeps its loudness. The channel of its own is as
-        // long as the block the host said it would ask for; a host that asks for
-        // more than that gets it in pieces rather than nothing, since growing a
-        // buffer here is not a thing to do while the audio waits.
-        const unsigned piece = static_cast<unsigned>(spare_channel_.size());
-        if (piece == 0) {
-            buffer.clear();
+    if constexpr (std::is_same_v<Sample, double>) {
+        if (channels >= 2) {
+            // The host's own channels take the samples as they are made.
+            double *outputs[2] {buffer.getWritePointer(0), buffer.getWritePointer(1)};
+            process(outputs, nframes, 0, nframes, midi_source);
+            for (int channel = 2; channel < channels; ++channel)
+                buffer.clear(channel, 0, static_cast<int>(nframes));
             return;
         }
+    }
 
-        float *const mono = buffer.getWritePointer(0);
-        for (unsigned at = 0; at < nframes; at += piece) {
-            const unsigned now = std::min(piece, nframes - at);
-            float *outputs[2] {mono + at, spare_channel_.data()};
-            process(outputs, now, midi_source);
+    // Otherwise the two channels are made in binary64 here and handed over:
+    // rounded once to 32-bit samples, or, for a host that gives one channel,
+    // mixed into it -- half of each, so that what was in the middle keeps its
+    // loudness. These channels are as long as the block the host said it would
+    // ask for; a host that asks for more than that gets it in pieces rather than
+    // nothing, since growing a buffer here is not a thing to do while the audio
+    // waits.
+    const auto piece = static_cast<unsigned>(rendered_[0].size());
+    if (piece == 0) {
+        buffer.clear();
+        return;
+    }
+
+    Sample *const first = buffer.getWritePointer(0);
+    Sample *const second = channels >= 2 ? buffer.getWritePointer(1) : nullptr;
+    const double *const left = rendered_[0].data();
+    const double *const right = rendered_[1].data();
+    for (unsigned at = 0; at < nframes; at += piece) {
+        const unsigned now = std::min(piece, nframes - at);
+        double *outputs[2] {rendered_[0].data(), rendered_[1].data()};
+        process(outputs, now, at, nframes, midi_source);
+        if (second != nullptr) {
             for (unsigned i = 0; i < now; ++i)
-                mono[at + i] = 0.5f * (mono[at + i] + spare_channel_[i]);
+                first[at + i] = static_cast<Sample>(left[i]);
+            for (unsigned i = 0; i < now; ++i)
+                second[at + i] = static_cast<Sample>(right[i]);
+        }
+        else {
+            for (unsigned i = 0; i < now; ++i)
+                first[at + i] = static_cast<Sample>(0.5 * (left[i] + right[i]));
         }
     }
 
@@ -930,7 +958,9 @@ void AdlplugAudioProcessor::processBlock(AudioBuffer<float> &buffer,
         buffer.clear(channel, 0, static_cast<int>(nframes));
 }
 
-void AdlplugAudioProcessor::processBlockBypassed(AudioBuffer<float> &buffer, MidiBuffer &midi_messages)
+template <class Sample>
+void AdlplugAudioProcessor::process_block_bypassed(AudioBuffer<Sample> &buffer,
+                                                   MidiBuffer &midi_messages)
 {
     {
         // Released by hand, and only if the try got it: unlocking a lock that was
@@ -956,6 +986,28 @@ void AdlplugAudioProcessor::processBlockBypassed(AudioBuffer<float> &buffer, Mid
     }
 
     AudioProcessor::processBlockBypassed(buffer, midi_messages);
+}
+
+void AdlplugAudioProcessor::processBlock(AudioBuffer<float> &buffer, MidiBuffer &midi_messages)
+{
+    process_block(buffer, midi_messages);
+}
+
+void AdlplugAudioProcessor::processBlock(AudioBuffer<double> &buffer, MidiBuffer &midi_messages)
+{
+    process_block(buffer, midi_messages);
+}
+
+void AdlplugAudioProcessor::processBlockBypassed(AudioBuffer<float> &buffer,
+                                                 MidiBuffer &midi_messages)
+{
+    process_block_bypassed(buffer, midi_messages);
+}
+
+void AdlplugAudioProcessor::processBlockBypassed(AudioBuffer<double> &buffer,
+                                                 MidiBuffer &midi_messages)
+{
+    process_block_bypassed(buffer, midi_messages);
 }
 
 // hasEditor() and createEditor() are in plugin_editor.cc, where the editor is:

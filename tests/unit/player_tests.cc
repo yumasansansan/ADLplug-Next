@@ -59,13 +59,13 @@ void set_up(Player &pl, const Instrument &ins)
 // told otherwise.
 double energy(Player &pl, unsigned frames = 4410)
 {
-    std::vector<float> left(frames), right(frames);
+    std::vector<double> left(frames), right(frames);
     pl.generate(left.data(), right.data(), frames, 1);
 
     double sum = 0;
     for (unsigned i = 0; i < frames; ++i) {
-        const auto l = static_cast<double>(left[i]);
-        const auto r = static_cast<double>(right[i]);
+        const double l = left[i];
+        const double r = right[i];
         sum += l * l + r * r;
     }
     return sum;

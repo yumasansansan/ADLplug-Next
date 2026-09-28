@@ -155,29 +155,29 @@ ADLPLUG_TEST(chip_resampler)
     // asks the chip for about as many as the ratio says: the rest of a block the
     // filter produced waits for the next one rather than being thrown away.
     unsigned asked_of_chip = 0;
-    const auto steady = [&asked_of_chip](float *left, float *right, unsigned frames) {
+    const auto steady = [&asked_of_chip](double *left, double *right, unsigned frames) {
         asked_of_chip += frames;
         for (unsigned i = 0; i < frames; ++i) {
-            left[i] = 0.5f;
-            right[i] = -0.25f;
+            left[i] = 0.5;
+            right[i] = -0.25;
         }
     };
 
-    std::vector<float> left(1024, 0.0f);
-    std::vector<float> right(1024, 0.0f);
+    std::vector<double> left(1024, 0.0);
+    std::vector<double> right(1024, 0.0);
     unsigned written = 0;
     for (const unsigned block : {256u, 64u, 1u, 200u, 256u, 13u}) {
         for (unsigned i = 0; i < block; ++i) {
-            left[written + i] = 123.0f;  // so that a frame not written is seen
-            right[written + i] = 123.0f;
+            left[written + i] = 123.0;  // so that a frame not written is seen
+            right[written + i] = 123.0;
         }
         resampler.pull(left.data() + written, right.data() + written, block, steady);
         written += block;
     }
     CHECK(written == 790);
     for (unsigned i = 0; i < written; ++i) {
-        CHECK(left[i] != 123.0f);
-        CHECK(right[i] != 123.0f);
+        CHECK(left[i] != 123.0);
+        CHECK(right[i] != 123.0);
     }
     // 790 frames of the host's are 890 of the chip's, give or take the frames the
     // filter holds either side.
@@ -189,8 +189,8 @@ ADLPLUG_TEST(chip_resampler)
     // filter's gain at direct current is one. The start of the stream is the
     // filter filling up, so the end of it is where to look.
     for (unsigned i = written - 200; i < written; ++i) {
-        CHECK(std::abs(static_cast<double>(left[i]) - 0.5) < 1e-6);
-        CHECK(std::abs(static_cast<double>(right[i]) + 0.25) < 1e-6);
+        CHECK(std::abs(left[i] - 0.5) < 1e-6);
+        CHECK(std::abs(right[i] + 0.25) < 1e-6);
     }
 
     // Equal rates are not resampled: there is nothing to say about it either.
@@ -207,17 +207,17 @@ ADLPLUG_TEST(chip_resampler)
     CHECK(!why.empty());
 
     unsigned straight_through = 0;
-    const auto count = [&straight_through](float *l, float *r, unsigned frames) {
+    const auto count = [&straight_through](double *l, double *r, unsigned frames) {
         straight_through += frames;
         for (unsigned i = 0; i < frames; ++i) {
-            l[i] = 1.0f;
-            r[i] = 1.0f;
+            l[i] = 1.0;
+            r[i] = 1.0;
         }
     };
     resampler.pull(left.data(), right.data(), 128, count);
     CHECK(straight_through == 128);
-    CHECK(left[0] == 1.0f);
-    CHECK(left[127] == 1.0f);
+    CHECK(left[0] == 1.0);
+    CHECK(left[127] == 1.0);
 }
 
 ADLPLUG_TEST(resampling_settings)

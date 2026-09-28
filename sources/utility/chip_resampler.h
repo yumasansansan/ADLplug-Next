@@ -68,7 +68,6 @@ public:
 
         const auto room = cascade_.max_output(max_in_);
         for (std::size_t channel = 0; channel < 2; ++channel) {
-            chip_float_[channel].assign(max_in_, 0.0f);
             chip_[channel].assign(max_in_, 0.0);
             host_[channel].assign(room, 0.0);
             held_[channel].assign(room, 0.0);
@@ -124,9 +123,10 @@ public:
 
     // Writes `frames` frames at the host's rate, asking `generate(left, right, n)`
     // for the chip's as it needs them. Without a filter it is the generator's
-    // output as it stands.
+    // output as it stands. Binary64 all the way, from the chip's samples to the
+    // host's, so nothing is copied here but whole doubles.
     template <class Generate>
-    void pull(float *left, float *right, unsigned frames, Generate &&generate)
+    void pull(double *left, double *right, unsigned frames, Generate &&generate)
     {
         if (!active_) {
             generate(left, right, frames);
@@ -136,10 +136,7 @@ public:
         unsigned done = take_held(left, right, frames);
         while (done < frames) {
             const unsigned want = std::min(max_in_, chip_frames_for(frames - done));
-            generate(chip_float_[0].data(), chip_float_[1].data(), want);
-            for (std::size_t channel = 0; channel < 2; ++channel)
-                for (unsigned i = 0; i < want; ++i)
-                    chip_[channel][i] = static_cast<double>(chip_float_[channel][i]);
+            generate(chip_[0].data(), chip_[1].data(), want);
 
             std::uint32_t produced = 0;
             const auto room = static_cast<std::uint32_t>(host_[0].size());
@@ -147,10 +144,8 @@ public:
                 produced = 0;  // only when asked to write past `room`, which is what max_output said it needs
 
             const unsigned use = std::min(static_cast<unsigned>(produced), frames - done);
-            for (unsigned i = 0; i < use; ++i) {
-                left[done + i] = static_cast<float>(host_[0][i]);
-                right[done + i] = static_cast<float>(host_[1][i]);
-            }
+            std::copy_n(host_[0].data(), use, left + done);
+            std::copy_n(host_[1].data(), use, right + done);
             done += use;
 
             // What the filter produced past this block waits for the next one.
@@ -159,8 +154,7 @@ public:
             held_count_ = static_cast<unsigned>(produced) - use;
             held_at_ = 0;
             for (std::size_t channel = 0; channel < 2; ++channel)
-                for (unsigned i = 0; i < held_count_; ++i)
-                    held_[channel][i] = host_[channel][use + i];
+                std::copy_n(host_[channel].data() + use, held_count_, held_[channel].data());
         }
     }
 
@@ -177,13 +171,11 @@ private:
     }
 
     // The frames held from the last call, as many of them as fit.
-    unsigned take_held(float *left, float *right, unsigned frames) noexcept
+    unsigned take_held(double *left, double *right, unsigned frames) noexcept
     {
         const unsigned use = std::min(held_count_, frames);
-        for (unsigned i = 0; i < use; ++i) {
-            left[i] = static_cast<float>(held_[0][held_at_ + i]);
-            right[i] = static_cast<float>(held_[1][held_at_ + i]);
-        }
+        std::copy_n(held_[0].data() + held_at_, use, left);
+        std::copy_n(held_[1].data() + held_at_, use, right);
         held_at_ += use;
         held_count_ -= use;
         return use;
@@ -195,7 +187,6 @@ private:
     unsigned host_rate_ = 0;
     unsigned max_in_ = 0;
 
-    std::vector<float> chip_float_[2];
     std::vector<double> chip_[2];
     std::vector<double> host_[2];
     std::vector<double> held_[2];

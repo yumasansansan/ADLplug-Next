@@ -93,6 +93,13 @@ target_compile_definitions(OPNMIDI_static PUBLIC "OPNMIDI_UNSTABLE_API=")
 unset(CMAKE_PROJECT_libADLMIDI_INCLUDE)
 unset(CMAKE_PROJECT_libOPNMIDI_INCLUDE)
 
+# Type-based alias analysis on Windows as on the other systems, where the
+# libraries have always been compiled with it (see adlplug_own_sources()).
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+  target_compile_options(ADLMIDI_static PRIVATE -fstrict-aliasing)
+  target_compile_options(OPNMIDI_static PRIVATE -fstrict-aliasing)
+endif()
+
 # The -fvisibility options that the libraries give their targets go; the
 # visibility settings of the build apply to them as to every other target.
 foreach(ADLplug_TARGET IN ITEMS ADLMIDI_static OPNMIDI_static)
