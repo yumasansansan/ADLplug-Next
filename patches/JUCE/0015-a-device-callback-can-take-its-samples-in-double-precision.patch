@@ -1,0 +1,672 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+A device callback can take its samples in double precision
+
+AudioIODeviceCallback is given floats. AudioProcessorPlayer plays a processor that processes in double precision through a copy -- the device's floats copied into a buffer of doubles, processed, and copied back -- so everything such a processor computes is rounded to a float before the device writes it, even when the device writes 32-bit integers or 64-bit floats, and what the device reads reaches the processor through a float as well.
+
+AudioIODeviceCallback gets wantsDoublePrecision(), false unless it is overridden, and audioDeviceIOCallbackWithContextDouble(), the same callback with doubles, which writes silence unless it is overridden. A device that can convert between its own format and doubles asks the callback before each block, since the answer can change while the device runs -- a player's changes with its processor's precision -- and while it is yes, converts to and from doubles and calls the double method. A device that cannot keeps calling the float method, and a callback that overrides neither method is never called with doubles, so nothing changes for either.
+
+AudioDeviceManager wants doubles when every callback it has wants them, asked under the lock its callbacks are called under, and then adds the callbacks' outputs together in double precision, its level meters reading the doubles. A callback added between the question and the block it answers is called with doubles for that block, and one that does not want them writes silence, the default. CallbackMaxSizeEnforcer passes the question and the double blocks through. AudioProcessorPlayer wants doubles while its processor processes in double precision, and processes each block in the precision the device gives it: straight through when that is the processor's own, and through a copy in the processor's precision when it is not, as it always did for doubles. StandalonePluginHolder passes both on to its player, and mutes the input in either precision.
+
+The double method has a name of its own rather than overloading audioDeviceIOCallbackWithContext(), so that the callbacks that override the float method alone -- in JUCE, and in the code of those who use it -- do not hide it and draw -Woverloaded-virtual.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_audio_devices/audio_io/juce_AudioIODevice.h b/modules/juce_audio_devices/audio_io/juce_AudioIODevice.h
+--- a/modules/juce_audio_devices/audio_io/juce_AudioIODevice.h
++++ b/modules/juce_audio_devices/audio_io/juce_AudioIODevice.h
+@@ -116,6 +116,32 @@ public:
+                                                    int numSamples,
+                                                    const AudioIODeviceCallbackContext& context);
+ 
++    /** Returns true if this callback would rather be given 64-bit samples.
++
++        A device that can supply them asks this before each block, and while it returns true
++        calls audioDeviceIOCallbackWithContextDouble() in place of audioDeviceIOCallbackWithContext(),
++        converting between its own sample format and doubles directly, so that nothing on the way
++        is rounded to single precision. A device that cannot is not affected, and calls
++        audioDeviceIOCallbackWithContext() as before.
++
++        The answer may change while the device is running; it is read from the audio thread.
++        The default returns false.
++    */
++    virtual bool wantsDoublePrecision() const;
++
++    /** Processes a block of incoming and outgoing audio data, in double precision.
++
++        The same as audioDeviceIOCallbackWithContext(), with 64-bit samples. A device calls
++        this in its place while wantsDoublePrecision() returns true, so a callback that
++        overrides this should override that too. The default fills the outputs with silence.
++    */
++    virtual void audioDeviceIOCallbackWithContextDouble (const double* const* inputChannelData,
++                                                         int numInputChannels,
++                                                         double* const* outputChannelData,
++                                                         int numOutputChannels,
++                                                         int numSamples,
++                                                         const AudioIODeviceCallbackContext& context);
++
+     /** Called to indicate that the device is about to start calling back.
+ 
+         This will be called just before the audio callbacks begin, either when this
+diff --git a/modules/juce_audio_devices/audio_io/juce_AudioIODevice.cpp b/modules/juce_audio_devices/audio_io/juce_AudioIODevice.cpp
+--- a/modules/juce_audio_devices/audio_io/juce_AudioIODevice.cpp
++++ b/modules/juce_audio_devices/audio_io/juce_AudioIODevice.cpp
+@@ -42,6 +42,22 @@ void AudioIODeviceCallback::audioDeviceIOCallbackWithContext ([[maybe_unused]] c
+                                                               [[maybe_unused]] int numSamples,
+                                                               [[maybe_unused]] const AudioIODeviceCallbackContext& context) {}
+ 
++bool AudioIODeviceCallback::wantsDoublePrecision() const  { return false; }
++
++void AudioIODeviceCallback::audioDeviceIOCallbackWithContextDouble ([[maybe_unused]] const double* const* inputChannelData,
++                                                                    [[maybe_unused]] int numInputChannels,
++                                                                    double* const* outputChannelData,
++                                                                    int numOutputChannels,
++                                                                    int numSamples,
++                                                                    [[maybe_unused]] const AudioIODeviceCallbackContext& context)
++{
++    // A device calls this only while wantsDoublePrecision() says so, which a callback that
++    // has not overridden this does not say; silence rather than whatever the buffers held.
++    for (int i = 0; i < numOutputChannels; ++i)
++        if (outputChannelData[i] != nullptr)
++            FloatVectorOperations::clear (outputChannelData[i], numSamples);
++}
++
+ //==============================================================================
+ AudioIODevice::AudioIODevice (const String& deviceName, const String& deviceTypeName)
+     : name (deviceName), typeName (deviceTypeName)
+diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.h b/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.h
+--- a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.h
++++ b/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.h
+@@ -447,6 +447,7 @@ public:
+ 
+         Atomic<float> level { 0 };
+         void updateLevel (const float* const*, int numChannels, int numSamples) noexcept;
++        void updateLevel (const double* const*, int numChannels, int numSamples) noexcept;
+     };
+ 
+     /** Returns a reference-counted object that can be used to get the current input level.
+@@ -514,6 +515,7 @@ private:
+     std::unique_ptr<XmlElement> lastExplicitSettings;
+     mutable bool listNeedsScanning = true;
+     AudioBuffer<float> tempBuffer;
++    AudioBuffer<double> tempBufferDouble;
+     MidiDeviceListConnection midiDeviceListConnection = MidiDeviceListConnection::make ([this]
+     {
+         midiDeviceListChanged();
+@@ -545,12 +547,14 @@ private:
+     class CallbackHandler;
+     std::unique_ptr<CallbackHandler> callbackHandler;
+ 
+-    void audioDeviceIOCallbackInt (const float* const* inputChannelData,
++    template <typename Sample>
++    void audioDeviceIOCallbackInt (const Sample* const* inputChannelData,
+                                    int totalNumInputChannels,
+-                                   float* const* outputChannelData,
++                                   Sample* const* outputChannelData,
+                                    int totalNumOutputChannels,
+                                    int numSamples,
+                                    const AudioIODeviceCallbackContext& context);
++    bool wantsDoublePrecisionInt() const;
+     void audioDeviceAboutToStartInt (AudioIODevice*);
+     void audioDeviceStoppedInt();
+     void audioDeviceErrorInt (const String&);
+diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp b/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp
+--- a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp
++++ b/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp
+@@ -73,6 +73,23 @@ bool AudioDeviceManager::AudioDeviceSetup::operator!= (const AudioDeviceManager:
+ }
+ 
+ //==============================================================================
++// The callback's own method for the precision of the samples it is handed.
++static void callWithSamples (AudioIODeviceCallback& callback,
++                             const float* const* ins, int numIns,
++                             float* const* outs, int numOuts,
++                             int numSamples, const AudioIODeviceCallbackContext& context)
++{
++    callback.audioDeviceIOCallbackWithContext (ins, numIns, outs, numOuts, numSamples, context);
++}
++
++static void callWithSamples (AudioIODeviceCallback& callback,
++                             const double* const* ins, int numIns,
++                             double* const* outs, int numOuts,
++                             int numSamples, const AudioIODeviceCallbackContext& context)
++{
++    callback.audioDeviceIOCallbackWithContextDouble (ins, numIns, outs, numOuts, numSamples, context);
++}
++
+ /*  This class is used to ensure that audio callbacks use buffers with a
+     predictable maximum size.
+ 
+@@ -97,19 +114,57 @@ public:
+         maximumSize = device->getCurrentBufferSizeSamples();
+         storedInputChannels .resize ((size_t) device->getActiveInputChannels() .countNumberOfSetBits());
+         storedOutputChannels.resize ((size_t) device->getActiveOutputChannels().countNumberOfSetBits());
++        storedInputChannelsDouble .resize (storedInputChannels .size());
++        storedOutputChannelsDouble.resize (storedOutputChannels.size());
+ 
+         inner.audioDeviceAboutToStart (device);
+     }
+ 
+     void audioDeviceIOCallbackWithContext (const float* const* inputChannelData,
+-                                           [[maybe_unused]] int numInputChannels,
++                                           int numInputChannels,
+                                            float* const* outputChannelData,
+-                                           [[maybe_unused]] int numOutputChannels,
++                                           int numOutputChannels,
+                                            int numSamples,
+                                            const AudioIODeviceCallbackContext& context) override
+     {
+-        jassert ((int) storedInputChannels.size()  == numInputChannels);
+-        jassert ((int) storedOutputChannels.size() == numOutputChannels);
++        inBlocks (inputChannelData, numInputChannels, outputChannelData, numOutputChannels, numSamples, context,
++                  storedInputChannels, storedOutputChannels);
++    }
++
++    bool wantsDoublePrecision() const override
++    {
++        return inner.wantsDoublePrecision();
++    }
++
++    void audioDeviceIOCallbackWithContextDouble (const double* const* inputChannelData,
++                                                 int numInputChannels,
++                                                 double* const* outputChannelData,
++                                                 int numOutputChannels,
++                                                 int numSamples,
++                                                 const AudioIODeviceCallbackContext& context) override
++    {
++        inBlocks (inputChannelData, numInputChannels, outputChannelData, numOutputChannels, numSamples, context,
++                  storedInputChannelsDouble, storedOutputChannelsDouble);
++    }
++
++    void audioDeviceStopped() override
++    {
++        inner.audioDeviceStopped();
++    }
++
++private:
++    template <typename Sample>
++    void inBlocks (const Sample* const* inputChannelData,
++                   [[maybe_unused]] int numInputChannels,
++                   Sample* const* outputChannelData,
++                   [[maybe_unused]] int numOutputChannels,
++                   int numSamples,
++                   const AudioIODeviceCallbackContext& context,
++                   std::vector<const Sample*>& storedIns,
++                   std::vector<Sample*>& storedOuts)
++    {
++        jassert ((int) storedIns.size()  == numInputChannels);
++        jassert ((int) storedOuts.size() == numOutputChannels);
+ 
+         int position = 0;
+ 
+@@ -118,28 +173,25 @@ public:
+             const auto blockLength = jmin (maximumSize, numSamples - position);
+ 
+             const auto addOffset = [position] (auto ptr) { return ptr + position; };
+-            std::transform (inputChannelData,  inputChannelData  + numInputChannels,  storedInputChannels .begin(), addOffset);
+-            std::transform (outputChannelData, outputChannelData + numOutputChannels, storedOutputChannels.begin(), addOffset);
++            std::transform (inputChannelData,  inputChannelData  + numInputChannels,  storedIns .begin(), addOffset);
++            std::transform (outputChannelData, outputChannelData + numOutputChannels, storedOuts.begin(), addOffset);
+ 
+-            inner.audioDeviceIOCallbackWithContext (storedInputChannels.data(),
+-                                                    (int) storedInputChannels.size(),
+-                                                    storedOutputChannels.data(),
+-                                                    (int) storedOutputChannels.size(),
+-                                                    blockLength,
+-                                                    context);
++            callWithSamples (inner,
++                             storedIns.data(),
++                             (int) storedIns.size(),
++                             storedOuts.data(),
++                             (int) storedOuts.size(),
++                             blockLength,
++                             context);
+ 
+             position += blockLength;
+         }
+     }
+ 
+-    void audioDeviceStopped() override
+-    {
+-        inner.audioDeviceStopped();
+-    }
+-
+-private:
+     std::vector<const float*> storedInputChannels;
+     std::vector<float*> storedOutputChannels;
++    std::vector<const double*> storedInputChannelsDouble;
++    std::vector<double*> storedOutputChannelsDouble;
+     AudioIODeviceCallback& inner;
+     int maximumSize = 0;
+ };
+@@ -167,6 +219,21 @@ private:
+         owner.audioDeviceIOCallbackInt (ins, numIns, outs, numOuts, numSamples, context);
+     }
+ 
++    bool wantsDoublePrecision() const override
++    {
++        return owner.wantsDoublePrecisionInt();
++    }
++
++    void audioDeviceIOCallbackWithContextDouble (const double* const* ins,
++                                                 int numIns,
++                                                 double* const* outs,
++                                                 int numOuts,
++                                                 int numSamples,
++                                                 const AudioIODeviceCallbackContext& context) override
++    {
++        owner.audioDeviceIOCallbackInt (ins, numIns, outs, numOuts, numSamples, context);
++    }
++
+     void audioDeviceAboutToStart (AudioIODevice* device) override
+     {
+         owner.audioDeviceAboutToStartInt (device);
+@@ -1068,9 +1135,10 @@ void AudioDeviceManager::removeAudioCallback (AudioIODeviceCallback* callbackToR
+     }
+ }
+ 
+-void AudioDeviceManager::audioDeviceIOCallbackInt (const float* const* inputChannelData,
++template <typename Sample>
++void AudioDeviceManager::audioDeviceIOCallbackInt (const Sample* const* inputChannelData,
+                                                    int numInputChannels,
+-                                                   float* const* outputChannelData,
++                                                   Sample* const* outputChannelData,
+                                                    int numOutputChannels,
+                                                    int numSamples,
+                                                    const AudioIODeviceCallbackContext& context)
+@@ -1083,25 +1151,35 @@ void AudioDeviceManager::audioDeviceIOCallbackInt (const float* const* inputChan
+     {
+         AudioProcessLoadMeasurer::ScopedTimer timer (loadMeasurer, numSamples);
+ 
+-        tempBuffer.setSize (jmax (1, numOutputChannels), jmax (1, numSamples), false, false, true);
++        auto& temp = [this]() -> AudioBuffer<Sample>&
++        {
++            if constexpr (std::is_same_v<Sample, double>)
++                return tempBufferDouble;
++            else
++                return tempBuffer;
++        }();
++
++        temp.setSize (jmax (1, numOutputChannels), jmax (1, numSamples), false, false, true);
+ 
+-        callbacks.getUnchecked (0)->audioDeviceIOCallbackWithContext (inputChannelData,
+-                                                                      numInputChannels,
+-                                                                      outputChannelData,
+-                                                                      numOutputChannels,
+-                                                                      numSamples,
+-                                                                      context);
++        callWithSamples (*callbacks.getUnchecked (0),
++                         inputChannelData,
++                         numInputChannels,
++                         outputChannelData,
++                         numOutputChannels,
++                         numSamples,
++                         context);
+ 
+-        auto* const* tempChans = tempBuffer.getArrayOfWritePointers();
++        auto* const* tempChans = temp.getArrayOfWritePointers();
+ 
+         for (int i = callbacks.size(); --i > 0;)
+         {
+-            callbacks.getUnchecked (i)->audioDeviceIOCallbackWithContext (inputChannelData,
+-                                                                          numInputChannels,
+-                                                                          tempChans,
+-                                                                          numOutputChannels,
+-                                                                          numSamples,
+-                                                                          context);
++            callWithSamples (*callbacks.getUnchecked (i),
++                             inputChannelData,
++                             numInputChannels,
++                             tempChans,
++                             numOutputChannels,
++                             numSamples,
++                             context);
+ 
+             for (int chan = 0; chan < numOutputChannels; ++chan)
+             {
+@@ -1115,7 +1193,7 @@ void AudioDeviceManager::audioDeviceIOCallbackInt (const float* const* inputChan
+     else
+     {
+         for (int i = 0; i < numOutputChannels; ++i)
+-            zeromem (outputChannelData[i], (size_t) numSamples * sizeof (float));
++            zeromem (outputChannelData[i], (size_t) numSamples * sizeof (Sample));
+     }
+ 
+     if (testSound != nullptr)
+@@ -1137,6 +1215,21 @@ void AudioDeviceManager::audioDeviceIOCallbackInt (const float* const* inputChan
+     outputLevelGetter->updateLevel (outputChannelData, numOutputChannels, numSamples);
+ }
+ 
++// Doubles through, when every callback wants them: a device that can supply them converts its
++// own format to doubles and back, and the callbacks' outputs are added in double precision. A
++// callback added while a block is on its way is given it all the same, which a callback that
++// does not want doubles answers with silence, for that block.
++bool AudioDeviceManager::wantsDoublePrecisionInt() const
++{
++    const ScopedLock sl (audioCallbackLock);
++
++    return ! callbacks.isEmpty()
++        && std::all_of (callbacks.begin(), callbacks.end(), [] (const AudioIODeviceCallback* callback)
++                                                              {
++                                                                  return callback->wantsDoublePrecision();
++                                                              });
++}
++
+ void AudioDeviceManager::audioDeviceAboutToStartInt (AudioIODevice* const device)
+ {
+     loadMeasurer.reset (device->getCurrentSampleRate(),
+@@ -1294,13 +1387,9 @@ void AudioDeviceManager::setDefaultMidiOutputDevice (const String& identifier)
+ //==============================================================================
+ AudioDeviceManager::LevelMeter::LevelMeter() noexcept : level() {}
+ 
+-void AudioDeviceManager::LevelMeter::updateLevel (const float* const* channelData, int numChannels, int numSamples) noexcept
++template <typename Sample>
++static float meteredLevel (float localLevel, const Sample* const* channelData, int numChannels, int numSamples) noexcept
+ {
+-    if (getReferenceCount() <= 1)
+-        return;
+-
+-    auto localLevel = level.get();
+-
+     if (numChannels > 0)
+     {
+         for (int j = 0; j < numSamples; ++j)
+@@ -1308,7 +1397,7 @@ void AudioDeviceManager::LevelMeter::updateLevel (const float* const* channelDat
+             float s = 0;
+ 
+             for (int i = 0; i < numChannels; ++i)
+-                s += std::abs (channelData[i][j]);
++                s += (float) std::abs (channelData[i][j]);
+ 
+             s /= (float) numChannels;
+ 
+@@ -1327,7 +1416,23 @@ void AudioDeviceManager::LevelMeter::updateLevel (const float* const* channelDat
+         localLevel = 0;
+     }
+ 
+-    level = localLevel;
++    return localLevel;
++}
++
++void AudioDeviceManager::LevelMeter::updateLevel (const float* const* channelData, int numChannels, int numSamples) noexcept
++{
++    if (getReferenceCount() <= 1)
++        return;
++
++    level = meteredLevel (level.get(), channelData, numChannels, numSamples);
++}
++
++void AudioDeviceManager::LevelMeter::updateLevel (const double* const* channelData, int numChannels, int numSamples) noexcept
++{
++    if (getReferenceCount() <= 1)
++        return;
++
++    level = meteredLevel (level.get(), channelData, numChannels, numSamples);
+ }
+ 
+ double AudioDeviceManager::LevelMeter::getCurrentLevel() const noexcept
+diff --git a/modules/juce_audio_utils/players/juce_AudioProcessorPlayer.h b/modules/juce_audio_utils/players/juce_AudioProcessorPlayer.h
+--- a/modules/juce_audio_utils/players/juce_AudioProcessorPlayer.h
++++ b/modules/juce_audio_utils/players/juce_AudioProcessorPlayer.h
+@@ -103,6 +103,10 @@ public:
+     /** @internal */
+     void audioDeviceIOCallbackWithContext (const float* const*, int, float* const*, int, int, const AudioIODeviceCallbackContext&) override;
+     /** @internal */
++    bool wantsDoublePrecision() const override;
++    /** @internal */
++    void audioDeviceIOCallbackWithContextDouble (const double* const*, int, double* const*, int, int, const AudioIODeviceCallbackContext&) override;
++    /** @internal */
+     void audioDeviceAboutToStart (AudioIODevice*) override;
+     /** @internal */
+     void audioDeviceStopped() override;
+@@ -130,6 +134,10 @@ private:
+     //==============================================================================
+     NumChannels findMostSuitableLayout (const AudioProcessor&) const;
+     void resizeChannels();
++    void updateDoublePrecisionWanted();
++
++    template <typename Sample>
++    void processDeviceBlock (const Sample* const*, int, Sample* const*, int, int, const AudioIODeviceCallbackContext&);
+ 
+     //==============================================================================
+     AudioProcessor* processor = nullptr;
+@@ -142,6 +150,10 @@ private:
+     std::vector<float*> channels;
+     AudioBuffer<float> tempBuffer;
+     AudioBuffer<double> conversionBuffer;
++    std::vector<double*> channelsDouble;
++    AudioBuffer<double> tempBufferDouble;
++    AudioBuffer<float> conversionBufferFloat;
++    std::atomic<bool> doublePrecisionWanted { false };
+ 
+     MidiBuffer incomingMidi;
+     MidiMessageCollector messageCollector;
+diff --git a/modules/juce_audio_utils/players/juce_AudioProcessorPlayer.cpp b/modules/juce_audio_utils/players/juce_AudioProcessorPlayer.cpp
+--- a/modules/juce_audio_utils/players/juce_AudioProcessorPlayer.cpp
++++ b/modules/juce_audio_utils/players/juce_AudioProcessorPlayer.cpp
+@@ -58,13 +58,14 @@ namespace juce
+     @param tempBuffer     temporary storage for inputs that don't have a corresponding output.
+     @param channels       holds pointers to each of the processor's audio channels.
+ */
+-static void initialiseIoBuffers (Span<const float* const> ins,
+-                                 Span<float* const> outs,
++template <typename Sample>
++static void initialiseIoBuffers (Span<const Sample* const> ins,
++                                 Span<Sample* const> outs,
+                                  const int numSamples,
+                                  size_t processorIns,
+                                  size_t processorOuts,
+-                                 AudioBuffer<float>& tempBuffer,
+-                                 std::vector<float*>& channels)
++                                 AudioBuffer<Sample>& tempBuffer,
++                                 std::vector<Sample*>& channels)
+ {
+     const auto totalNumChannels = jmax (processorIns, processorOuts);
+ 
+@@ -74,7 +75,7 @@ static void initialiseIoBuffers (Span<const float* const> ins,
+ 
+     channels.resize (totalNumChannels);
+ 
+-    const auto numBytes = (size_t) numSamples * sizeof (float);
++    const auto numBytes = (size_t) numSamples * sizeof (Sample);
+ 
+     size_t tempBufferIndex = 0;
+ 
+@@ -147,6 +148,21 @@ void AudioProcessorPlayer::resizeChannels()
+                                    actualProcessorChannels.outs);
+     channels.resize ((size_t) maxChannels);
+     tempBuffer.setSize (maxChannels, blockSize);
++    channelsDouble.resize ((size_t) maxChannels);
++    tempBufferDouble.setSize (maxChannels, blockSize);
++}
++
++// What the device is asked for: 64-bit samples when the processor is processing in double
++// precision, so that they reach it, and leave it, without a conversion to single precision.
++void AudioProcessorPlayer::updateDoublePrecisionWanted()
++{
++    doublePrecisionWanted.store (processor != nullptr && processor->isUsingDoublePrecision(),
++                                 std::memory_order_relaxed);
++}
++
++bool AudioProcessorPlayer::wantsDoublePrecision() const
++{
++    return doublePrecisionWanted.load (std::memory_order_relaxed);
+ }
+ 
+ void AudioProcessorPlayer::setProcessor (AudioProcessor* const processorToPlay)
+@@ -186,6 +202,7 @@ void AudioProcessorPlayer::setProcessor (AudioProcessor* const processorToPlay)
+     processor = processorToPlay;
+     isPrepared = true;
+     resizeChannels();
++    updateDoublePrecisionWanted();
+ 
+     if (oldOne != nullptr)
+         oldOne->releaseResources();
+@@ -212,6 +229,7 @@ void AudioProcessorPlayer::setDoublePrecisionProcessing (bool doublePrecision)
+         }
+ 
+         isDoublePrecision = doublePrecision;
++        updateDoublePrecisionWanted();
+     }
+ }
+ 
+@@ -232,6 +250,29 @@ void AudioProcessorPlayer::audioDeviceIOCallbackWithContext (const float* const*
+                                                              const int numSamples,
+                                                              const AudioIODeviceCallbackContext& context)
+ {
++    processDeviceBlock (inputChannelData, numInputChannels, outputChannelData, numOutputChannels, numSamples, context);
++}
++
++void AudioProcessorPlayer::audioDeviceIOCallbackWithContextDouble (const double* const* const inputChannelData,
++                                                                   const int numInputChannels,
++                                                                   double* const* const outputChannelData,
++                                                                   const int numOutputChannels,
++                                                                   const int numSamples,
++                                                                   const AudioIODeviceCallbackContext& context)
++{
++    processDeviceBlock (inputChannelData, numInputChannels, outputChannelData, numOutputChannels, numSamples, context);
++}
++
++template <typename Sample>
++void AudioProcessorPlayer::processDeviceBlock (const Sample* const* const inputChannelData,
++                                               const int numInputChannels,
++                                               Sample* const* const outputChannelData,
++                                               const int numOutputChannels,
++                                               const int numSamples,
++                                               const AudioIODeviceCallbackContext& context)
++{
++    constexpr auto isDouble = std::is_same_v<Sample, double>;
++
+     const ScopedLock sl (lock);
+ 
+     jassert (currentDevice != nullptr);
+@@ -242,16 +283,32 @@ void AudioProcessorPlayer::audioDeviceIOCallbackWithContext (const float* const*
+     incomingMidi.clear();
+     messageCollector.removeNextBlockOfMessages (incomingMidi, numSamples);
+ 
++    auto& ioChannels = [this]() -> std::vector<Sample*>&
++    {
++        if constexpr (isDouble)
++            return channelsDouble;
++        else
++            return channels;
++    }();
++
++    auto& ioTempBuffer = [this]() -> AudioBuffer<Sample>&
++    {
++        if constexpr (isDouble)
++            return tempBufferDouble;
++        else
++            return tempBuffer;
++    }();
++
+     initialiseIoBuffers ({ inputChannelData,  (size_t) numInputChannels },
+                          { outputChannelData, (size_t) numOutputChannels },
+                          numSamples,
+                          (size_t) actualProcessorChannels.ins,
+                          (size_t) actualProcessorChannels.outs,
+-                         tempBuffer,
+-                         channels);
++                         ioTempBuffer,
++                         ioChannels);
+ 
+     const auto totalNumChannels = jmax (actualProcessorChannels.ins, actualProcessorChannels.outs);
+-    AudioBuffer<float> buffer (channels.data(), (int) totalNumChannels, numSamples);
++    AudioBuffer<Sample> buffer (ioChannels.data(), (int) totalNumChannels, numSamples);
+ 
+     if (processor != nullptr)
+     {
+@@ -308,11 +365,21 @@ void AudioProcessorPlayer::audioDeviceIOCallbackWithContext (const float* const*
+ 
+         if (! processor->isSuspended())
+         {
+-            if (processor->isUsingDoublePrecision())
++            // In the processor's own precision: the device's samples as they are when the two
++            // agree, and a copy in the other precision when they do not.
++            if (processor->isUsingDoublePrecision() != isDouble)
+             {
+-                conversionBuffer.makeCopyOf (buffer, true);
+-                processor->processBlock (conversionBuffer, incomingMidi);
+-                buffer.makeCopyOf (conversionBuffer, true);
++                auto& other = [this]() -> auto&
++                {
++                    if constexpr (isDouble)
++                        return conversionBufferFloat;
++                    else
++                        return conversionBuffer;
++                }();
++
++                other.makeCopyOf (buffer, true);
++                processor->processBlock (other, incomingMidi);
++                buffer.makeCopyOf (other, true);
+             }
+             else
+             {
+@@ -383,6 +450,7 @@ void AudioProcessorPlayer::audioDeviceStopped()
+     blockSize = 0;
+     isPrepared = false;
+     tempBuffer.setSize (1, 1);
++    tempBufferDouble.setSize (1, 1);
+ 
+     currentDevice = nullptr;
+     currentWorkgroup.reset();
+diff --git a/modules/juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h b/modules/juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h
+--- a/modules/juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h
++++ b/modules/juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h
+@@ -436,6 +436,7 @@ public:
+     std::atomic<bool> muteInput { true };
+     Value shouldMuteInput;
+     AudioBuffer<float> emptyBuffer;
++    AudioBuffer<double> emptyBufferDouble;
+     bool autoOpenMidiDevices;
+ 
+     std::unique_ptr<AudioDeviceManager::AudioDeviceSetup> options;
+@@ -578,10 +579,38 @@ private:
+                                                  context);
+     }
+ 
++    bool wantsDoublePrecision() const override
++    {
++        return player.wantsDoublePrecision();
++    }
++
++    void audioDeviceIOCallbackWithContextDouble (const double* const* inputChannelData,
++                                                 int numInputChannels,
++                                                 double* const* outputChannelData,
++                                                 int numOutputChannels,
++                                                 int numSamples,
++                                                 const AudioIODeviceCallbackContext& context) override
++    {
++        if (muteInput)
++        {
++            emptyBufferDouble.clear();
++            inputChannelData = emptyBufferDouble.getArrayOfReadPointers();
++        }
++
++        player.audioDeviceIOCallbackWithContextDouble (inputChannelData,
++                                                       numInputChannels,
++                                                       outputChannelData,
++                                                       numOutputChannels,
++                                                       numSamples,
++                                                       context);
++    }
++
+     void audioDeviceAboutToStart (AudioIODevice* device) override
+     {
+         emptyBuffer.setSize (device->getActiveInputChannels().countNumberOfSetBits(), device->getCurrentBufferSizeSamples());
+         emptyBuffer.clear();
++        emptyBufferDouble.setSize (device->getActiveInputChannels().countNumberOfSetBits(), device->getCurrentBufferSizeSamples());
++        emptyBufferDouble.clear();
+ 
+         player.audioDeviceAboutToStart (device);
+         player.setMidiOutput (deviceManager.getDefaultMidiOutput());
+@@ -592,6 +621,7 @@ private:
+         player.setMidiOutput (nullptr);
+         player.audioDeviceStopped();
+         emptyBuffer.setSize (0, 0);
++        emptyBufferDouble.setSize (0, 0);
+     }
+ 
+     //==============================================================================

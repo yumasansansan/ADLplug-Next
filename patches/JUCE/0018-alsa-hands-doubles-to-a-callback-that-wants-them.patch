@@ -1,0 +1,288 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+ALSA hands doubles to a callback that wants them
+
+ALSADevice reads and writes a device's samples through a converter to or from floats alone, so a callback that computes in double precision has its samples rounded to a float before they are rounded to the device's width, and a device's 32-bit integers are read into a float, which does not hold them.
+
+Each device keeps a converter to or from doubles, made with AudioData's Float64 format, beside the one for floats, and the thread keeps buffers of doubles beside its buffers of floats. Before each block it asks the callback, under the callback lock, which precision it wants, reads the input in that precision, calls the callback's method for it, and writes the output from it. Should the answer change between the reading and the call, the block's output is silence rather than samples of the other precision.
+
+It builds on the patches that add AudioData's Float64 format and the callback's double method.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_audio_devices/native/juce_ALSA_linux.cpp b/modules/juce_audio_devices/native/juce_ALSA_linux.cpp
+--- a/modules/juce_audio_devices/native/juce_ALSA_linux.cpp
++++ b/modules/juce_audio_devices/native/juce_ALSA_linux.cpp
+@@ -250,12 +250,18 @@ public:
+                 const int type = formatsToTry [i + 1];
+                 bitDepth = type & 255;
+ 
+-                converter.reset (createConverter (isInput, bitDepth,
+-                                                  (type & isFloatBit) != 0,
+-                                                  (type & isLittleEndianBit) != 0,
+-                                                  (type & onlyUseLower24Bits) != 0,
+-                                                  numChannels,
+-                                                  isInterleaved));
++                converter.reset (createConverter<AudioData::Float32> (isInput, bitDepth,
++                                                                      (type & isFloatBit) != 0,
++                                                                      (type & isLittleEndianBit) != 0,
++                                                                      (type & onlyUseLower24Bits) != 0,
++                                                                      numChannels,
++                                                                      isInterleaved));
++                converterDouble.reset (createConverter<AudioData::Float64> (isInput, bitDepth,
++                                                                            (type & isFloatBit) != 0,
++                                                                            (type & isLittleEndianBit) != 0,
++                                                                            (type & onlyUseLower24Bits) != 0,
++                                                                            numChannels,
++                                                                            isInterleaved));
+                 break;
+             }
+         }
+@@ -320,10 +326,12 @@ public:
+     }
+ 
+     //==============================================================================
+-    bool writeToOutputDevice (AudioBuffer<float>& outputChannelBuffer, const int numSamples)
++    template <typename Sample>
++    bool writeToOutputDevice (AudioBuffer<Sample>& outputChannelBuffer, const int numSamples)
+     {
+         jassert (numChannelsRunning <= outputChannelBuffer.getNumChannels());
+-        float* const* const data = outputChannelBuffer.getArrayOfWritePointers();
++        Sample* const* const data = outputChannelBuffer.getArrayOfWritePointers();
++        auto& sampleConverter = std::is_same_v<Sample, double> ? converterDouble : converter;
+         snd_pcm_sframes_t numDone = 0;
+ 
+         if (isInterleaved)
+@@ -331,14 +339,14 @@ public:
+             scratch.ensureSize ((size_t) ((int) sizeof (float) * numSamples * numChannelsRunning), false);
+ 
+             for (int i = 0; i < numChannelsRunning; ++i)
+-                converter->convertSamples (scratch.getData(), i, data[i], 0, numSamples);
++                sampleConverter->convertSamples (scratch.getData(), i, data[i], 0, numSamples);
+ 
+             numDone = snd_pcm_writei (handle, scratch.getData(), (snd_pcm_uframes_t) numSamples);
+         }
+         else
+         {
+             for (int i = 0; i < numChannelsRunning; ++i)
+-                converter->convertSamples (data[i], data[i], numSamples);
++                sampleConverter->convertSamples (data[i], data[i], numSamples);
+ 
+             numDone = snd_pcm_writen (handle, (void**) data, (snd_pcm_uframes_t) numSamples);
+         }
+@@ -358,10 +366,12 @@ public:
+         return true;
+     }
+ 
+-    bool readFromInputDevice (AudioBuffer<float>& inputChannelBuffer, const int numSamples)
++    template <typename Sample>
++    bool readFromInputDevice (AudioBuffer<Sample>& inputChannelBuffer, const int numSamples)
+     {
+         jassert (numChannelsRunning <= inputChannelBuffer.getNumChannels());
+-        float* const* const data = inputChannelBuffer.getArrayOfWritePointers();
++        Sample* const* const data = inputChannelBuffer.getArrayOfWritePointers();
++        auto& sampleConverter = std::is_same_v<Sample, double> ? converterDouble : converter;
+ 
+         if (isInterleaved)
+         {
+@@ -384,7 +394,7 @@ public:
+                 JUCE_ALSA_LOG ("Did not read all samples: num: " << num << ", numSamples: " << numSamples);
+ 
+             for (int i = 0; i < numChannelsRunning; ++i)
+-                converter->convertSamples (data[i], 0, scratch.getData(), i, numSamples);
++                sampleConverter->convertSamples (data[i], 0, scratch.getData(), i, numSamples);
+         }
+         else
+         {
+@@ -403,7 +413,7 @@ public:
+                 JUCE_ALSA_LOG ("Did not read all samples: num: " << num << ", numSamples: " << numSamples);
+ 
+             for (int i = 0; i < numChannelsRunning; ++i)
+-                converter->convertSamples (data[i], data[i], numSamples);
++                sampleConverter->convertSamples (data[i], data[i], numSamples);
+         }
+ 
+         return true;
+@@ -421,10 +431,10 @@ private:
+     const bool isInput;
+     bool isInterleaved;
+     MemoryBlock scratch;
+-    std::unique_ptr<AudioData::Converter> converter;
++    std::unique_ptr<AudioData::Converter> converter, converterDouble;
+ 
+     //==============================================================================
+-    template <class SampleType>
++    template <class SampleType, class NativeType>
+     struct ConverterHelper
+     {
+         static AudioData::Converter* createConverter (const bool forInput, const bool isLittleEndian, const int numInterleavedChannels, bool interleaved)
+@@ -441,7 +451,7 @@ private:
+         {
+             if (forInput)
+             {
+-                using DestType = AudioData::Pointer <AudioData::Float32, AudioData::NativeEndian, AudioData::NonInterleaved, AudioData::NonConst>;
++                using DestType = AudioData::Pointer <NativeType, AudioData::NativeEndian, AudioData::NonInterleaved, AudioData::NonConst>;
+ 
+                 if (isLittleEndian)
+                     return new AudioData::ConverterInstance <AudioData::Pointer <SampleType, AudioData::LittleEndian, InterleavedType, AudioData::Const>, DestType> (numInterleavedChannels, 1);
+@@ -449,7 +459,7 @@ private:
+                 return new AudioData::ConverterInstance <AudioData::Pointer <SampleType, AudioData::BigEndian, InterleavedType, AudioData::Const>, DestType> (numInterleavedChannels, 1);
+             }
+ 
+-            using SourceType = AudioData::Pointer <AudioData::Float32, AudioData::NativeEndian, AudioData::NonInterleaved, AudioData::Const>;
++            using SourceType = AudioData::Pointer <NativeType, AudioData::NativeEndian, AudioData::NonInterleaved, AudioData::Const>;
+ 
+             if (isLittleEndian)
+                 return new AudioData::ConverterInstance <SourceType, AudioData::Pointer <SampleType, AudioData::LittleEndian, InterleavedType, AudioData::NonConst>> (1, numInterleavedChannels);
+@@ -458,6 +468,8 @@ private:
+         }
+     };
+ 
++    // A converter between the device's format and the native one, floats or doubles.
++    template <class NativeType>
+     static AudioData::Converter* createConverter (bool forInput, int bitDepth,
+                                                   bool isFloat, bool isLittleEndian, bool useOnlyLower24Bits,
+                                                   int numInterleavedChannels,
+@@ -466,16 +478,16 @@ private:
+         JUCE_ALSA_LOG ("format: bitDepth=" << bitDepth << ", isFloat=" << (int) isFloat
+                         << ", isLittleEndian=" << (int) isLittleEndian << ", numChannels=" << numInterleavedChannels);
+ 
+-        if (isFloat)         return ConverterHelper <AudioData::Float32>::createConverter (forInput, isLittleEndian, numInterleavedChannels, interleaved);
+-        if (bitDepth == 16)  return ConverterHelper <AudioData::Int16>  ::createConverter (forInput, isLittleEndian, numInterleavedChannels, interleaved);
+-        if (bitDepth == 24)  return ConverterHelper <AudioData::Int24>  ::createConverter (forInput, isLittleEndian, numInterleavedChannels, interleaved);
++        if (isFloat)         return ConverterHelper <AudioData::Float32, NativeType>::createConverter (forInput, isLittleEndian, numInterleavedChannels, interleaved);
++        if (bitDepth == 16)  return ConverterHelper <AudioData::Int16,   NativeType>::createConverter (forInput, isLittleEndian, numInterleavedChannels, interleaved);
++        if (bitDepth == 24)  return ConverterHelper <AudioData::Int24,   NativeType>::createConverter (forInput, isLittleEndian, numInterleavedChannels, interleaved);
+ 
+         jassert (bitDepth == 32);
+ 
+         if (useOnlyLower24Bits)
+-            return ConverterHelper <AudioData::Int24in32>::createConverter (forInput, isLittleEndian, numInterleavedChannels, interleaved);
++            return ConverterHelper <AudioData::Int24in32, NativeType>::createConverter (forInput, isLittleEndian, numInterleavedChannels, interleaved);
+ 
+-        return ConverterHelper <AudioData::Int32>::createConverter (forInput, isLittleEndian, numInterleavedChannels, interleaved);
++        return ConverterHelper <AudioData::Int32, NativeType>::createConverter (forInput, isLittleEndian, numInterleavedChannels, interleaved);
+     }
+ 
+     //==============================================================================
+@@ -526,6 +538,9 @@ public:
+         inputChannelBuffer.setSize (maxInputsRequested, bufferSize);
+         inputChannelBuffer.clear();
+         inputChannelDataForCallback.clear();
++        inputChannelBufferDouble.setSize (maxInputsRequested, bufferSize);
++        inputChannelBufferDouble.clear();
++        inputChannelDataForCallbackDouble.clear();
+         currentInputChans.clear();
+ 
+         if (inputChannels.getHighestBit() >= 0)
+@@ -535,6 +550,7 @@ public:
+                 if (inputChannels[i])
+                 {
+                     inputChannelDataForCallback.add (inputChannelBuffer.getReadPointer (i));
++                    inputChannelDataForCallbackDouble.add (inputChannelBufferDouble.getReadPointer (i));
+                     currentInputChans.setBit (i);
+                 }
+             }
+@@ -548,6 +564,9 @@ public:
+         outputChannelBuffer.setSize (maxOutputsRequested, bufferSize);
+         outputChannelBuffer.clear();
+         outputChannelDataForCallback.clear();
++        outputChannelBufferDouble.setSize (maxOutputsRequested, bufferSize);
++        outputChannelBufferDouble.clear();
++        outputChannelDataForCallbackDouble.clear();
+         currentOutputChans.clear();
+ 
+         // Note that the input device is opened before an output, because we've heard
+@@ -586,6 +605,7 @@ public:
+                 if (outputChannels[i])
+                 {
+                     outputChannelDataForCallback.add (outputChannelBuffer.getWritePointer (i));
++                    outputChannelDataForCallbackDouble.add (outputChannelBufferDouble.getWritePointer (i));
+                     currentOutputChans.setBit (i);
+                 }
+             }
+@@ -674,6 +694,8 @@ public:
+ 
+         inputChannelBuffer.setSize (1, 1);
+         outputChannelBuffer.setSize (1, 1);
++        inputChannelBufferDouble.setSize (1, 1);
++        outputChannelBufferDouble.setSize (1, 1);
+ 
+         numCallbacks = 0;
+     }
+@@ -688,6 +710,13 @@ public:
+     {
+         while (! threadShouldExit())
+         {
++            bool useDouble = false;
++
++            {
++                const ScopedLock sl (callbackLock);
++                useDouble = callback != nullptr && callback->wantsDoublePrecision();
++            }
++
+             if (inputDevice != nullptr && inputDevice->handle != nullptr)
+             {
+                 if (outputDevice == nullptr || outputDevice->handle == nullptr)
+@@ -705,7 +734,8 @@ public:
+ 
+                 audioIoInProgress = true;
+ 
+-                if (! inputDevice->readFromInputDevice (inputChannelBuffer, bufferSize))
++                if (! (useDouble ? inputDevice->readFromInputDevice (inputChannelBufferDouble, bufferSize)
++                                 : inputDevice->readFromInputDevice (inputChannelBuffer, bufferSize)))
+                 {
+                     JUCE_ALSA_LOG ("Read failure");
+                     break;
+@@ -721,7 +751,16 @@ public:
+                 const ScopedLock sl (callbackLock);
+                 ++numCallbacks;
+ 
+-                if (callback != nullptr)
++                if (callback != nullptr && useDouble && callback->wantsDoublePrecision())
++                {
++                    callback->audioDeviceIOCallbackWithContextDouble (inputChannelDataForCallbackDouble.getRawDataPointer(),
++                                                                      inputChannelDataForCallbackDouble.size(),
++                                                                      outputChannelDataForCallbackDouble.getRawDataPointer(),
++                                                                      outputChannelDataForCallbackDouble.size(),
++                                                                      bufferSize,
++                                                                      {});
++                }
++                else if (callback != nullptr && ! useDouble && ! callback->wantsDoublePrecision())
+                 {
+                     callback->audioDeviceIOCallbackWithContext (inputChannelDataForCallback.getRawDataPointer(),
+                                                                 inputChannelDataForCallback.size(),
+@@ -730,6 +769,11 @@ public:
+                                                                 bufferSize,
+                                                                 {});
+                 }
++                else if (useDouble)
++                {
++                    for (int i = 0; i < outputChannelDataForCallbackDouble.size(); ++i)
++                        zeromem (outputChannelDataForCallbackDouble[i], (size_t) bufferSize * sizeof (double));
++                }
+                 else
+                 {
+                     for (int i = 0; i < outputChannelDataForCallback.size(); ++i)
+@@ -751,7 +795,8 @@ public:
+ 
+                 audioIoInProgress = true;
+ 
+-                if (! outputDevice->writeToOutputDevice (outputChannelBuffer, bufferSize))
++                if (! (useDouble ? outputDevice->writeToOutputDevice (outputChannelBufferDouble, bufferSize)
++                                 : outputDevice->writeToOutputDevice (outputChannelBuffer, bufferSize)))
+                 {
+                     JUCE_ALSA_LOG ("write failure");
+                     break;
+@@ -810,6 +855,9 @@ private:
+     AudioBuffer<float> inputChannelBuffer, outputChannelBuffer;
+     Array<const float*> inputChannelDataForCallback;
+     Array<float*> outputChannelDataForCallback;
++    AudioBuffer<double> inputChannelBufferDouble, outputChannelBufferDouble;
++    Array<const double*> inputChannelDataForCallbackDouble;
++    Array<double*> outputChannelDataForCallbackDouble;
+ 
+     unsigned int minChansOut = 0, maxChansOut = 0;
+     unsigned int minChansIn = 0, maxChansIn = 0;

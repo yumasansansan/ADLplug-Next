@@ -27,6 +27,7 @@ set(ADLplug_UNIT_TEST_SOURCES
   "unit/main.cc"
   "unit/bank_tests.cc"
   "unit/chip_settings_tests.cc"
+  "unit/device_tests.cc"
   "unit/fifo_tests.cc"
   "unit/measurer_tests.cc"
   "unit/player_tests.cc"
@@ -118,8 +119,15 @@ get_target_property(ADLplug_UNIT_TESTS_LIBRARY_CODE ADLplug_unit_tests JUCE_GENE
 target_include_directories(ADLplug_unit_tests SYSTEM PRIVATE "${ADLplug_UNIT_TESTS_LIBRARY_CODE}")
 target_include_directories(ADLplug_unit_tests PRIVATE "${PROJECT_SOURCE_DIR}/sources")
 target_sources(ADLplug_unit_tests PRIVATE ${ADLplug_UNIT_TEST_SOURCES} ${ADLplug_UNIT_TESTED_SOURCES})
+# The tests read no audio files, so, as the plugin, they are built without
+# JUCE's audio codecs, which the audio modules of the device tests bring along
+# otherwise: FLAC's C, for one, calls fileno(), which ISO C does not declare.
 target_compile_definitions(ADLplug_unit_tests PRIVATE
   "ADLPLUG_${ADLplug_CHIP}"
+  JUCE_USE_FLAC=0
+  JUCE_USE_OGGVORBIS=0
+  JUCE_USE_MP3AUDIOFORMAT=0
+  JUCE_USE_WINDOWS_MEDIA_FORMAT=0
   JUCE_USE_CURL=0
   JUCE_WEB_BROWSER=0)
 if(ADLplug_CHIP STREQUAL "OPL3")
@@ -134,10 +142,14 @@ if(ADLplug_CHIP STREQUAL "OPL3")
 else()
   target_link_libraries(ADLplug_unit_tests PRIVATE wopn OPNMIDI_static)
 endif()
+# juce_audio_utils, with the modules it needs, for the device path in double
+# precision (device_tests.cc): a device, the device manager and the processor
+# player, which patches/JUCE teach to pass 64-bit samples through.
 target_link_libraries(ADLplug_unit_tests PRIVATE
   mediaperch-resample
   juce::juce_core
   juce::juce_graphics
+  juce::juce_audio_utils
   juce::juce_recommended_config_flags)
 adlplug_own_sources(${ADLplug_UNIT_TEST_SOURCES} ${ADLplug_UNIT_TESTED_SOURCES})
 # resources.c embeds the pack of banks generated for the plugin.

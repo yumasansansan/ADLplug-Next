@@ -91,6 +91,18 @@ adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0012-direct2d-makes-devices-only-for-the-adapters-it-draws-with.patch")
 adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0013-the-standalone-processes-in-double-precision-when-the-processor-can.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0014-audio-data-converts-samples-to-and-from-64-bit-floats.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0015-a-device-callback-can-take-its-samples-in-double-precision.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0016-wasapi-hands-doubles-to-a-callback-that-wants-them.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0017-asio-hands-doubles-to-a-callback-that-wants-them.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0018-alsa-hands-doubles-to-a-callback-that-wants-them.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0019-a-negative-float-written-into-24-bits-of-32-goes-through-a-signed-integer.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0001-esfmu-the-rhythm-volume-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libADLMIDI"

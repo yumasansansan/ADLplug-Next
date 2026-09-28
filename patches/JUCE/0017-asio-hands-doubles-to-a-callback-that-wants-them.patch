@@ -1,0 +1,342 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+ASIO hands doubles to a callback that wants them, and converts its 64-bit float formats
+
+ASIOSampleFormat converts a driver's samples to floats and back: the integer formats through a double that is rounded to a float at the end, the 32-bit float formats by copying their bytes. So a callback that computes in double precision has its samples rounded to a float before they are rounded to the driver's width. The 64-bit float formats, ASIOSTFloat64LSB and ASIOSTFloat64MSB, fall to the jassertfalse of the default case in both directions, which leaves the callback's input buffers holding what they held and the driver's output buffers unwritten.
+
+The conversions are templates on the sample type -- convertToSamples() and convertFromSamples() in place of convertToFloat() and convertFromFloat() -- so an integer sample goes straight to and from a double, a 32-bit float is widened or rounded in the driver's byte order, and the 64-bit float formats are converted, in either precision and either byte order. The device keeps buffers of doubles beside its buffers of floats, allocated and pointed into with them, and calls the callback's double method while the callback wants doubles, asked under the callback lock before each block. With floats every conversion is the one it was, except that the 64-bit float formats are converted now.
+
+It builds on the patch that adds the callback's double method.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_audio_devices/native/juce_ASIO_windows.cpp b/modules/juce_audio_devices/native/juce_ASIO_windows.cpp
+--- a/modules/juce_audio_devices/native/juce_ASIO_windows.cpp
++++ b/modules/juce_audio_devices/native/juce_ASIO_windows.cpp
+@@ -124,11 +124,18 @@ struct ASIOSampleFormat
+         }
+     }
+ 
+-    void convertToFloat (const void* src, float* dst, int samps) const noexcept
++    // The driver's samples as floats or doubles, and back. The integer formats are converted in
++    // double precision either way, so a double loses nothing on its way but the rounding to the
++    // format's width. The 64-bit float formats, which were left unconverted, are converted too.
++    template <typename Sample>
++    void convertToSamples (const void* src, Sample* dst, int samps) const noexcept
+     {
+         if (formatIsFloat)
+         {
+-            memcpy (dst, src, (size_t) samps * sizeof (float));
++            if constexpr (std::is_same_v<Sample, float>)
++                memcpy (dst, src, (size_t) samps * sizeof (float));
++            else
++                convertFloat32ToDouble (static_cast<const char*> (src), dst, samps, littleEndian);
+         }
+         else
+         {
+@@ -137,16 +144,21 @@ struct ASIOSampleFormat
+                 case 16: convertInt16ToFloat (static_cast<const char*> (src), dst, byteStride, samps, littleEndian); break;
+                 case 24: convertInt24ToFloat (static_cast<const char*> (src), dst, byteStride, samps, littleEndian); break;
+                 case 32: convertInt32ToFloat (static_cast<const char*> (src), dst, byteStride, samps, littleEndian); break;
++                case 64: convertFloat64ToFloat (static_cast<const char*> (src), dst, samps, littleEndian); break;
+                 default: jassertfalse; break;
+             }
+         }
+     }
+ 
+-    void convertFromFloat (const float* src, void* dst, int samps) const noexcept
++    template <typename Sample>
++    void convertFromSamples (const Sample* src, void* dst, int samps) const noexcept
+     {
+         if (formatIsFloat)
+         {
+-            memcpy (dst, src, (size_t) samps * sizeof (float));
++            if constexpr (std::is_same_v<Sample, float>)
++                memcpy (dst, src, (size_t) samps * sizeof (float));
++            else
++                convertDoubleToFloat32 (src, static_cast<char*> (dst), samps, littleEndian);
+         }
+         else
+         {
+@@ -155,6 +167,7 @@ struct ASIOSampleFormat
+                 case 16: convertFloatToInt16 (src, static_cast<char*> (dst), byteStride, samps, littleEndian); break;
+                 case 24: convertFloatToInt24 (src, static_cast<char*> (dst), byteStride, samps, littleEndian); break;
+                 case 32: convertFloatToInt32 (src, static_cast<char*> (dst), byteStride, samps, littleEndian); break;
++                case 64: convertFloatToFloat64 (src, static_cast<char*> (dst), samps, littleEndian); break;
+                 default: jassertfalse; break;
+             }
+         }
+@@ -170,7 +183,8 @@ struct ASIOSampleFormat
+     bool formatIsFloat = false, littleEndian = true;
+ 
+ private:
+-    static void convertInt16ToFloat (const char* src, float* dest, int srcStrideBytes,
++    template <typename Sample>
++    static void convertInt16ToFloat (const char* src, Sample* dest, int srcStrideBytes,
+                                      int numSamples, bool littleEndian) noexcept
+     {
+         const double g = 1.0 / 32768.0;
+@@ -179,7 +193,7 @@ private:
+         {
+             while (--numSamples >= 0)
+             {
+-                *dest++ = (float) (g * (short) ByteOrder::littleEndianShort (src));
++                *dest++ = (Sample) (g * (short) ByteOrder::littleEndianShort (src));
+                 src += srcStrideBytes;
+             }
+         }
+@@ -187,13 +201,14 @@ private:
+         {
+             while (--numSamples >= 0)
+             {
+-                *dest++ = (float) (g * (short) ByteOrder::bigEndianShort (src));
++                *dest++ = (Sample) (g * (short) ByteOrder::bigEndianShort (src));
+                 src += srcStrideBytes;
+             }
+         }
+     }
+ 
+-    static void convertFloatToInt16 (const float* src, char* dest, int dstStrideBytes,
++    template <typename Sample>
++    static void convertFloatToInt16 (const Sample* src, char* dest, int dstStrideBytes,
+                                      int numSamples, bool littleEndian) noexcept
+     {
+         const double maxVal = (double) 0x7fff;
+@@ -218,7 +233,8 @@ private:
+         }
+     }
+ 
+-    static void convertInt24ToFloat (const char* src, float* dest, int srcStrideBytes,
++    template <typename Sample>
++    static void convertInt24ToFloat (const char* src, Sample* dest, int srcStrideBytes,
+                                      int numSamples, bool littleEndian) noexcept
+     {
+         const double g = 1.0 / 0x7fffff;
+@@ -227,7 +243,7 @@ private:
+         {
+             while (--numSamples >= 0)
+             {
+-                *dest++ = (float) (g * ByteOrder::littleEndian24Bit (src));
++                *dest++ = (Sample) (g * ByteOrder::littleEndian24Bit (src));
+                 src += srcStrideBytes;
+             }
+         }
+@@ -235,13 +251,14 @@ private:
+         {
+             while (--numSamples >= 0)
+             {
+-                *dest++ = (float) (g * ByteOrder::bigEndian24Bit (src));
++                *dest++ = (Sample) (g * ByteOrder::bigEndian24Bit (src));
+                 src += srcStrideBytes;
+             }
+         }
+     }
+ 
+-    static void convertFloatToInt24 (const float* src, char* dest, int dstStrideBytes,
++    template <typename Sample>
++    static void convertFloatToInt24 (const Sample* src, char* dest, int dstStrideBytes,
+                                      int numSamples, bool littleEndian) noexcept
+     {
+         const double maxVal = (double) 0x7fffff;
+@@ -264,7 +281,8 @@ private:
+         }
+     }
+ 
+-    static void convertInt32ToFloat (const char* src, float* dest, int srcStrideBytes,
++    template <typename Sample>
++    static void convertInt32ToFloat (const char* src, Sample* dest, int srcStrideBytes,
+                                      int numSamples, bool littleEndian) noexcept
+     {
+         const double g = 1.0 / 0x7fffffff;
+@@ -273,7 +291,7 @@ private:
+         {
+             while (--numSamples >= 0)
+             {
+-                *dest++ = (float) (g * (int) ByteOrder::littleEndianInt (src));
++                *dest++ = (Sample) (g * (int) ByteOrder::littleEndianInt (src));
+                 src += srcStrideBytes;
+             }
+         }
+@@ -281,13 +299,14 @@ private:
+         {
+             while (--numSamples >= 0)
+             {
+-                *dest++ = (float) (g * (int) ByteOrder::bigEndianInt (src));
++                *dest++ = (Sample) (g * (int) ByteOrder::bigEndianInt (src));
+                 src += srcStrideBytes;
+             }
+         }
+     }
+ 
+-    static void convertFloatToInt32 (const float* src, char* dest, int dstStrideBytes,
++    template <typename Sample>
++    static void convertFloatToInt32 (const Sample* src, char* dest, int dstStrideBytes,
+                                      int numSamples, bool littleEndian) noexcept
+     {
+         const double maxVal = (double) 0x7fffffff;
+@@ -311,6 +330,58 @@ private:
+             }
+         }
+     }
++
++    static void convertFloat32ToDouble (const char* src, double* dest, int numSamples, bool littleEndian) noexcept
++    {
++        while (--numSamples >= 0)
++        {
++            const auto bits = littleEndian ? ByteOrder::littleEndianInt (src) : ByteOrder::bigEndianInt (src);
++            float value;
++            std::memcpy (&value, &bits, sizeof (value));
++            *dest++ = value;
++            src += sizeof (value);
++        }
++    }
++
++    static void convertDoubleToFloat32 (const double* src, char* dest, int numSamples, bool littleEndian) noexcept
++    {
++        while (--numSamples >= 0)
++        {
++            const auto value = (float) *src++;
++            uint32 bits;
++            std::memcpy (&bits, &value, sizeof (bits));
++            bits = littleEndian ? ByteOrder::swapIfBigEndian (bits) : ByteOrder::swapIfLittleEndian (bits);
++            std::memcpy (dest, &bits, sizeof (bits));
++            dest += sizeof (bits);
++        }
++    }
++
++    template <typename Sample>
++    static void convertFloat64ToFloat (const char* src, Sample* dest, int numSamples, bool littleEndian) noexcept
++    {
++        while (--numSamples >= 0)
++        {
++            const auto bits = littleEndian ? ByteOrder::littleEndianInt64 (src) : ByteOrder::bigEndianInt64 (src);
++            double value;
++            std::memcpy (&value, &bits, sizeof (value));
++            *dest++ = (Sample) value;
++            src += sizeof (value);
++        }
++    }
++
++    template <typename Sample>
++    static void convertFloatToFloat64 (const Sample* src, char* dest, int numSamples, bool littleEndian) noexcept
++    {
++        while (--numSamples >= 0)
++        {
++            const auto value = (double) *src++;
++            uint64 bits;
++            std::memcpy (&bits, &value, sizeof (bits));
++            bits = littleEndian ? ByteOrder::swapIfBigEndian (bits) : ByteOrder::swapIfLittleEndian (bits);
++            std::memcpy (dest, &bits, sizeof (bits));
++            dest += sizeof (bits);
++        }
++    }
+ };
+ 
+ //==============================================================================
+@@ -339,6 +410,8 @@ public:
+         name = devName;
+         inBuffers.calloc (4);
+         outBuffers.calloc (4);
++        inBuffersDouble.calloc (4);
++        outBuffersDouble.calloc (4);
+ 
+         jassert (currentASIODev[slotNumber] == nullptr);
+         currentASIODev[slotNumber] = this;
+@@ -464,6 +537,8 @@ public:
+ 
+         inBuffers.calloc (totalNumInputChans + 8);
+         outBuffers.calloc (totalNumOutputChans + 8);
++        inBuffersDouble.calloc (totalNumInputChans + 8);
++        outBuffersDouble.calloc (totalNumOutputChans + 8);
+ 
+         if (needToReset)
+         {
+@@ -506,6 +581,7 @@ public:
+         {
+             buffersCreated = true;
+             ioBufferSpace.calloc (totalBuffers * currentBlockSizeSamples + 32);
++            ioBufferSpaceDouble.calloc (totalBuffers * currentBlockSizeSamples + 32);
+ 
+             int n = 0;
+             Array<int> types;
+@@ -516,6 +592,7 @@ public:
+                 if (inputChannels[i])
+                 {
+                     inBuffers[n] = ioBufferSpace + (currentBlockSizeSamples * n);
++                    inBuffersDouble[n] = ioBufferSpaceDouble + (currentBlockSizeSamples * n);
+ 
+                     ASIOChannelInfo channelInfo = {};
+                     channelInfo.channel = i;
+@@ -538,6 +615,7 @@ public:
+                 if (outputChannels[i])
+                 {
+                     outBuffers[n] = ioBufferSpace + (currentBlockSizeSamples * (numActiveInputChans + n));
++                    outBuffersDouble[n] = ioBufferSpaceDouble + (currentBlockSizeSamples * (numActiveInputChans + n));
+ 
+                     ASIOChannelInfo channelInfo = {};
+                     channelInfo.channel = i;
+@@ -775,6 +853,8 @@ private:
+     HeapBlock<ASIOBufferInfo> bufferInfos;
+     HeapBlock<float*> inBuffers, outBuffers;
+     HeapBlock<float> ioBufferSpace;
++    HeapBlock<double*> inBuffersDouble, outBuffersDouble;
++    HeapBlock<double> ioBufferSpaceDouble;
+     HeapBlock<ASIOSampleFormat> inputFormat, outputFormat;
+     int numActiveInputChans = 0, numActiveOutputChans = 0;
+ 
+@@ -1249,6 +1329,8 @@ private:
+             bufferInfos.calloc (chansToAllocate);
+             inBuffers.calloc (chansToAllocate);
+             outBuffers.calloc (chansToAllocate);
++            inBuffersDouble.calloc (chansToAllocate);
++            outBuffersDouble.calloc (chansToAllocate);
+             inputFormat.calloc (chansToAllocate);
+             outputFormat.calloc (chansToAllocate);
+ 
+@@ -1344,12 +1426,33 @@ private:
+             auto* infos = bufferInfos.get();
+             auto samps = currentBlockSizeSamples;
+ 
+-            if (currentCallback != nullptr)
++            if (currentCallback != nullptr && currentCallback->wantsDoublePrecision())
++            {
++                for (int i = 0; i < numActiveInputChans; ++i)
++                {
++                    jassert (inBuffersDouble[i] != nullptr);
++                    inputFormat[i].convertToSamples (infos[i].buffers[bufferIndex], inBuffersDouble[i], samps);
++                }
++
++                currentCallback->audioDeviceIOCallbackWithContextDouble (inBuffersDouble.getData(),
++                                                                         numActiveInputChans,
++                                                                         outBuffersDouble,
++                                                                         numActiveOutputChans,
++                                                                         samps,
++                                                                         {});
++
++                for (int i = 0; i < numActiveOutputChans; ++i)
++                {
++                    jassert (outBuffersDouble[i] != nullptr);
++                    outputFormat[i].convertFromSamples (outBuffersDouble[i], infos[numActiveInputChans + i].buffers[bufferIndex], samps);
++                }
++            }
++            else if (currentCallback != nullptr)
+             {
+                 for (int i = 0; i < numActiveInputChans; ++i)
+                 {
+                     jassert (inBuffers[i] != nullptr);
+-                    inputFormat[i].convertToFloat (infos[i].buffers[bufferIndex], inBuffers[i], samps);
++                    inputFormat[i].convertToSamples (infos[i].buffers[bufferIndex], inBuffers[i], samps);
+                 }
+ 
+                 currentCallback->audioDeviceIOCallbackWithContext (inBuffers.getData(),
+@@ -1362,7 +1465,7 @@ private:
+                 for (int i = 0; i < numActiveOutputChans; ++i)
+                 {
+                     jassert (outBuffers[i] != nullptr);
+-                    outputFormat[i].convertFromFloat (outBuffers[i], infos[numActiveInputChans + i].buffers[bufferIndex], samps);
++                    outputFormat[i].convertFromSamples (outBuffers[i], infos[numActiveInputChans + i].buffers[bufferIndex], samps);
+                 }
+             }
+             else

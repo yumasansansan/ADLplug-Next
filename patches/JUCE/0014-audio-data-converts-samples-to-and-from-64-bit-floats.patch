@@ -1,0 +1,245 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+Audio data converts samples to and from 64-bit floats
+
+AudioData's sample formats are integers of 8 to 32 bits and 32-bit floats, and a conversion between two of them goes through single precision or through a 32-bit integer: a Pointer into an integer format copies from another format with setAsInt32 (source.getAsInt32()), and one into Float32 with setAsFloat (source.getAsFloat()). There is no 64-bit format, and no way to read or write a sample as a double. So a device that converts between its own sample format and a callback's buffers with AudioData, as WASAPI and ALSA do, has nothing wider than a float to hand a callback, and nothing to convert a double with.
+
+Float64 is a format of 64-bit floats beside Float32, in either byte order, and every format can be read and written as a double: Pointer has getAsDouble() and setAsDouble(), and the formats have getAsDoubleLE/BE() and setAsDoubleLE/BE(). An integer format reads as its integer over the power of two it is scaled by -- 2^7, 2^15, 2^23 or 2^31 -- which is exact. It is written from a double scaled by the same power of two, rounded once to the nearest integer and limited to the range its setAsFloat() keeps, so that a sample read and written again keeps its value -- all but the most negative value of a signed format, which setAsFloat() never writes either. Int24in32 is read from its low three bytes, as getAsInt32() reads it, since a device may leave the fourth byte zero, and is written as the signed number it is. Float32 reads and writes a double with the one rounding of the conversion between the two types.
+
+The integer formats' copyFromLE/BE() write through setAsDouble() when the source is a Float64 pointer, which Pointer::isDoublePrecision() tells them at compile time, and through the 32-bit integer as before otherwise, and Float64 copies from any format with getAsDouble(). So a conversion from doubles rounds once, to the width it writes; a conversion into doubles is exact; and every conversion between the formats that were there before is the one it was.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_audio_basics/buffers/juce_AudioDataConverters.h b/modules/juce_audio_basics/buffers/juce_AudioDataConverters.h
+--- a/modules/juce_audio_basics/buffers/juce_AudioDataConverters.h
++++ b/modules/juce_audio_basics/buffers/juce_AudioDataConverters.h
+@@ -56,6 +56,7 @@ public:
+     class Int24;      /**< Used as a template parameter for AudioData::Pointer. Indicates an 24-bit integer packed data format. */
+     class Int32;      /**< Used as a template parameter for AudioData::Pointer. Indicates an 32-bit integer packed data format. */
+     class Float32;    /**< Used as a template parameter for AudioData::Pointer. Indicates an 32-bit float data format. */
++    class Float64;    /**< Used as a template parameter for AudioData::Pointer. Indicates an 64-bit float data format. */
+ 
+     //==============================================================================
+     // These types can be used as the Endianness template parameter for the AudioData::Pointer class.
+@@ -86,6 +87,8 @@ public:
+         template <class SampleFormatType> static void  setAsFloat (SampleFormatType& s, float newValue) noexcept         { s.setAsFloatBE (newValue); }
+         template <class SampleFormatType> static int32 getAsInt32 (SampleFormatType& s) noexcept                         { return s.getAsInt32BE(); }
+         template <class SampleFormatType> static void  setAsInt32 (SampleFormatType& s, int32 newValue) noexcept         { s.setAsInt32BE (newValue); }
++        template <class SampleFormatType> static double getAsDouble (SampleFormatType& s) noexcept                       { return s.getAsDoubleBE(); }
++        template <class SampleFormatType> static void   setAsDouble (SampleFormatType& s, double newValue) noexcept      { s.setAsDoubleBE (newValue); }
+         template <class SourceType, class DestType> static void copyFrom (DestType& dest, SourceType& source) noexcept   { dest.copyFromBE (source); }
+         enum { isBigEndian = 1 };
+     };
+@@ -97,6 +100,8 @@ public:
+         template <class SampleFormatType> static void  setAsFloat (SampleFormatType& s, float newValue) noexcept         { s.setAsFloatLE (newValue); }
+         template <class SampleFormatType> static int32 getAsInt32 (SampleFormatType& s) noexcept                         { return s.getAsInt32LE(); }
+         template <class SampleFormatType> static void  setAsInt32 (SampleFormatType& s, int32 newValue) noexcept         { s.setAsInt32LE (newValue); }
++        template <class SampleFormatType> static double getAsDouble (SampleFormatType& s) noexcept                       { return s.getAsDoubleLE(); }
++        template <class SampleFormatType> static void   setAsDouble (SampleFormatType& s, double newValue) noexcept      { s.setAsDoubleLE (newValue); }
+         template <class SourceType, class DestType> static void copyFrom (DestType& dest, SourceType& source) noexcept   { dest.copyFromLE (source); }
+         enum { isBigEndian = 0 };
+     };
+@@ -123,10 +128,14 @@ public:
+         inline int32 getAsInt32BE() const noexcept              { return getAsInt32LE(); }
+         inline void setAsInt32LE (int newValue) noexcept        { *data = (int8) (newValue >> 24); }
+         inline void setAsInt32BE (int newValue) noexcept        { setAsInt32LE (newValue); }
++        inline double getAsDoubleLE() const noexcept            { return *data * (1.0 / (1.0 + (double) maxValue)); }
++        inline double getAsDoubleBE() const noexcept            { return getAsDoubleLE(); }
++        inline void setAsDoubleLE (double newValue) noexcept    { *data = (int8) jlimit ((int) -maxValue, (int) maxValue, roundToInt (jlimit (-1.0, 1.0, newValue) * (1.0 + (double) maxValue))); }
++        inline void setAsDoubleBE (double newValue) noexcept    { setAsDoubleLE (newValue); }
+         inline void clear() noexcept                            { *data = 0; }
+         inline void clearMultiple (int num) noexcept            { zeromem (data, (size_t) (num * bytesPerSample)) ;}
+-        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { setAsInt32LE (source.getAsInt32()); }
+-        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { setAsInt32BE (source.getAsInt32()); }
++        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { if constexpr (SourceType::isDoublePrecision()) setAsDoubleLE (source.getAsDouble()); else setAsInt32LE (source.getAsInt32()); }
++        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { if constexpr (SourceType::isDoublePrecision()) setAsDoubleBE (source.getAsDouble()); else setAsInt32BE (source.getAsInt32()); }
+         inline void copyFromSameType (Int8& source) noexcept    { *data = *source.data; }
+ 
+         int8* data;
+@@ -148,10 +157,14 @@ public:
+         inline int32 getAsInt32BE() const noexcept              { return getAsInt32LE(); }
+         inline void setAsInt32LE (int newValue) noexcept        { *data = (uint8) (128 + (newValue >> 24)); }
+         inline void setAsInt32BE (int newValue) noexcept        { setAsInt32LE (newValue); }
++        inline double getAsDoubleLE() const noexcept            { return (*data - 128) * (1.0 / (1.0 + (double) maxValue)); }
++        inline double getAsDoubleBE() const noexcept            { return getAsDoubleLE(); }
++        inline void setAsDoubleLE (double newValue) noexcept    { *data = (uint8) jlimit (0, 255, 128 + roundToInt (jlimit (-1.0, 1.0, newValue) * (1.0 + (double) maxValue))); }
++        inline void setAsDoubleBE (double newValue) noexcept    { setAsDoubleLE (newValue); }
+         inline void clear() noexcept                            { *data = 128; }
+         inline void clearMultiple (int num) noexcept            { memset (data, 128, (size_t) num) ;}
+-        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { setAsInt32LE (source.getAsInt32()); }
+-        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { setAsInt32BE (source.getAsInt32()); }
++        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { if constexpr (SourceType::isDoublePrecision()) setAsDoubleLE (source.getAsDouble()); else setAsInt32LE (source.getAsInt32()); }
++        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { if constexpr (SourceType::isDoublePrecision()) setAsDoubleBE (source.getAsDouble()); else setAsInt32BE (source.getAsInt32()); }
+         inline void copyFromSameType (UInt8& source) noexcept   { *data = *source.data; }
+ 
+         uint8* data;
+@@ -173,10 +186,14 @@ public:
+         inline int32 getAsInt32BE() const noexcept              { return (int32) (ByteOrder::swapIfLittleEndian ((uint16) *data) << 16); }
+         inline void setAsInt32LE (int32 newValue) noexcept      { *data = ByteOrder::swapIfBigEndian    ((uint16) (newValue >> 16)); }
+         inline void setAsInt32BE (int32 newValue) noexcept      { *data = ByteOrder::swapIfLittleEndian ((uint16) (newValue >> 16)); }
++        inline double getAsDoubleLE() const noexcept            { return (1.0 / (1.0 + (double) maxValue)) * (int16) ByteOrder::swapIfBigEndian    (*data); }
++        inline double getAsDoubleBE() const noexcept            { return (1.0 / (1.0 + (double) maxValue)) * (int16) ByteOrder::swapIfLittleEndian (*data); }
++        inline void setAsDoubleLE (double newValue) noexcept    { *data = ByteOrder::swapIfBigEndian    ((uint16) jlimit ((int) -maxValue, (int) maxValue, roundToInt (jlimit (-1.0, 1.0, newValue) * (1.0 + (double) maxValue)))); }
++        inline void setAsDoubleBE (double newValue) noexcept    { *data = ByteOrder::swapIfLittleEndian ((uint16) jlimit ((int) -maxValue, (int) maxValue, roundToInt (jlimit (-1.0, 1.0, newValue) * (1.0 + (double) maxValue)))); }
+         inline void clear() noexcept                            { *data = 0; }
+         inline void clearMultiple (int num) noexcept            { zeromem (data, (size_t) (num * bytesPerSample)) ;}
+-        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { setAsInt32LE (source.getAsInt32()); }
+-        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { setAsInt32BE (source.getAsInt32()); }
++        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { if constexpr (SourceType::isDoublePrecision()) setAsDoubleLE (source.getAsDouble()); else setAsInt32LE (source.getAsInt32()); }
++        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { if constexpr (SourceType::isDoublePrecision()) setAsDoubleBE (source.getAsDouble()); else setAsInt32BE (source.getAsInt32()); }
+         inline void copyFromSameType (Int16& source) noexcept   { *data = *source.data; }
+ 
+         uint16* data;
+@@ -198,10 +215,14 @@ public:
+         inline int32 getAsInt32BE() const noexcept              { return (int32) (((unsigned int) ByteOrder::bigEndian24Bit    (data)) << 8); }
+         inline void setAsInt32LE (int32 newValue) noexcept      { ByteOrder::littleEndian24BitToChars (newValue >> 8, data); }
+         inline void setAsInt32BE (int32 newValue) noexcept      { ByteOrder::bigEndian24BitToChars    (newValue >> 8, data); }
++        inline double getAsDoubleLE() const noexcept            { return ByteOrder::littleEndian24Bit (data) * (1.0 / (1.0 + (double) maxValue)); }
++        inline double getAsDoubleBE() const noexcept            { return ByteOrder::bigEndian24Bit    (data) * (1.0 / (1.0 + (double) maxValue)); }
++        inline void setAsDoubleLE (double newValue) noexcept    { ByteOrder::littleEndian24BitToChars (jlimit ((int) -maxValue, (int) maxValue, roundToInt (jlimit (-1.0, 1.0, newValue) * (1.0 + (double) maxValue))), data); }
++        inline void setAsDoubleBE (double newValue) noexcept    { ByteOrder::bigEndian24BitToChars    (jlimit ((int) -maxValue, (int) maxValue, roundToInt (jlimit (-1.0, 1.0, newValue) * (1.0 + (double) maxValue))), data); }
+         inline void clear() noexcept                            { data[0] = 0; data[1] = 0; data[2] = 0; }
+         inline void clearMultiple (int num) noexcept            { zeromem (data, (size_t) (num * bytesPerSample)) ;}
+-        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { setAsInt32LE (source.getAsInt32()); }
+-        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { setAsInt32BE (source.getAsInt32()); }
++        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { if constexpr (SourceType::isDoublePrecision()) setAsDoubleLE (source.getAsDouble()); else setAsInt32LE (source.getAsInt32()); }
++        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { if constexpr (SourceType::isDoublePrecision()) setAsDoubleBE (source.getAsDouble()); else setAsInt32BE (source.getAsInt32()); }
+         inline void copyFromSameType (Int24& source) noexcept   { data[0] = source.data[0]; data[1] = source.data[1]; data[2] = source.data[2]; }
+ 
+         char* data;
+@@ -223,10 +244,14 @@ public:
+         inline int32 getAsInt32BE() const noexcept              { return (int32) ByteOrder::swapIfLittleEndian (*data); }
+         inline void setAsInt32LE (int32 newValue) noexcept      { *data = ByteOrder::swapIfBigEndian    ((uint32) newValue); }
+         inline void setAsInt32BE (int32 newValue) noexcept      { *data = ByteOrder::swapIfLittleEndian ((uint32) newValue); }
++        inline double getAsDoubleLE() const noexcept            { return (1.0 / (1.0 + (double) maxValue)) * (int32) ByteOrder::swapIfBigEndian    (*data); }
++        inline double getAsDoubleBE() const noexcept            { return (1.0 / (1.0 + (double) maxValue)) * (int32) ByteOrder::swapIfLittleEndian (*data); }
++        inline void setAsDoubleLE (double newValue) noexcept    { *data = ByteOrder::swapIfBigEndian    ((uint32) roundToInt (jlimit (-(double) maxValue, (double) maxValue, newValue * (1.0 + (double) maxValue)))); }
++        inline void setAsDoubleBE (double newValue) noexcept    { *data = ByteOrder::swapIfLittleEndian ((uint32) roundToInt (jlimit (-(double) maxValue, (double) maxValue, newValue * (1.0 + (double) maxValue)))); }
+         inline void clear() noexcept                            { *data = 0; }
+         inline void clearMultiple (int num) noexcept            { zeromem (data, (size_t) (num * bytesPerSample)) ;}
+-        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { setAsInt32LE (source.getAsInt32()); }
+-        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { setAsInt32BE (source.getAsInt32()); }
++        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { if constexpr (SourceType::isDoublePrecision()) setAsDoubleLE (source.getAsDouble()); else setAsInt32LE (source.getAsInt32()); }
++        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { if constexpr (SourceType::isDoublePrecision()) setAsDoubleBE (source.getAsDouble()); else setAsInt32BE (source.getAsInt32()); }
+         inline void copyFromSameType (Int32& source) noexcept   { *data = *source.data; }
+ 
+         uint32* data;
+@@ -247,8 +272,12 @@ public:
+         inline int32 getAsInt32BE() const noexcept              { return (int32) ByteOrder::swapIfLittleEndian (*data) << 8; }
+         inline void setAsInt32LE (int32 newValue) noexcept      { *data = ByteOrder::swapIfBigEndian    ((uint32) newValue >> 8); }
+         inline void setAsInt32BE (int32 newValue) noexcept      { *data = ByteOrder::swapIfLittleEndian ((uint32) newValue >> 8); }
+-        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { setAsInt32LE (source.getAsInt32()); }
+-        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { setAsInt32BE (source.getAsInt32()); }
++        inline double getAsDoubleLE() const noexcept            { return (1.0 / (1.0 + (double) Int32::maxValue)) * getAsInt32LE(); }
++        inline double getAsDoubleBE() const noexcept            { return (1.0 / (1.0 + (double) Int32::maxValue)) * getAsInt32BE(); }
++        inline void setAsDoubleLE (double newValue) noexcept    { *data = ByteOrder::swapIfBigEndian    ((uint32) jlimit ((int) -maxValue, (int) maxValue, roundToInt (jlimit (-1.0, 1.0, newValue) * (1.0 + (double) maxValue)))); }
++        inline void setAsDoubleBE (double newValue) noexcept    { *data = ByteOrder::swapIfLittleEndian ((uint32) jlimit ((int) -maxValue, (int) maxValue, roundToInt (jlimit (-1.0, 1.0, newValue) * (1.0 + (double) maxValue)))); }
++        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { if constexpr (SourceType::isDoublePrecision()) setAsDoubleLE (source.getAsDouble()); else setAsInt32LE (source.getAsInt32()); }
++        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { if constexpr (SourceType::isDoublePrecision()) setAsDoubleBE (source.getAsDouble()); else setAsInt32BE (source.getAsInt32()); }
+         inline void copyFromSameType (Int24in32& source) noexcept { *data = *source.data; }
+ 
+         enum { bytesPerSample = 4, maxValue = 0x7fffff, resolution = (1 << 8), isFloat = 0 };
+@@ -276,6 +305,10 @@ public:
+         inline int32 getAsInt32BE() const noexcept              { return (int32) roundToInt (jlimit (-1.0, 1.0, (double) getAsFloatBE()) * (double) maxValue); }
+         inline void setAsInt32LE (int32 newValue) noexcept      { setAsFloatLE ((float) (newValue * (1.0 / (1.0 + (double) maxValue)))); }
+         inline void setAsInt32BE (int32 newValue) noexcept      { setAsFloatBE ((float) (newValue * (1.0 / (1.0 + (double) maxValue)))); }
++        inline double getAsDoubleLE() const noexcept            { return getAsFloatLE(); }
++        inline double getAsDoubleBE() const noexcept            { return getAsFloatBE(); }
++        inline void setAsDoubleLE (double newValue) noexcept    { setAsFloatLE ((float) newValue); }
++        inline void setAsDoubleBE (double newValue) noexcept    { setAsFloatBE ((float) newValue); }
+         inline void clear() noexcept                            { *data = 0; }
+         inline void clearMultiple (int num) noexcept            { zeromem (data, (size_t) (num * bytesPerSample)) ;}
+         template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { setAsFloatLE (source.getAsFloat()); }
+@@ -286,6 +319,52 @@ public:
+         enum { bytesPerSample = 4, maxValue = 0x7fffffff, resolution = (1 << 8), isFloat = 1 };
+     };
+ 
++    class Float64
++    {
++    public:
++        inline Float64 (void* d) noexcept  : data (static_cast<double*> (d))  {}
++
++        inline void advance() noexcept                          { ++data; }
++        inline void skip (int numSamples) noexcept              { data += numSamples; }
++       #if JUCE_BIG_ENDIAN
++        inline double getAsDoubleBE() const noexcept            { return *data; }
++        inline void setAsDoubleBE (double newValue) noexcept    { *data = newValue; }
++        inline double getAsDoubleLE() const noexcept            { return swapped (*data); }
++        inline void setAsDoubleLE (double newValue) noexcept    { *data = swapped (newValue); }
++       #else
++        inline double getAsDoubleLE() const noexcept            { return *data; }
++        inline void setAsDoubleLE (double newValue) noexcept    { *data = newValue; }
++        inline double getAsDoubleBE() const noexcept            { return swapped (*data); }
++        inline void setAsDoubleBE (double newValue) noexcept    { *data = swapped (newValue); }
++       #endif
++        inline float getAsFloatLE() const noexcept              { return (float) getAsDoubleLE(); }
++        inline float getAsFloatBE() const noexcept              { return (float) getAsDoubleBE(); }
++        inline void setAsFloatLE (float newValue) noexcept      { setAsDoubleLE (newValue); }
++        inline void setAsFloatBE (float newValue) noexcept      { setAsDoubleBE (newValue); }
++        inline int32 getAsInt32LE() const noexcept              { return (int32) roundToInt (jlimit (-1.0, 1.0, getAsDoubleLE()) * (double) maxValue); }
++        inline int32 getAsInt32BE() const noexcept              { return (int32) roundToInt (jlimit (-1.0, 1.0, getAsDoubleBE()) * (double) maxValue); }
++        inline void setAsInt32LE (int32 newValue) noexcept      { setAsDoubleLE (newValue * (1.0 / (1.0 + (double) maxValue))); }
++        inline void setAsInt32BE (int32 newValue) noexcept      { setAsDoubleBE (newValue * (1.0 / (1.0 + (double) maxValue))); }
++        inline void clear() noexcept                            { *data = 0; }
++        inline void clearMultiple (int num) noexcept            { zeromem (data, (size_t) (num * bytesPerSample)); }
++        template <class SourceType> inline void copyFromLE (SourceType& source) noexcept    { setAsDoubleLE (source.getAsDouble()); }
++        template <class SourceType> inline void copyFromBE (SourceType& source) noexcept    { setAsDoubleBE (source.getAsDouble()); }
++        inline void copyFromSameType (Float64& source) noexcept { *data = *source.data; }
++
++        double* data;
++        enum { bytesPerSample = 8, maxValue = 0x7fffffff, resolution = 1, isFloat = 1 };
++
++    private:
++        static double swapped (double value) noexcept
++        {
++            uint64 bits;
++            memcpy (&bits, &value, sizeof (bits));
++            bits = ByteOrder::swap (bits);
++            memcpy (&value, &bits, sizeof (value));
++            return value;
++        }
++    };
++
+     //==============================================================================
+     class NonInterleaved
+     {
+@@ -440,6 +519,25 @@ public:
+             Endianness::setAsInt32 (data, newValue);
+         }
+ 
++        /** Returns the value of the first sample as a double-precision floating point value.
++            As getAsFloat(), without a rounding to single precision on the way: an integer format
++            gives its value exactly, and a 64-bit floating point one the value it holds.
++        */
++        inline double getAsDouble() const noexcept              { return Endianness::getAsDouble (data); }
++
++        /** Sets the value of the first sample as a double-precision floating point value.
++            As setAsFloat(), without a rounding to single precision on the way: an integer format
++            is written with the value rounded once, to its own width.
++
++            (This method can only be used if the AudioData::NonConst option was used).
++        */
++        inline void setAsDouble (double newValue) noexcept
++        {
++            // trying to write to a const pointer! For a writeable one, use AudioData::NonConst instead!
++            static_assert (Constness::isConst == 0, "Attempt to write to a const pointer");
++            Endianness::setAsDouble (data, newValue);
++        }
++
+         /** Moves the pointer along to the next sample. */
+         inline Pointer& operator++() noexcept                   { advance(); return *this; }
+ 
+@@ -559,6 +657,11 @@ public:
+         /** Returns true if the pointer is using a floating-point format. */
+         static bool isFloatingPoint() noexcept                  { return (bool) SampleFormat::isFloat; }
+ 
++        /** Returns true if the format holds 64-bit floating point samples. Samples converted into
++            or out of such a format are read and written in double precision.
++        */
++        static constexpr bool isDoublePrecision() noexcept      { return std::is_same_v<SampleFormat, Float64>; }
++
+         /** Returns true if the format is big-endian. */
+         static bool isBigEndian() noexcept                      { return (bool) Endianness::isBigEndian; }
+ 

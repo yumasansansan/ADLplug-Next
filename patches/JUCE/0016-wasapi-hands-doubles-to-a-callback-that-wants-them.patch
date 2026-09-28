@@ -1,0 +1,179 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+WASAPI hands doubles to a callback that wants them
+
+WASAPIInputDevice and WASAPIOutputDevice convert between the endpoint's format and floats alone. That costs nothing at a 32-bit float endpoint, as the mix format of shared mode usually is, but at an integer endpoint, which exclusive mode can open, a callback that computes in double precision has its samples rounded to a float before they are rounded to the endpoint's width, and a 32-bit integer is read into a float, which does not hold it.
+
+Beside each converter for floats the devices keep one for doubles, made with AudioData's Float64 format, and the thread keeps buffers of doubles beside its buffers of floats. Before each block it asks the callback which precision it wants, under the lock that guards the callback, converts the input into that precision there, calls the callback's method for it, and converts the output from it. A double is rounded once, to the endpoint's width, whatever that is. The input's reservoir is read into one buffer or the other whether the callback is called or not, as it was read before.
+
+It builds on the two patches before it, which add AudioData's Float64 format and the callback's double method.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_audio_devices/native/juce_WASAPI_windows.cpp b/modules/juce_audio_devices/native/juce_WASAPI_windows.cpp
+--- a/modules/juce_audio_devices/native/juce_WASAPI_windows.cpp
++++ b/modules/juce_audio_devices/native/juce_WASAPI_windows.cpp
+@@ -980,8 +980,11 @@ public:
+     template <class SourceType>
+     void updateFormatWithType (SourceType*) noexcept
+     {
++        using SourcePointer = AudioData::Pointer<SourceType, AudioData::LittleEndian, AudioData::Interleaved, AudioData::Const>;
+         using NativeType = AudioData::Pointer<AudioData::Float32, AudioData::NativeEndian, AudioData::NonInterleaved, AudioData::NonConst>;
+-        converter.reset (new AudioData::ConverterInstance<AudioData::Pointer<SourceType, AudioData::LittleEndian, AudioData::Interleaved, AudioData::Const>, NativeType> (actualNumChannels, 1));
++        using NativeDoubleType = AudioData::Pointer<AudioData::Float64, AudioData::NativeEndian, AudioData::NonInterleaved, AudioData::NonConst>;
++        converter.reset (new AudioData::ConverterInstance<SourcePointer, NativeType> (actualNumChannels, 1));
++        converterDouble.reset (new AudioData::ConverterInstance<SourcePointer, NativeDoubleType> (actualNumChannels, 1));
+     }
+ 
+     void updateFormat (bool isFloat) override
+@@ -1061,21 +1064,24 @@ public:
+         }
+     }
+ 
+-    void copyBuffersFromReservoir (float* const* destBuffers, const int numDestBuffers, const int bufferSize)
++    template <typename Sample>
++    void copyBuffersFromReservoir (Sample* const* destBuffers, const int numDestBuffers, const int bufferSize)
+     {
+         if ((numChannels <= 0 && bufferSize == 0) || reservoir.isEmpty())
+             return;
+ 
++        auto& sampleConverter = std::is_same_v<Sample, double> ? converterDouble : converter;
++
+         auto offset = jmax (0, bufferSize - queue.getNumReadable());
+ 
+         if (offset > 0)
+             for (int i = 0; i < numDestBuffers; ++i)
+-                zeromem (destBuffers[i], (size_t) offset * sizeof (float));
++                zeromem (destBuffers[i], (size_t) offset * sizeof (Sample));
+ 
+         for (const auto& block : queue.read (jmin (queue.getNumReadable(), bufferSize)))
+         {
+             for (auto i = 0; i < numDestBuffers; ++i)
+-                converter->convertSamples (destBuffers[i] + offset,
++                sampleConverter->convertSamples (destBuffers[i] + offset,
+                                            0,
+                                            addBytesToPointer (reservoir.getData(), block.getStart() * bytesPerFrame),
+                                            channelMaps.getUnchecked (i),
+@@ -1090,7 +1096,7 @@ public:
+     SingleThreadedAbstractFifo queue;
+     int xruns = 0;
+ 
+-    std::unique_ptr<AudioData::Converter> converter;
++    std::unique_ptr<AudioData::Converter> converter, converterDouble;
+ 
+ private:
+     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WASAPIInputDevice)
+@@ -1123,8 +1129,11 @@ public:
+     template <class DestType>
+     void updateFormatWithType (DestType*)
+     {
++        using DestPointer = AudioData::Pointer<DestType, AudioData::LittleEndian, AudioData::Interleaved, AudioData::NonConst>;
+         using NativeType = AudioData::Pointer<AudioData::Float32, AudioData::NativeEndian, AudioData::NonInterleaved, AudioData::Const>;
+-        converter.reset (new AudioData::ConverterInstance<NativeType, AudioData::Pointer<DestType, AudioData::LittleEndian, AudioData::Interleaved, AudioData::NonConst>> (1, actualNumChannels));
++        using NativeDoubleType = AudioData::Pointer<AudioData::Float64, AudioData::NativeEndian, AudioData::NonInterleaved, AudioData::Const>;
++        converter.reset (new AudioData::ConverterInstance<NativeType, DestPointer> (1, actualNumChannels));
++        converterDouble.reset (new AudioData::ConverterInstance<NativeDoubleType, DestPointer> (1, actualNumChannels));
+     }
+ 
+     void updateFormat (bool isFloat) override
+@@ -1167,12 +1176,15 @@ public:
+         return (int) actualBufferSize;
+     }
+ 
+-    void copyBuffers (const float* const* srcBuffers, int numSrcBuffers, int bufferSize,
++    template <typename Sample>
++    void copyBuffers (const Sample* const* srcBuffers, int numSrcBuffers, int bufferSize,
+                       WASAPIInputDevice* inputDevice, Thread& thread)
+     {
+         if (numChannels <= 0)
+             return;
+ 
++        auto& sampleConverter = std::is_same_v<Sample, double> ? converterDouble : converter;
++
+         int offset = 0;
+ 
+         while (bufferSize > 0)
+@@ -1203,7 +1215,7 @@ public:
+             if (check (renderClient->GetBuffer ((UINT32) samplesToDo, &outputData)))
+             {
+                 for (int i = 0; i < numChannelsToCopy; ++i)
+-                    converter->convertSamples (outputData, channelMaps.getUnchecked (i), srcBuffers[i] + offset, 0, samplesToDo);
++                    sampleConverter->convertSamples (outputData, channelMaps.getUnchecked (i), srcBuffers[i] + offset, 0, samplesToDo);
+ 
+                 renderClient->ReleaseBuffer ((UINT32) samplesToDo, 0);
+             }
+@@ -1214,7 +1226,7 @@ public:
+     }
+ 
+     ComSmartPtr<IAudioRenderClient> renderClient;
+-    std::unique_ptr<AudioData::Converter> converter;
++    std::unique_ptr<AudioData::Converter> converter, converterDouble;
+ 
+ private:
+     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WASAPIOutputDevice)
+@@ -1576,8 +1588,12 @@ public:
+ 
+         AudioBuffer<float> ins  (jmax (1, numInputBuffers),  bufferSize + 32);
+         AudioBuffer<float> outs (jmax (1, numOutputBuffers), bufferSize + 32);
++        AudioBuffer<double> insDouble  (jmax (1, numInputBuffers),  bufferSize + 32);
++        AudioBuffer<double> outsDouble (jmax (1, numOutputBuffers), bufferSize + 32);
+         ins.clear();
+         outs.clear();
++        insDouble.clear();
++        outsDouble.clear();
+ 
+         while (! threadShouldExit())
+         {
+@@ -1612,14 +1628,35 @@ public:
+                     if (isExclusiveMode (deviceMode) && WaitForSingleObject (inputDevice->clientEvent, 0) == WAIT_OBJECT_0)
+                         inputDevice->handleDeviceBuffer();
+                 }
+-
+-                inputDevice->copyBuffersFromReservoir (ins.getArrayOfWritePointers(), numInputBuffers, bufferSize);
+             }
+ 
++            // In the precision the callback asks for, which it may change while the device runs:
++            // asked under the lock that guards the callback, and the input converted to it there.
++            bool useDouble = false;
++
+             {
+                 const ScopedTryLock sl (startStopLock);
++                const auto started = sl.isLocked() && (loadedFlags & flagStarted) != 0;
++                useDouble = started && callback->wantsDoublePrecision();
++
++                if (inputDeviceActive)
++                {
++                    if (useDouble)
++                        inputDevice->copyBuffersFromReservoir (insDouble.getArrayOfWritePointers(), numInputBuffers, bufferSize);
++                    else
++                        inputDevice->copyBuffersFromReservoir (ins.getArrayOfWritePointers(), numInputBuffers, bufferSize);
++                }
+ 
+-                if (sl.isLocked() && (loadedFlags & flagStarted) != 0)
++                if (useDouble)
++                {
++                    callback->audioDeviceIOCallbackWithContextDouble (insDouble.getArrayOfReadPointers(),
++                                                                      numInputBuffers,
++                                                                      outsDouble.getArrayOfWritePointers(),
++                                                                      numOutputBuffers,
++                                                                      bufferSize,
++                                                                      {});
++                }
++                else if (started)
+                 {
+                     callback->audioDeviceIOCallbackWithContext (ins.getArrayOfReadPointers(),
+                                                                 numInputBuffers,
+@@ -1638,7 +1675,10 @@ public:
+             {
+                 // Note that this function is handed the input device so it can check for the event and make sure
+                 // the input reservoir is filled up correctly even when bufferSize > device actualBufferSize
+-                outputDevice->copyBuffers (outs.getArrayOfReadPointers(), numOutputBuffers, bufferSize, inputDevice.get(), *this);
++                if (useDouble)
++                    outputDevice->copyBuffers (outsDouble.getArrayOfReadPointers(), numOutputBuffers, bufferSize, inputDevice.get(), *this);
++                else
++                    outputDevice->copyBuffers (outs.getArrayOfReadPointers(), numOutputBuffers, bufferSize, inputDevice.get(), *this);
+             }
+         }
+     }
