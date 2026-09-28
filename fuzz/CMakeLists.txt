@@ -26,8 +26,12 @@
 # libFuzzer's -dict=.
 #
 # Beside each libFuzzer program, ADLplug_fuzz_<name>.args lists the arguments
-# it runs with, one to a line: its dictionary, its seed inputs and its
-# regression inputs. ci/fuzz.sh runs every target by these files.
+# it runs with, one to a line: its dictionary, a corpus directory of its own in
+# the build, and its seed inputs and regression inputs. libFuzzer writes what it
+# finds into the first directory it is given, which is that corpus, so that a
+# run of the file as it is, by hand, leaves the seed directories as they are --
+# the bank files among them are the submodules' own. ci/fuzz.sh runs every
+# target by these files, with a corpus of its own before them.
 
 if(ADLplug_SANITIZERS)
   cmake_language(DEFER CALL adlplug_sanitizer_test_environment)
@@ -164,7 +168,10 @@ function(adlplug_fuzz_target name)
       if(arg_DICTIONARY)
         list(APPEND arguments "-dict=${arg_DICTIONARY}")
       endif()
-      list(APPEND arguments ${arg_ARGUMENTS} ${inputs})
+      # The build's corpus first, for libFuzzer to write into (see the top).
+      set(corpus "${CMAKE_CURRENT_BINARY_DIR}/corpus/${target}")
+      file(MAKE_DIRECTORY "${corpus}")
+      list(APPEND arguments ${arg_ARGUMENTS} "${corpus}" ${inputs})
       list(JOIN arguments "\n" arguments)
       file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${target}.args" "${arguments}\n")
       if(arg_LONG_RUNS_ONLY)

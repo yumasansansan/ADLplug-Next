@@ -21,11 +21,12 @@
 # them in turn outgrew the time a job may take under the memory sanitizer. A
 # name that is no target of the build is an error, so that a renamed target
 # cannot fall out of every job without a word. A target runs with the arguments
-# that CMake listed beside it (build/<preset>/fuzz/*.args: its dictionary, seed
-# inputs and regression inputs), on a corpus of its own in <corpora>/<target>/,
-# which it grows and which may carry over from an earlier run. Once a target has
-# run, that corpus is merged down to the fewest inputs that reach what all of it
-# reached. An input that fails is written to <crashes>/<target>/.
+# that CMake listed beside it (build/<preset>/fuzz/*.args: its dictionary, the
+# build's corpus directory, which only a run by hand grows, and its seed inputs
+# and regression inputs), on a corpus of its own in <corpora>/<target>/, given
+# first, which it grows and which may carry over from an earlier run. Once a
+# target has run, that corpus is merged down to the fewest inputs that reach
+# what all of it reached. An input that fails is written to <crashes>/<target>/.
 #
 # Given <earlier crashes>, each target first runs once on the inputs under
 # <earlier crashes>/<target>/ that failed in an earlier run. One that still
