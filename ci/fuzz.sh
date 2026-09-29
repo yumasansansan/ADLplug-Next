@@ -7,8 +7,8 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-#   ci/fuzz.sh [--with-long] [--only <targets> | --skip <targets>] <preset>
-#              <seconds> <corpora> <crashes> [<earlier crashes>]
+#   ci/fuzz.sh [--with-long] [--only <targets> | --skip <targets>] [--grace <seconds>]
+#              <preset> <seconds> <corpora> <crashes> [<earlier crashes>]
 #
 # Runs every fuzz target that a build of <preset> with ADLplug_BUILD_FUZZERS
 # made, each for <seconds> with libFuzzer. A target whose every input is heavy
@@ -17,8 +17,8 @@
 # worth the time, so the fuzzing of a push passes it by and the daily fuzzing
 # takes it. --only runs no target but the ones named, and --skip every target
 # but those, each given as names joined by commas: the daily fuzzing splits the
-# targets of a preset between two jobs this way, since one job fuzzing all of
-# them in turn outgrew the time a job may take under the memory sanitizer. A
+# targets of a preset between jobs this way, since one job fuzzing all of them
+# in turn outgrew the time a job may take under the memory sanitizer. A
 # name that is no target of the build is an error, so that a renamed target
 # cannot fall out of every job without a word. A target runs with the arguments
 # that CMake listed beside it (build/<preset>/fuzz/*.args: its dictionary, the
@@ -26,7 +26,8 @@
 # and regression inputs), on a corpus of its own in <corpora>/<target>/, given
 # first, which it grows and which may carry over from an earlier run. Once a
 # target has run, that corpus is merged down to the fewest inputs that reach
-# what all of it reached. An input that fails is written to <crashes>/<target>/.
+# what all of it reached, if the run changed it. An input that fails is written
+# to <crashes>/<target>/.
 #
 # Given <earlier crashes>, each target first runs once on the inputs under
 # <earlier crashes>/<target>/ that failed in an earlier run. One that still
@@ -37,11 +38,12 @@
 #
 # No run of a target lasts longer than the time it was given and ten minutes
 # more, or an hour more in a build with the memory sanitizer, which is slower by
-# a good deal (the guard below). A target that does not end of its own by then
-# -- one wedged where it cannot say what it found, or one input of which takes
-# forever -- is stopped and counted as a failure, so that the targets after it
-# still run, and the run ends by itself with everything it found kept, instead
-# of standing until the time of the whole job runs out.
+# a good deal, or as much more as --grace says (the guard below). A target that
+# does not end of its own by then -- one wedged where it cannot say what it
+# found, or one input of which takes forever -- is stopped and counted as a
+# failure, so that the targets after it still run, and the run ends by itself
+# with everything it found kept, instead of standing until the time of the whole
+# job runs out.
 set -euo pipefail
 
 # How the stopping of a target shows: the status timeout keeps for the time
@@ -61,11 +63,20 @@ export TSAN_OPTIONS=${TSAN_OPTIONS:-halt_on_error=1:second_deadlock_stack=1}
 with_long=0
 only=
 skip=
+grace=
 while [ $# -gt 0 ]; do
   case "$1" in
     --with-long)
       with_long=1
       shift
+      ;;
+    --grace)
+      if ! [[ ${2:-} =~ ^[0-9]+$ ]]; then
+        echo "error: --grace takes a number of seconds" >&2
+        exit 2
+      fi
+      grace=$2
+      shift 2
       ;;
     --only | --skip)
       if [ -z "${2:-}" ]; then
@@ -113,9 +124,20 @@ earlier=${5:-}
 # asks for, that was not enough for OPNplug-Next's measurement target: on three
 # runs in a row it was still replaying its corpus of some 180 inputs when it was
 # stopped, before any fuzzing had begun.
-guard=$((seconds + 600))
-if grep -q '^ADLplug_SANITIZERS:STRING=.*\bmemory\b' "build/$preset/CMakeCache.txt" 2>/dev/null; then
-  guard=$((seconds + 3600))
+#
+# --grace gives a target that many seconds instead, for a caller that knows what
+# its targets have to replay: the daily fuzzing gives each heavy target under the
+# memory sanitizer two hours, since the synth's corpus came to take 72 minutes to
+# replay, whatever time it was asked to fuzz for: an hour would call it hung on
+# any run of fewer than twelve minutes, and leave it eight minutes to spare on a
+# run of twenty, which a slower runner does not have.
+if [ -n "$grace" ]; then
+  guard=$((seconds + grace))
+else
+  guard=$((seconds + 600))
+  if grep -q '^ADLplug_SANITIZERS:STRING=.*\bmemory\b' "build/$preset/CMakeCache.txt" 2>/dev/null; then
+    guard=$((seconds + 3600))
+  fi
 fi
 
 shopt -s nullglob
@@ -191,6 +213,11 @@ for manifest in "${manifests[@]}"; do
     fi
   fi
 
+  # The inputs the corpus holds before the run, by name, which libFuzzer makes
+  # of what an input holds: whether the run added any or reduced any is what
+  # decides whether there is a merge to make afterwards.
+  held=$(find "$corpora/$target" -maxdepth 1 -type f -printf '%f\n' | sort | sha256sum)
+
   echo "== $target: fuzzing for $seconds seconds"
   code=0
   timeout --kill-after=60s "$guard" "$fuzzer" -max_total_time="$seconds" -print_final_stats=1 \
@@ -214,6 +241,18 @@ for manifest in "${manifests[@]}"; do
   # kept. It happens beside the corpus, not in it, so that a job stopped in the
   # middle keeps the corpus it had; a merge that does not finish loses nothing
   # either.
+  #
+  # A run that left the corpus as it found it has nothing to merge down, and the
+  # merge would replay the whole corpus once more for nothing. Under the memory
+  # sanitizer that is where a job's time went: the measurement's corpus of some
+  # 200 inputs took 55 minutes to replay and the synth's of some 2,400 took 72,
+  # each run spent its twenty minutes and more replaying, fuzzed nothing, and was
+  # made to replay it all again, until the job ran out of time in the synth's
+  # merge.
+  if [ "$(find "$corpora/$target" -maxdepth 1 -type f -printf '%f\n' | sort | sha256sum)" = "$held" ]; then
+    echo "== $target: the run left the corpus as it found it, and there is nothing to merge down"
+    continue
+  fi
   echo "== $target: merging the corpus down"
   merged=$(mktemp -d)
   code=0
