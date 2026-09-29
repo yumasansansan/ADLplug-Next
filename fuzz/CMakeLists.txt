@@ -81,7 +81,7 @@ set(ADLplug_FUZZ_BIG_INPUT "64M")
 # on it for twenty minutes, which is its own default, and then hand back a job
 # that spent itself on the one input: that is how a rate of 16 Hz, which the
 # resampler of both libraries never came back from, took a whole fuzzing job of
-# CI (patches/libADLMIDI/0009-*, and
+# CI (patches/libADLMIDI/0003-*, and
 # fuzz/regressions/<chip>/host/sixteen-samples-a-second, which is the input).
 #
 # A build with the memory sanitizer says -timeout=600 instead: the same minute at

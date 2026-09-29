@@ -159,7 +159,7 @@ void Player::generate(double *left, double *right, unsigned nframes, unsigned st
     // Through pointers to the doubles they are: adl_generateFormat takes every
     // sample format as the bytes of the buffers, so the buffers would have to be
     // handed over as another type than they are, and adl_generateDouble, which
-    // patches/libADLMIDI/0015 adds, writes the same samples through pointers of
+    // patches/libADLMIDI/0009 adds, writes the same samples through pointers of
     // their own type.
     adl_generateDouble(player_.get(), static_cast<int>(2 * nframes), left, right, stride);
 }

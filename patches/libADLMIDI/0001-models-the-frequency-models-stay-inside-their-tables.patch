@@ -1,0 +1,54 @@
+SPDX-FileCopyrightText: 2025-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: MIT
+
+The AIL and MS AdLib frequency models stay inside their octaves and their table at the lowest notes
+
+Upstream took the rest of this patch its own way, in abba426 ("Prevent possible errors at models and fixed the out-of-range at HMI SOS model"): HMI SOS reads its bend table no further than its last entry, as this patch had it, and the models that convert a tone to an unsigned type assert that the tone is not below zero, which OPL3::noteOn() makes sure of. The two faults left are not below zero; ordinary notes reach them, and this patch still fixes them.
+
+oplModel_ailFreq() adds an octave offset that counts how far below the table the note was, and a tone below 12 can make the octave negative. Upstream now asserts that it is not, so a build with assertions stops at the first low note played with the AIL volume model, and a build without them shifts the negative octave into the block field, which is undefined:
+
+    src/models/model_ail.c:153: uint16_t oplModel_ailFreq(double, uint32_t *): Assertion `octave >= 0' failed.
+    src/models/model_ail.c:161:27: runtime error: left shift of negative value -1
+
+The octave is held at zero before the assertion, as oplModel_hmiFreq() holds it, with the comment "Don't wrap everything to top!".
+
+oplModel_msAdLibFreq() adds a half-tone offset that a downward bend makes negative in the lowest octave, and then reads its frequency table at that note:
+
+    src/models/model_msadlib.c:114:12: runtime error: index -1 out of bounds for type 'uint16_t[12]'
+
+The lowest note is as far down as it goes.
+
+Over the tones from 0 to 256, every sixteenth of a tone, the answer changes at 110 tones of AIL, those from 0 to 6.8125, where the sign of the octave stood in the frequency (a tone of 0 answered 0xfeb2, and answers 0x02b2 with this), and at 84 tones of MS AdLib between 0.5625 and 11.9375, where the table was read off its front; every other answer of the eight models is the same, and none of them does anything that the undefined behaviour sanitizer reports. A fuzz target of ADLplug-Next that plays MIDI through the real-time API, with the volume model a saved project can hold, found the first; calling each model over the range of tones found the second.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/models/model_ail.c b/src/models/model_ail.c
+index 9fff731..92adfe4 100644
+--- a/src/models/model_ail.c
++++ b/src/models/model_ail.c
+@@ -150,6 +150,9 @@ uint16_t oplModel_ailFreq(double tone, uint32_t *mul_offset)
+
+     octave += octaveOffset;
+
++    if(octave < 0)
++        octave = 0; /* Don't wrap everything to top! */
++
+     assert(octave >= 0);
+
+     while(octave > 7)
+diff --git a/src/models/model_msadlib.c b/src/models/model_msadlib.c
+index 94cfd8d..7254b33 100644
+--- a/src/models/model_msadlib.c
++++ b/src/models/model_msadlib.c
+@@ -111,6 +111,10 @@ uint16_t oplModel_msAdLibFreq(double tone, uint32_t *mul_offset)
+     }
+
+     note += halfToneoffset;
++
++    if(note < 0)
++        note = 0; /* Don't go below the lowest note! */
++
+     freq = s_msAdLibFreqTable[delta][note % 12];
+     octave = note / 12;
+

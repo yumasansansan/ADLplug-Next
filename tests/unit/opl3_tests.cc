@@ -179,7 +179,7 @@ ADLPLUG_TEST(rhythm_mode_drums_are_panned)
     // A drum of rhythm mode is heard from the output its channel says, as every
     // other sound of the chip is. The DOSBox core summed the five drums into both
     // outputs whatever their channels said, which is what
-    // patches/libADLMIDI/0014-dosbox-a-rhythm-mode-drum-is-panned-by-its-own-channel.patch
+    // patches/libADLMIDI/0008-dosbox-a-rhythm-mode-drum-is-panned-by-its-own-channel.patch
     // fixes; the Nuked core, written from a die scan of the chip, is here as what
     // the chip does.
     DosBoxOPL3 dosbox;

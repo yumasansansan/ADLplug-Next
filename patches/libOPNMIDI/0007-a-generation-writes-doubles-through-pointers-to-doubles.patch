@@ -9,7 +9,7 @@ opn2_generateFormat() takes the buffers it writes as OPN2_UInt8 *, whatever the 
 
 opn2_generateDouble() writes the same samples, those opn2_generateFormat() writes for OPNMIDI_SampleType_F64 and converted by opn2_cvtReal<double>() as they are, through pointers to double: sampleCount / 2 of them to each of left and right, stride samples apart. The generation loop moves out of opn2_generateFormat() into a function the two calls share, which is told where the samples go, so opn2_generateFormat() does what it did, and the new sender copies what SendStereoAudio() copies, from where it copies it. It returns 0 when either buffer is missing, rather than taking the target for one in bytes. The code is C++98, as the library is.
 
-ADLplug-Next's players ask for binary64 samples and keep them as doubles on their way to the host; with this they hand the library their buffers as the doubles they are. libADLMIDI gets the same call from patches/libADLMIDI/0015.
+ADLplug-Next's players ask for binary64 samples and keep them as doubles on their way to the host; with this they hand the library their buffers as the doubles they are. libADLMIDI gets the same call from patches/libADLMIDI/0009.
 
 This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
 

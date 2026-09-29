@@ -104,68 +104,34 @@ adlplug_patch("thirdparty/JUCE"
 adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0019-a-negative-float-written-into-24-bits-of-32-goes-through-a-signed-integer.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0001-esfmu-the-rhythm-volume-without-shifting-a-negative.patch")
+  "patches/libADLMIDI/0001-models-the-frequency-models-stay-inside-their-tables.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0002-mame-opl2-modulation-and-feedback-without-shifting-a-negative.patch")
+  "patches/libADLMIDI/0002-nuked-opl3-the-fast-path-silences-a-slot-as-the-other-does.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0003-ymfm-the-round-trip-without-shifting-a-negative.patch")
+  "patches/libADLMIDI/0003-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0004-nuked-opl2-the-crushed-sample-without-shifting-a-negative.patch")
+  "patches/libADLMIDI/0004-nuked-opl3-the-fast-path-shifts-by-less-than-its-width.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0005-nuked-cqm-the-modulation-and-the-output-without-shifting-a-negative.patch")
+  "patches/libADLMIDI/0005-a-panic-takes-every-note-a-channel-holds.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0006-the-api-looks-at-the-numbers-it-is-given.patch")
+  "patches/libADLMIDI/0006-a-number-of-chips-the-library-refuses-is-not-one-it-keeps.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0007-models-the-frequency-models-stay-inside-their-tables.patch")
+  "patches/libADLMIDI/0007-a-note-with-one-chip-channel-has-no-second-one-to-read.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0008-nuked-opl3-the-fast-path-silences-a-slot-as-the-other-does.patch")
+  "patches/libADLMIDI/0008-dosbox-a-rhythm-mode-drum-is-panned-by-its-own-channel.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0009-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
-adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0010-nuked-opl3-the-fast-path-shifts-by-less-than-its-width.patch")
-adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0011-a-panic-takes-every-note-a-channel-holds.patch")
-adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0012-a-number-of-chips-the-library-refuses-is-not-one-it-keeps.patch")
-adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0013-a-note-with-one-chip-channel-has-no-second-one-to-read.patch")
-adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0014-dosbox-a-rhythm-mode-drum-is-panned-by-its-own-channel.patch")
-adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0015-a-generation-writes-doubles-through-pointers-to-doubles.patch")
+  "patches/libADLMIDI/0009-a-generation-writes-doubles-through-pointers-to-doubles.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0001-psg-a-noise-table-that-does-not-overflow.patch")
+  "patches/libOPNMIDI/0001-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0002-ym2612-the-dac-value-without-shifting-a-negative.patch")
+  "patches/libOPNMIDI/0002-a-panic-takes-every-note-a-channel-holds.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0003-mame-phase-modulation-without-shifting-a-negative.patch")
+  "patches/libOPNMIDI/0003-a-number-of-chips-the-library-refuses-is-not-one-it-keeps.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0004-mame-feedback-and-dac-without-shifting-a-negative.patch")
+  "patches/libOPNMIDI/0004-the-counter-the-interpolation-starts-from-is-set-before-it-is-read.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0005-nuked-opn2-the-envelope-and-the-output-without-shifting-a-negative.patch")
+  "patches/libOPNMIDI/0005-mame-the-tables-every-chip-shares-are-built-once.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0006-gens-the-phase-counter-that-wraps-is-unsigned.patch")
+  "patches/libOPNMIDI/0006-nuked-opn2-the-chip-type-is-the-chips-own.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0007-fmgen-the-self-feedback-without-shifting-a-negative.patch")
-adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0008-ymfm-the-round-trip-without-shifting-a-negative.patch")
-adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0009-the-api-looks-at-the-numbers-it-is-given.patch")
-adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0010-gens-the-phase-a-channel-update-works-with-wraps-as-well.patch")
-adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0011-the-chip-type-that-is-no-family.patch")
-adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0012-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
-adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0013-a-panic-takes-every-note-a-channel-holds.patch")
-adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0014-a-number-of-chips-the-library-refuses-is-not-one-it-keeps.patch")
-adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0015-the-counter-the-interpolation-starts-from-is-set-before-it-is-read.patch")
-adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0016-mame-the-tables-every-chip-shares-are-built-once.patch")
-adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0017-nuked-opn2-the-chip-type-is-the-chips-own.patch")
-adlplug_patch("thirdparty/libOPNMIDI"
-  "patches/libOPNMIDI/0018-a-generation-writes-doubles-through-pointers-to-doubles.patch")
+  "patches/libOPNMIDI/0007-a-generation-writes-doubles-through-pointers-to-doubles.patch")
