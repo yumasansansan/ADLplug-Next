@@ -128,9 +128,11 @@ earlier=${5:-}
 # --grace gives a target that many seconds instead, for a caller that knows what
 # its targets have to replay: the daily fuzzing gives each heavy target under the
 # memory sanitizer two hours, since the synth's corpus came to take 72 minutes to
-# replay, whatever time it was asked to fuzz for: an hour would call it hung on
-# any run of fewer than twelve minutes, and leave it eight minutes to spare on a
-# run of twenty, which a slower runner does not have.
+# replay on a runner without AVX-512, where that sanitizer is many times slower
+# than elsewhere (.github/workflows/fuzz-part.yml), whatever time it was asked
+# to fuzz for: an hour would call it hung on any run of fewer than twelve
+# minutes, and leave it eight minutes to spare on a run of twenty, which a slower
+# runner does not have.
 if [ -n "$grace" ]; then
   guard=$((seconds + grace))
 else
@@ -244,11 +246,11 @@ for manifest in "${manifests[@]}"; do
   #
   # A run that left the corpus as it found it has nothing to merge down, and the
   # merge would replay the whole corpus once more for nothing. Under the memory
-  # sanitizer that is where a job's time went: the measurement's corpus of some
-  # 200 inputs took 55 minutes to replay and the synth's of some 2,400 took 72,
-  # each run spent its twenty minutes and more replaying, fuzzed nothing, and was
-  # made to replay it all again, until the job ran out of time in the synth's
-  # merge.
+  # sanitizer, on a runner without AVX-512, that is where a job's time went: the
+  # measurement's corpus of some 200 inputs took 55 minutes to replay and the
+  # synth's of some 2,400 took 72, each run spent its twenty minutes and more
+  # replaying, fuzzed nothing, and was made to replay it all again, until the job
+  # ran out of time in the synth's merge.
   if [ "$(find "$corpora/$target" -maxdepth 1 -type f -printf '%f\n' | sort | sha256sum)" = "$held" ]; then
     echo "== $target: the run left the corpus as it found it, and there is nothing to merge down"
     continue

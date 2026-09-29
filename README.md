@@ -55,9 +55,10 @@ macOS, in Debug and Release. The builds for x86-64 (64-bit Intel and AMD
 CPUs) are for CPUs with AVX2, and the builds for macOS are for Apple Silicon
 (M1 and later).
 
-A push to the `main` branch also packages the Release builds, and builds the
-rpm packages and the builds that leave some emulator cores (the programs that
-recreate the sound chips) out. When every job has passed, the
+A push to the `main` branch also packages the Release builds, makes Release
+builds for x86-64 CPUs with AVX-512 as well, and builds the rpm packages and
+the builds that leave some emulator cores (the programs that recreate the sound
+chips) out. When every job has passed, the
 [Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly)
 pre-release (the latest development version, ahead of a proper release) is
 replaced. Archives for each system are made, and packages for Ubuntu and for
@@ -74,11 +75,17 @@ version.
 Each archive of the
 [Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly)
 pre-release (zip, tar.xz) has both plugins, ADLplug-Next and OPNplug-Next.
-Every x86-64 build (`avx2`, `amd64v3` or `x86_64_v3` in its name) needs a CPU
-with AVX2 (x86-64-v3): Intel from Haswell (2013) on and AMD from Zen (2017) on,
-which as of 2026 is most CPUs from about the last ten years. On a CPU without
-it, a DAW or other host (the software that loads plugins) crashes, even while
-it scans for plugins.
+Every x86-64 build needs a CPU with AVX2 (x86-64-v3): Intel from Haswell (2013)
+on and AMD from Zen (2017) on, which as of 2026 is most CPUs from about the last
+ten years. The builds with `avx512`, `amd64v4` or `x86_64_v4` in their names
+need AVX-512 (x86-64-v4) as well, and use all 512 bits of its width: Intel's
+Core processors of Ice Lake, Tiger Lake and Rocket Lake (2019 to 2021) have
+it, as do most of Intel's server processors since Skylake-SP (2017) and AMD's
+from Zen 4 (2022) on, but Intel's Core processors from Alder Lake (2021) to
+Arrow Lake do not. On those, and whenever in doubt, take the builds with
+`avx2`, `amd64v3` or `x86_64_v3` in their names. On a CPU without what a build
+needs, a DAW or other host (the software that loads plugins) crashes, even
+while it scans for plugins.
 
 - Windows 11 or later (x86-64): extract the zip archive. The plugins and the
   standalone programs need the
@@ -98,10 +105,11 @@ it scans for plugins.
   - `.lv2`: `~/Library/Audio/Plug-Ins/LV2`
   - `.aaxplugin`: `/Library/Application Support/Avid/Audio/Plug-Ins`
 - Ubuntu 26.04 or later: install the deb packages, for example
-  `sudo apt install ./adlplug-next_*_amd64v3.deb`.
+  `sudo apt install ./adlplug-next_*_amd64v3.deb` (`amd64v4` for AVX-512).
 - RHEL 10 or later, AlmaLinux 10 or later, and openSUSE: install the rpm
   packages, for example `sudo dnf install ./adlplug-next-*.x86_64_v3.rpm` or
-  `sudo zypper install ./adlplug-next-*.x86_64_v3.rpm`.
+  `sudo zypper install ./adlplug-next-*.x86_64_v3.rpm` (`x86_64_v4` for
+  AVX-512).
 - Other Linux systems (x86-64): extract the tar.xz archive, and copy the
   `.vst3` folders to `~/.vst3` and the `.lv2` folders to `~/.lv2`.
 

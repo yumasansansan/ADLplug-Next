@@ -43,12 +43,16 @@
 #    (ci/package.sh);
 #  - an AlmaLinux 10 container builds and tests the Release configurations for
 #    the rpm packages (ci/package-rpm.sh);
+#  - the Release configurations of Windows, Ubuntu and the rpm packages are
+#    built, tested and packed for AVX-512 (x86-64-v4) as well, by the avx512
+#    jobs, each on the first of the runners it tries that has AVX-512;
 #  - builds without the emulator cores that can be left out check that other
 #    cores play in their place (the render.fallback tests);
 #  - when every job of the run has passed, and the daily fuzzing passed its
-#    last run, the publish job replaces the pre-release "Nightly" with the
-#    archive of each system, the packages and SHA256SUMS, and moves the tag
-#    nightly to the commit (ci/publish.sh).
+#    last run, the publish job checks that every archive and package is there
+#    and replaces the pre-release "Nightly" with the archive of each system, the
+#    packages and SHA256SUMS, and moves the tag nightly to the commit
+#    (ci/publish.sh).
 # Only the publish job can write to the repository. The one action,
 # actions/upload-artifact, keeps the pictures of the editor and the packs; it
 # is pinned to the commit of its release. The publish job downloads the packs
@@ -467,9 +471,225 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # **AVX-512, on a runner that has it.** The Nightly release has the Release
+  # builds for AVX-512 as well (x86-64-v4, ADLplug_ARCH=avx512), made by the three
+  # jobs below, each of which builds both plugins; what a push to any branch
+  # checks is built by the jobs above. Such a build runs what it builds -- the bank
+  # generator, the helpers of JUCE that load the plugin to write its manifests,
+  # the training of profile-guided optimisation -- and the tests run it after, so
+  # it can only be made on a runner whose processor has AVX-512. GitHub's runners
+  # have it about one time in three, and there is no asking for it: in the runs of
+  # 2026-09-26 to 09-28, 23 of 66 Ubuntu jobs and 2 of 6 Windows jobs had it. So
+  # each job tries one runner after another (max-parallel: 1), twelve at the most,
+  # and builds on the first that has it. A try that finds the packs of its job
+  # kept already, by an earlier try of the run, or finds no AVX-512 on its runner,
+  # ends after its first step, in seconds, and the next try gets a runner of its
+  # own; so do the tries after the one that built. At one time in three, all
+  # twelve miss less than once in a hundred runs ((2/3)^12 is 0.8 %); then the
+  # publish job finds the packs missing and makes no Nightly (ci/publish.sh
+  # assemble). A try that fails stops those after it (fail-fast), since what
+  # failed is the build and not the runner.
+  avx512-windows:
+    name: AVX-512 Release (windows-2025-vs2026, try ${{ matrix.try }})
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      actions: read
+    env:
+      ADLplug_AVX512_PACKS: package-avx512-windows
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        try: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+    # The steps of the Ubuntu job as well, and its first step that of the rpm job:
+    # YAML anchors, which GitHub reads.
+    steps: &avx512-steps
+      - &avx512-try
+        name: Whether this try builds
+        id: try
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The packs kept already by an earlier try of this run, which GitHub
+          # lists by name among the run's artifacts.
+          count_pattern='"total_count": *([0-9]+)'
+          answer=$(curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+            --header "Authorization: Bearer $GH_TOKEN" --header "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=$ADLplug_AVX512_PACKS")
+          if ! [[ $answer =~ $count_pattern ]]; then
+            echo "error: GitHub's list of the artifacts of this run gives no count:" >&2
+            echo "$answer" >&2
+            exit 1
+          fi
+          if [ "${BASH_REMATCH[1]}" -ne 0 ]; then
+            echo "An earlier try of this run built and kept $ADLplug_AVX512_PACKS; there is nothing left to build."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # What x86-64-v4 has beyond x86-64-v3, as the processor reports it:
+          # Linux lists it in /proc/cpuinfo, and so does the runtime of Git for
+          # Windows, whose shell this is on Windows.
+          grep -m 1 '^model name' /proc/cpuinfo || true
+          flags=" $(grep -m 1 '^flags' /proc/cpuinfo | cut -d : -f 2) "
+          missing=
+          for feature in avx512f avx512bw avx512cd avx512dq avx512vl; do
+            if [[ $flags != *" $feature "* ]]; then
+              missing+=" $feature"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "This runner's processor lacks$missing; the next try looks for one that has it."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "This runner's processor has AVX-512: this try builds."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: |
+          # The commit with its whole history, the submodules at depth 1. Git
+          # keeps the files as committed, CRLF or LF, on every runner.
+          git config --global core.autocrlf false
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git submodule update --init --depth 1 --jobs 4
+          git log -1 --format='%H %s'
+
+      - name: Set up the toolchain
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/setup.sh
+
+      - name: Build ADLplug-Next
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/build.sh adl-release avx512
+
+      - name: Test ADLplug-Next
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/test.sh adl-release
+
+      - name: Pack ADLplug-Next
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/package.sh adl-release avx512 package
+
+      - name: Build OPNplug-Next
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/build.sh opn-release avx512
+
+      - name: Test OPNplug-Next
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/test.sh opn-release
+
+      - name: Pack OPNplug-Next
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/package.sh opn-release avx512 package
+
+      - name: Keep the packs
+        if: ${{ steps.try.outputs.build == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.ADLplug_AVX512_PACKS }}
+          path: package/
+          if-no-files-found: error
+          retention-days: 1
+
+  avx512-ubuntu:
+    name: AVX-512 Release (ubuntu-26.04, try ${{ matrix.try }})
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      actions: read
+    env:
+      ADLplug_AVX512_PACKS: package-avx512-ubuntu
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        try: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    steps: *avx512-steps
+
+  avx512-rpm:
+    name: AVX-512 rpm (almalinux:10, try ${{ matrix.try }})
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    # The container of the rpm job above.
+    container: almalinux:10@sha256:957738702313e6ee452cdb17bc1431542c467be9a4e2f4da3b8e551b0ebb9677
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      actions: read
+    env:
+      ADLplug_AVX512_PACKS: package-avx512-rpm
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        try: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+    steps:
+      - *avx512-try
+
+      - name: Check out
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: |
+          dnf install -y -q git
+          git config --global core.autocrlf false
+          git config --global --add safe.directory "$PWD"
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git submodule update --init --depth 1 --jobs 4
+          git log -1 --format='%H %s'
+
+      - name: Set up the toolchain
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/setup.sh
+
+      - name: Build ADLplug-Next
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/build.sh adl-release avx512 -DADLplug_INSTALL_LV2DIR=lib64/lv2
+
+      - name: Test ADLplug-Next
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/test.sh adl-release --no-gui
+
+      - name: Pack ADLplug-Next
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/package-rpm.sh adl-release avx512 package
+
+      - name: Build OPNplug-Next
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/build.sh opn-release avx512 -DADLplug_INSTALL_LV2DIR=lib64/lv2
+
+      - name: Test OPNplug-Next
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/test.sh opn-release --no-gui
+
+      - name: Pack OPNplug-Next
+        if: ${{ steps.try.outputs.build == 'true' }}
+        run: bash ci/package-rpm.sh opn-release avx512 package
+
+      - name: Keep the packages
+        if: ${{ steps.try.outputs.build == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.ADLplug_AVX512_PACKS }}
+          path: package/
+          if-no-files-found: error
+          retention-days: 1
+
   publish:
     name: Nightly release
-    needs: [build, reuse, fallback, rpm, sanitize, msan, tidy]
+    needs: [build, reuse, fallback, rpm, avx512-windows, avx512-ubuntu, avx512-rpm, sanitize, msan, tidy]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-26.04
     timeout-minutes: 30

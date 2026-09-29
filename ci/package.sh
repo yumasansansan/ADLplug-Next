@@ -7,7 +7,7 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-#   ci/package.sh <preset> <avx2|apple-m1> <directory>
+#   ci/package.sh <preset> <avx2|avx512|apple-m1> <directory>
 #
 # Packs a Release build of ci/build.sh for the Nightly release, which CI makes
 # on a push to main (.github/workflows/ci.yml), into <directory>:
@@ -16,8 +16,9 @@
 #    (ci/licenses.py) and version.txt, which ci/publish.sh merges with the
 #    other chip's into the archive of the system;
 #  - on Linux, the deb package for Ubuntu 26.04 or later of what the
-#    build installs under /usr, as the amd64v3 variant: it needs AVX2, as
-#    every x86-64 build of this project does.
+#    build installs under /usr, as the amd64v3 variant for an avx2 build, which
+#    needs AVX2, as every x86-64 build of this project does, and as the amd64v4
+#    variant for an avx512 build, which needs AVX-512 as well.
 set -euo pipefail
 
 preset=$1
@@ -51,8 +52,12 @@ case "$(uname -s)" in
   MINGW* | MSYS*) system=windows ;;
   *) echo "error: unknown system $(uname -s)" >&2; exit 2 ;;
 esac
+# The variant of the deb package, and what it needs of a processor.
+variant=
+needs=
 case $arch in
-  avx2) machine=x86_64-avx2 ;;
+  avx2) machine=x86_64-avx2 variant=amd64v3 needs="AVX2 (x86-64-v3)" ;;
+  avx512) machine=x86_64-avx512 variant=amd64v4 needs="AVX-512 (x86-64-v4)" ;;
   apple-m1) machine=arm64 ;;
   *) echo "error: unknown instruction set '$arch'" >&2; exit 2 ;;
 esac
@@ -133,9 +138,9 @@ mkdir "$root/DEBIAN"
   echo "Package: $package"
   echo "Version: $version"
   echo "Architecture: amd64"
-  if [ "$arch" = avx2 ]; then
-    echo "Architecture-Variant: amd64v3"
-    file=${package}_${version}_amd64v3.deb
+  if [ -n "$variant" ]; then
+    echo "Architecture-Variant: $variant"
+    file=${package}_${version}_$variant.deb
   fi
   echo "Maintainer: Yuma Kakei <yumasansansan@gmail.com>"
   echo "Installed-Size: $(du -sk "$root" | cut -f 1)"
@@ -148,8 +153,8 @@ mkdir "$root/DEBIAN"
   echo " as VST3 and LV2 plugins and as a standalone program."
   echo " ."
   echo " This is version $display."
-  if [ "$arch" = avx2 ]; then
-    echo " It needs a processor with AVX2 (x86-64-v3)."
+  if [ -n "$needs" ]; then
+    echo " It needs a processor with $needs."
   fi
 } > "$root/DEBIAN/control"
 

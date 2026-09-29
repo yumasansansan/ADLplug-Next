@@ -43,13 +43,13 @@ DyTect は，Yuma Kakei（GitHub では yumasansansan）のアーティスト名
 
 リポジトリへのすべての push とプルリクエストは，GitHub Actions（GitHub 上で自動的にビルドやテストを行う仕組み）によって，Windows，Linux，macOS 上で，Debug と Release の両方でビルドされます．x86-64（Intel・AMD の 64 ビット CPU）向けのビルドは AVX2 に対応した CPU 向けで，macOS 向けのビルドは Apple Silicon（M1 以降）向けです．
 
-`main` ブランチへの push では，加えて Release ビルドのパッケージ化，rpm パッケージのビルド，一部のエミュレータコア（音源チップを再現するプログラム）を除いたビルドが行われます．すべてのジョブが成功すると，[Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly) プレリリース（正式リリース前の，最新の開発版）が置き換えられます．各システム向けのアーカイブと，Ubuntu 向け，および RHEL・AlmaLinux・openSUSE 向けのパッケージが生成されます（[インストール方法](#インストール方法) を参照）．
+`main` ブランチへの push では，加えて Release ビルドのパッケージ化，AVX-512 に対応した x86-64 CPU 向けの Release ビルド，rpm パッケージのビルド，一部のエミュレータコア（音源チップを再現するプログラム）を除いたビルドが行われます．すべてのジョブが成功すると，[Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly) プレリリース（正式リリース前の，最新の開発版）が置き換えられます．各システム向けのアーカイブと，Ubuntu 向け，および RHEL・AlmaLinux・openSUSE 向けのパッケージが生成されます（[インストール方法](#インストール方法) を参照）．
 
 最初のリリースまで，バージョンは 1.99.N です．N は，アップストリームの ADLplug の最後のコミット以降の，`main` ブランチのコミットの数です．プラグインには，コミットの日時（UTC）とハッシュも，`1.99.N+YYYYMMDD.HHMM.git<hash>` のように表示されます．マイナーバージョンが奇数のものは開発版です．
 
 ## インストール方法
 
-[Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly) プレリリースのアーカイブファイル（zip，tar.xz など）には，ADLplug-Next／OPNplug-Next の，両方のプラグインが入っています．x86-64 向けのビルド（名前に `avx2`，`amd64v3`，`x86_64_v3` を含むもの）には，すべて AVX2（x86-64-v3）に対応した CPU が必要です（Intel は Haswell（2013 年）以降，AMD は Zen（2017 年）以降で，2026 年現在で，およそ 10 年以内の CPU は，おおむね対応しています）．対応していない CPU では，DAW などのホスト（プラグインを読み込むソフト）が，プラグインをスキャンする段階でもクラッシュします．
+[Nightly](https://github.com/yumasansansan/ADLplug-Next/releases/tag/nightly) プレリリースのアーカイブファイル（zip，tar.xz など）には，ADLplug-Next／OPNplug-Next の，両方のプラグインが入っています．x86-64 向けのビルドには，すべて AVX2（x86-64-v3）に対応した CPU が必要です（Intel は Haswell（2013 年）以降，AMD は Zen（2017 年）以降で，2026 年現在で，およそ 10 年以内の CPU は，おおむね対応しています）．名前に `avx512`，`amd64v4`，`x86_64_v4` を含むビルドは，さらに AVX-512（x86-64-v4）に対応した CPU 向けで，その 512 ビットの幅をすべて使います（Intel の Core プロセッサの Ice Lake，Tiger Lake，Rocket Lake（2019〜2021 年），Skylake-SP（2017 年）以降の Intel のサーバー向けプロセッサの多く，AMD の Zen 4（2022 年）以降が対応しています．Intel の Core プロセッサのうち，Alder Lake（2021 年）から Arrow Lake までは対応していません）．それらの CPU や，対応しているかどうか分からないときは，名前に `avx2`，`amd64v3`，`x86_64_v3` を含むビルドを使ってください．ビルドが必要とする命令に対応していない CPU では，DAW などのホスト（プラグインを読み込むソフト）が，プラグインをスキャンする段階でもクラッシュします．
 
 - Windows 11 以降（x86-64）: zip アーカイブを展開してください．プラグインとスタンドアロンのプログラムを動かすには，x64 用の [Microsoft Visual C++ 再頒布可能パッケージ](https://learn.microsoft.com/ja-jp/cpp/windows/latest-supported-vc-redist) が必要です．プラグイン（名前が `.vst3` などで終わるフォルダ）は，フォルダごと次の場所にコピーしてください．
   - `.vst3`: `C:\Program Files\Common Files\VST3`
@@ -60,8 +60,8 @@ DyTect は，Yuma Kakei（GitHub では yumasansansan）のアーティスト名
   - `.component`（AU）: `~/Library/Audio/Plug-Ins/Components`
   - `.lv2`: `~/Library/Audio/Plug-Ins/LV2`
   - `.aaxplugin`: `/Library/Application Support/Avid/Audio/Plug-Ins`
-- Ubuntu 26.04 以降: deb パッケージをインストールしてください（例: `sudo apt install ./adlplug-next_*_amd64v3.deb`）．
-- RHEL 10 以降，AlmaLinux 10 以降，openSUSE: rpm パッケージをインストールしてください（例: `sudo dnf install ./adlplug-next-*.x86_64_v3.rpm` または `sudo zypper install ./adlplug-next-*.x86_64_v3.rpm`）．
+- Ubuntu 26.04 以降: deb パッケージをインストールしてください（例: `sudo apt install ./adlplug-next_*_amd64v3.deb`．AVX-512 向けは `amd64v4`）．
+- RHEL 10 以降，AlmaLinux 10 以降，openSUSE: rpm パッケージをインストールしてください（例: `sudo dnf install ./adlplug-next-*.x86_64_v3.rpm` または `sudo zypper install ./adlplug-next-*.x86_64_v3.rpm`．AVX-512 向けは `x86_64_v4`）．
 - その他の Linux（x86-64）: tar.xz アーカイブを展開し，`.vst3` のフォルダを `~/.vst3` に，`.lv2` のフォルダを `~/.lv2` にコピーしてください．
 
 Linux では，画面の表示に X11 を使います（Wayland の環境でも，Xwayland を通して表示されます）．AAX プラグインには PACE 社による署名がないため，Pro Tools Developer でのみ読み込むことができます．各アーカイブとパッケージには，プラグインのライセンスの文書と，音色バンク（音色をまとめたデータ）の利用条件を記した `<プラグイン名>-banks.txt`（`ADLplug-Next-banks.txt` など）が含まれています．

@@ -1,0 +1,264 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# One part of the long fuzzing: .github/workflows/fuzz.yml calls this for each
+# sanitizer build and each part of its targets -- "rest", every target but the
+# heavy ones, or one heavy target by its name -- and says how long each target
+# is to be fuzzed.
+#
+# **On a runner with AVX-512 when one can be had.** GitHub hands out two kinds of
+# runner, about two without AVX-512 to one with it, and there is no asking for
+# either. Fuzzing is faster on the second kind, and under the memory sanitizer by
+# far: in the daily runs of 2026-09-26 to 09-28, that sanitizer got through 2 to
+# 13 times as many inputs a second there as on the first kind with the other five
+# targets, and 11 to 17 times as many with the heavy two, which on the first kind
+# spent all their time replaying their corpora and on the second fuzzed for all
+# of it; the address sanitizer got through 1.2 to 1.7 times as many, and the
+# thread sanitizer 1.4 to 1.8 times. So a part tries one runner after another
+# (max-parallel: 1), eight at the most. A try that finds the corpus or the failed
+# inputs of its part kept already, by an earlier try of the run, or finds no
+# AVX-512 on its runner, ends after its first step, in seconds, and the next try
+# gets a runner of its own; the first try on a runner with AVX-512 fuzzes, and
+# the tries after it end the same way. The last try fuzzes on whatever runner it
+# has, since fuzzing needs no AVX-512 and is only slower without it -- which is
+# how every part fuzzed before -- and the seven before it all miss about one time
+# in twenty ((2/3)^7 is 6 %). A try that fails stops those after it (fail-fast):
+# what failed is the fuzzing, not the runner.
+#
+# The build is the fuzz targets alone, with every coverage feature libFuzzer can
+# steer by (ci/build.sh --fuzz-only). These runs are where the fuzzer has the
+# time to use them; the plugin, which one of those features keeps from being
+# loaded at all, is built and tested by the jobs of every push instead. It is
+# built for the processor of the runner that fuzzes with it -- native, AVX-512
+# at its whole width where the runner has it -- since each job builds what it
+# runs and nothing but the corpus and the failed inputs goes from one runner to
+# another.
+
+name: Fuzz a part
+
+on:
+  workflow_call:
+    inputs:
+      preset:
+        description: The preset of the sanitizer build
+        type: string
+        required: true
+      part:
+        description: '"rest", or the name of a heavy target'
+        type: string
+        required: true
+      heavy:
+        description: The heavy targets, joined by commas
+        type: string
+        required: true
+      minutes:
+        description: How long to fuzz each target, one of the choices of fuzz.yml
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fuzz:
+    name: try ${{ matrix.try }} (ubuntu-26.04)
+    runs-on: ubuntu-26.04
+    # What each choice is allowed, set for a runner without AVX-512, which the
+    # last try may have: a job's targets run one after another after a build, and
+    # each replays its corpus when it starts and, when the run changed it, again
+    # when the corpus is merged down, which under the memory sanitizer can take
+    # longer than the time it is fuzzed. Ten times one target's time and half an
+    # hour for the build is room for the five targets of the rest, and for one
+    # heavy target by itself, and still stops a job that hangs after a time that
+    # has to do with what was asked of it. Measured with the memory sanitizer, the
+    # slowest of the builds, on such a runner, for twenty minutes a target:
+    # ADLplug-Next's other five came to some two hours and OPNplug-Next's to some
+    # three, and the two heavy ones together to more than the 230 minutes the table
+    # allows -- the synth's merge was stopped at that limit -- where each by
+    # itself, with the build and a merge, comes to two hours and three quarters at
+    # the most. A heavy target under that sanitizer, on such a runner, replays its
+    # corpus for more than an hour whatever it is asked to fuzz for, so its job is
+    # never allowed less than 170 minutes: the build, a replay and a merge of the
+    # synth's, with room to spare. The tables are worked out here because an
+    # expression of GitHub's cannot multiply; every choice of fuzz.yml is a key of
+    # each, and none may go past the six hours that a job of a hosted runner may
+    # take at the most.
+    timeout-minutes: >-
+      ${{ fromJSON(endsWith(inputs.preset, '-msan') && inputs.part != 'rest'
+            && '{"1": 170, "5": 170, "10": 170, "15": 180, "20": 230, "30": 330}'
+            || '{"1": 40, "5": 80, "10": 130, "15": 180, "20": 230, "30": 330}')[inputs.minutes] }}
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        try: [1, 2, 3, 4, 5, 6, 7, 8]
+    env:
+      ADLplug_FUZZ_PRESET: ${{ inputs.preset }}
+      ADLplug_FUZZ_PART: ${{ inputs.part }}
+      ADLplug_FUZZ_HEAVY: ${{ inputs.heavy }}
+      ADLplug_FUZZ_MINUTES: ${{ inputs.minutes }}
+
+    steps:
+      - name: Whether this try fuzzes
+        id: try
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # What an earlier try of this run that fuzzed the part keeps, which
+          # GitHub lists by name among the run's artifacts.
+          for artifact in "fuzz-corpora-$ADLplug_FUZZ_PRESET-$ADLplug_FUZZ_PART" \
+                          "fuzz-crashes-$ADLplug_FUZZ_PRESET-$ADLplug_FUZZ_PART"; do
+            kept=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=$artifact" \
+              --jq '.total_count')
+            if [ "$kept" -ne 0 ]; then
+              echo "An earlier try of this run fuzzed this part and kept $artifact; there is nothing left to do."
+              echo "fuzz=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          # What x86-64-v4 has beyond x86-64-v3, as Linux lists it.
+          grep -m 1 '^model name' /proc/cpuinfo || true
+          flags=" $(grep -m 1 '^flags' /proc/cpuinfo | cut -d : -f 2) "
+          missing=
+          for feature in avx512f avx512bw avx512cd avx512dq avx512vl; do
+            if [[ $flags != *" $feature "* ]]; then
+              missing+=" $feature"
+            fi
+          done
+          if [ -z "$missing" ]; then
+            echo "This runner's processor has AVX-512: this try fuzzes."
+            echo "fuzz=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ strategy.job-index }}" -eq $(( ${{ strategy.job-total }} - 1 )) ]; then
+            echo "This runner's processor lacks$missing, and this is the last try: it fuzzes all the same, more slowly."
+            echo "fuzz=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "This runner's processor lacks$missing; the next try looks for one that has it."
+            echo "fuzz=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out
+        if: ${{ steps.try.outputs.fuzz == 'true' }}
+        run: |
+          # The commit with its whole history, the submodules at depth 1. Git
+          # keeps the files as committed, CRLF or LF, on every runner.
+          git config --global core.autocrlf false
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git submodule update --init --depth 1 --jobs 4
+          git log -1 --format='%H %s'
+
+      - name: Set up the toolchain
+        if: ${{ steps.try.outputs.fuzz == 'true' }}
+        run: bash ci/setup.sh
+
+      - name: Build
+        if: ${{ steps.try.outputs.fuzz == 'true' }}
+        run: bash ci/build.sh --fuzz-only "$ADLplug_FUZZ_PRESET" native
+
+      - name: Carry over the corpus and the inputs that failed
+        if: ${{ steps.try.outputs.fuzz == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p fuzz-run/corpora fuzz-run/earlier
+          # Only a run that fuzzed counts: fuzz.yml is started by the schedule
+          # or by hand, and a run of it on a push is one GitHub writes down when
+          # it cannot read the file itself, which holds no corpus and has no say
+          # in whether fuzzing passed.
+          last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow fuzz.yml --branch main \
+            --status completed --limit 20 --json conclusion,databaseId,event \
+            --jq '[.[] | select(.event == "schedule" or .event == "workflow_dispatch")
+                       | select(.conclusion == "success" or .conclusion == "failure")][0].databaseId // empty')
+          if [ -z "$last" ]; then
+            echo "No earlier run: the corpus starts from the seed inputs."
+            exit 0
+          fi
+          echo "Carrying over from run $last."
+          # A target's corpus and the inputs that failed on it are in the artifacts
+          # of the job that fuzzed it: those of any part of the build, whether the
+          # run split its targets into these parts, into two, or not at all. With
+          # a pattern, gh puts each artifact in a directory of its own name. This
+          # job takes its own targets' from all of them and leaves every other
+          # target's alone, so that no job carries along a copy of what another
+          # one grows, and a target moved from one part to another keeps its
+          # corpus.
+          gh run download "$last" --repo "$GITHUB_REPOSITORY" --dir fuzz-run/kept/corpora \
+            --name "fuzz-corpora-$ADLplug_FUZZ_PRESET" --pattern "fuzz-corpora-$ADLplug_FUZZ_PRESET-*" \
+            || echo "Run $last kept no corpus: the corpus starts from the seed inputs."
+          gh run download "$last" --repo "$GITHUB_REPOSITORY" --dir fuzz-run/kept/crashes \
+            --name "fuzz-crashes-$ADLplug_FUZZ_PRESET" --pattern "fuzz-crashes-$ADLplug_FUZZ_PRESET-*" \
+            || echo "Run $last kept no inputs that failed."
+          shopt -s nullglob
+          for manifest in "build/$ADLplug_FUZZ_PRESET/fuzz/"*.args; do
+            target=$(basename "$manifest" .args)
+            if [[ ",$ADLplug_FUZZ_HEAVY," == *",$target,"* ]]; then
+              part=$target
+            else
+              part=rest
+            fi
+            if [ "$part" != "$ADLplug_FUZZ_PART" ]; then
+              continue
+            fi
+            for kept in fuzz-run/kept/corpora/*/"$target"; do
+              mkdir -p "fuzz-run/corpora/$target"
+              cp -R "$kept/." "fuzz-run/corpora/$target/"
+            done
+            for kept in fuzz-run/kept/crashes/*/"$target"; do
+              mkdir -p "fuzz-run/earlier/$target"
+              cp -R "$kept/." "fuzz-run/earlier/$target/"
+            done
+          done
+          rm -rf fuzz-run/kept
+
+      - name: Fuzz each target
+        if: ${{ steps.try.outputs.fuzz == 'true' }}
+        run: |
+          if [ "$ADLplug_FUZZ_PART" = rest ]; then
+            select=(--skip "$ADLplug_FUZZ_HEAVY")
+          else
+            select=(--only "$ADLplug_FUZZ_PART")
+          fi
+          # A heavy target under the memory sanitizer replays its corpus for more
+          # than an hour before it fuzzes, on a runner without AVX-512, which
+          # ci/fuzz.sh would take for a hang after the hour it allows that
+          # sanitizer; it is given two.
+          grace=()
+          if [[ $ADLplug_FUZZ_PRESET == *-msan && $ADLplug_FUZZ_PART != rest ]]; then
+            grace=(--grace 7200)
+          fi
+          bash ci/fuzz.sh --with-long "${select[@]}" ${grace[@]+"${grace[@]}"} "$ADLplug_FUZZ_PRESET" \
+            "$((ADLplug_FUZZ_MINUTES * 60))" fuzz-run/corpora fuzz-run/crashes fuzz-run/earlier
+
+      # What a run found is kept whatever became of the job, its own time limit
+      # included: a job that the limit stops counts as cancelled, and that is the
+      # very run whose corpus and failing inputs are worth having. A try that did
+      # not fuzz has nothing to keep.
+      - name: Keep the corpus
+        if: ${{ always() && steps.try.outputs.fuzz == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-corpora-${{ inputs.preset }}-${{ inputs.part }}
+          path: fuzz-run/corpora/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Keep the inputs that failed
+        if: ${{ always() && steps.try.outputs.fuzz == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-crashes-${{ inputs.preset }}-${{ inputs.part }}
+          path: fuzz-run/crashes/
+          if-no-files-found: ignore
+          retention-days: 90
