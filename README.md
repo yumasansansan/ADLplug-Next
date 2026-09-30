@@ -318,7 +318,7 @@ An option chooses whether ADLplug-Next or OPNplug-Next is built:
 | -DADLplug_COVERAGE=ON/OFF       | OFF                                    | Count which of ADLplug-Next's own code the tests and the fuzz corpus reach (ci/coverage.sh)     |
 | -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | Enable assertions (internal consistency checks) in any build type (Debug, Release and others) |
 | -DADLplug_WERROR=ON/OFF         | OFF (the presets set ON)               | Treat warnings in ADLplug-Next's own code as errors                                           |
-| -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | Build developer tools (a tool that loads the VST3 plugin and writes out its sound)            |
+| -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | Build developer tools (a tool that loads the VST3 plugin and writes out its sound, and for OPL3 one that measures how far each emulator core is from the low-level one, drawn from a die shot of the chip) |
 | -DADLplug_BUILD_TESTS=ON/OFF    | OFF                                    | Build the tests and register them with CTest (CMake's test runner)                            |
 | -DADLplug_BUILD_FUZZERS=ON/OFF  | OFF                                    | Build the fuzz targets with libFuzzer (Linux only; see Testing)                               |
 | -DADLplug_FUZZ_FULL_COVERAGE=ON/OFF | OFF                                | Give the libraries every coverage feature libFuzzer steers by; build the fuzz targets alone, since the plugin of such a build cannot be loaded |

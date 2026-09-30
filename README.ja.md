@@ -207,7 +207,7 @@ cmake --build --preset adl-release     # 上と同様です．
 | -DADLplug_COVERAGE=ON/OFF       | OFF                                    | ADLplug-Next 自身のコードのうち，テストと fuzz のコーパスが届く範囲を数える（`ci/coverage.sh`） |
 | -DADLplug_ASSERTIONS=ON/OFF     | OFF                                    | ビルドの種類（Debug・Release など）にかかわらず，アサーション（内部の整合性のチェック）を有効にする |
 | -DADLplug_WERROR=ON/OFF         | OFF（プリセットでは ON に設定されています）  | ADLplug-Next 自身のコードの警告をエラーとして扱う |
-| -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | 開発者向けのツール（VST3 プラグインを読み込んで，音を書き出すツール）をビルドする |
+| -DADLplug_BUILD_TOOLS=ON/OFF    | OFF                                    | 開発者向けのツール（VST3 プラグインを読み込んで，音を書き出すツールと，OPL3 では，各エミュレータコアが低レベルのコア（チップのダイ写真から起こしたコア）からどれだけ離れているかを測るツール）をビルドする |
 | -DADLplug_BUILD_TESTS=ON/OFF    | OFF                                    | テストをビルドし，CTest（CMake のテストを実行するツール）に登録する |
 | -DADLplug_BUILD_FUZZERS=ON/OFF  | OFF                                    | fuzz（自動で作った入力で不具合を探すテスト）の対象を，libFuzzer 付きでビルドする（Linux のみ，後述） |
 | -DADLplug_FUZZ_FULL_COVERAGE=ON/OFF | OFF                                | libFuzzer が探索に使う計測を，ライブラリにすべて付ける（fuzz の対象だけをビルドしてください．このビルドのプラグインは読み込めません） |

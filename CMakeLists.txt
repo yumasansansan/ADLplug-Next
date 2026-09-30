@@ -86,7 +86,7 @@ system_option(ADLplug_ASIO "Enable ASIO support (Windows, GPLv3)" OFF "Windows" 
 
 option(ADLplug_ASSERTIONS "Enable assertions" OFF)
 option(ADLplug_WERROR "Treat warnings in ADLplug's own sources as errors" OFF)
-option(ADLplug_BUILD_TOOLS "Build developer tools (tools/render: offline VST3 renderer)" OFF)
+option(ADLplug_BUILD_TOOLS "Build developer tools (tools/render: offline VST3 renderer; tools/corecmp, for OPL3: the emulator cores against the low-level one)" OFF)
 option(ADLplug_BUILD_TESTS "Build the tests and register them with CTest (render tests need ADLplug_BUILD_TOOLS)" OFF)
 option(ADLplug_BUILD_FUZZERS "Build the fuzz targets with libFuzzer (fuzz/; meant for the address and undefined sanitizers)" OFF)
 # libFuzzer runs on Ubuntu. On Windows it cannot be linked at all: the
@@ -1072,6 +1072,18 @@ if(ADLplug_BUILD_TOOLS)
     target_sources(ADLplug_render PRIVATE "tools/render/x_errors.cc")
     target_link_libraries(ADLplug_render PRIVATE X11::X11)
   endif()
+
+  # tools/corecmp plays the same MIDI through libADLMIDI with each emulator core
+  # and measures how far each is from the low-level one, which was drawn from a
+  # die shot of the chip: the yardstick for a core that is to come close to it.
+  # It needs the library alone, not the plug-in.
+  if(ADLplug_CHIP STREQUAL "OPL3")
+    add_executable(ADLplug_corecmp "tools/corecmp/corecmp.cc")
+    adlplug_set_language_standard(ADLplug_corecmp)
+    target_link_libraries(ADLplug_corecmp PRIVATE ADLMIDI_static)
+    target_compile_definitions(ADLplug_corecmp PRIVATE
+      "ADLPLUG_CORECMP_DEFAULT_BANK=\"${PROJECT_SOURCE_DIR}/thirdparty/libADLMIDI/fm_banks/wopl_files/GM-By-J.A.Nguyen-and-Wohlstand.wopl\"")
+  endif()
 endif()
 
 # --------------------------------------------------------------------------
@@ -1089,6 +1101,9 @@ if(TARGET ADLplug_render)
   get_target_property(ADLplug_RENDER_SOURCES ADLplug_render SOURCES)
   list(FILTER ADLplug_RENDER_SOURCES INCLUDE REGEX "^tools/")
   list(APPEND ADLplug_OWN_SOURCES ${ADLplug_RENDER_SOURCES})
+endif()
+if(TARGET ADLplug_corecmp)
+  list(APPEND ADLplug_OWN_SOURCES "tools/corecmp/corecmp.cc")
 endif()
 get_target_property(ADLplug_BANKGEN_SOURCES ADLplug_bankgen SOURCES)
 list(FILTER ADLplug_BANKGEN_SOURCES INCLUDE REGEX "^(sources|tools)/")
