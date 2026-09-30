@@ -64,11 +64,13 @@ pre-release (the latest development version, ahead of a proper release) is
 replaced. Archives for each system are made, and packages for Ubuntu and for
 RHEL, AlmaLinux and openSUSE (see [Installing](#installing)).
 
-Until the first release, the versions are 1.99.N, where N counts the commits
-of the `main` branch since the last commit of upstream ADLplug. The plugins
-show the time of the commit, in UTC, and its hash as well:
-`1.99.N+YYYYMMDD.HHMM.git<hash>`. An odd minor number marks a development
-version.
+The first release will be 2.2.0. Until then the versions are 2.1.N, where N
+counts the commits of the `main` branch since the last of the builds numbered
+1.99.N (1.99.99); after 255 commits they go on as 2.3.N, then 2.5.N, and so
+on. The plugins show the time of the commit, in UTC, and its hash as well:
+`2.1.N+YYYYMMDD.HHMM.git<hash>`. An odd minor number (the middle one) marks a
+development version. The first release is not 2.0.0 because LV2 hosts take a
+plugin whose minor number is 0 for an experimental one.
 
 ## Installing
 
