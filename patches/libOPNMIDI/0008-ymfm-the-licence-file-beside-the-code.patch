@@ -1,0 +1,47 @@
+SPDX-FileCopyrightText: 2021 Aaron Giles
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: BSD-3-Clause
+
+ymfm: the licence file beside the code, as libADLMIDI has it
+
+ymfm is under the BSD 3-Clause licence, whose second condition asks that a redistribution in binary form reproduce the copyright notice, the conditions and the disclaimer in the documentation or other materials that come with it. libADLMIDI keeps ymfm's LICENSE beside its copy of ymfm, in src/chips/ymfm/; here the notice stands only at the top of each of the thirteen ymfm source files. A program that gathers the licence files found beside the code a binary was built from, as ADLplug-Next's packaging does, therefore finds libOPNMIDI's own licences for ymfm and not ymfm's, and the binary goes out without the notice that the second condition asks for.
+
+This adds that file, byte for byte the one libADLMIDI carries (blob f73e841). Its 29 lines are, word for word, the notice, the conditions and the disclaimer that the header of every ymfm file here holds, so the licence of the code does not change; the notice now also stands beside it, where such programs, and people, look for it.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/chips/ymfm/LICENSE b/src/chips/ymfm/LICENSE
+new file mode 100644
+index 0000000..f73e841
+--- /dev/null
++++ b/src/chips/ymfm/LICENSE
+@@ -0,0 +1,29 @@
++BSD 3-Clause License
++
++Copyright (c) 2021, Aaron Giles
++All rights reserved.
++
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are met:
++
++1. Redistributions of source code must retain the above copyright notice, this
++   list of conditions and the following disclaimer.
++
++2. Redistributions in binary form must reproduce the above copyright notice,
++   this list of conditions and the following disclaimer in the documentation
++   and/or other materials provided with the distribution.
++
++3. Neither the name of the copyright holder nor the names of its
++   contributors may be used to endorse or promote products derived from
++   this software without specific prior written permission.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
++FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

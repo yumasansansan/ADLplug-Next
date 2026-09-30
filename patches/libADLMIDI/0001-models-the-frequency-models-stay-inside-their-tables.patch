@@ -21,6 +21,8 @@ The lowest note is as far down as it goes.
 
 Over the tones from 0 to 256, every sixteenth of a tone, the answer changes at 110 tones of AIL, those from 0 to 6.8125, where the sign of the octave stood in the frequency (a tone of 0 answered 0xfeb2, and answers 0x02b2 with this), and at 84 tones of MS AdLib between 0.5625 and 11.9375, where the table was read off its front; every other answer of the eight models is the same, and none of them does anything that the undefined behaviour sanitizer reports. A fuzz target of ADLplug-Next that plays MIDI through the real-time API, with the volume model a saved project can hold, found the first; calling each model over the range of tones found the second.
 
+Every tone that OPL3::noteOn() can hand a model lies between 0, below which it holds the tone, and about 396: a note of 127, a pitch bend of 127.98 half tones at the widest bend range, a note offset of 127, a vibrato of 12.19 half tones and the second voice's detune of 1.97. Over all of them, in steps of 1/1024 of a tone, with this patch none of the eight models does anything that the address or the undefined behaviour sanitizer reports, with assertions or without, and the six models it does not touch answer exactly as they do without it.
+
 This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
 
 diff --git a/src/models/model_ail.c b/src/models/model_ail.c

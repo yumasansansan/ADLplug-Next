@@ -135,3 +135,5 @@ adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0006-nuked-opn2-the-chip-type-is-the-chips-own.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0007-a-generation-writes-doubles-through-pointers-to-doubles.patch")
+adlplug_patch("thirdparty/libOPNMIDI"
+  "patches/libOPNMIDI/0008-ymfm-the-licence-file-beside-the-code.patch")
