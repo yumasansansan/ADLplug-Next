@@ -24,7 +24,7 @@
 // the next. Before a scene the player runs silent for a while (--warm-up, 8192
 // frames by default), which is not compared: setting up the player and the bank
 // writes a thousand registers or so, and a core that takes its writes as the
-// chip's bus does, as the low-level one does at some 0.56 of a sample each, is
+// chip's bus does, as the low-level one does at 2 2/9 samples each, is
 // still taking them when the scene would begin. The panning is the chip's, each
 // output on or off; --soft-pan asks for libADLMIDI's own, which the low-level
 // core does not have.
@@ -235,7 +235,8 @@ void play(ADL_MIDIPlayer *pl, const Event &e)
 struct Options {
     std::string bank = ADLPLUG_CORECMP_DEFAULT_BANK;
     int reference = ADLMIDI_EMU_NUKED_OPL3_LLE;
-    std::vector<int> cores = {ADLMIDI_EMU_NUKED, ADLMIDI_EMU_NUKED_FAST, ADLMIDI_EMU_DOSBOX, ADLMIDI_EMU_YMFM_OPL3};
+    std::vector<int> cores = {ADLMIDI_EMU_ADLPLUG_OPL3, ADLMIDI_EMU_NUKED, ADLMIDI_EMU_NUKED_FAST, ADLMIDI_EMU_DOSBOX,
+                              ADLMIDI_EMU_YMFM_OPL3};
     std::vector<std::string> scene_words;
     int chips = 1;
     unsigned jobs = 1;
@@ -483,6 +484,7 @@ const char *name_of(int emulator)
     case ADLMIDI_EMU_NUKED_OPL2_LITE: return "Nuked OPL2 Lite";
     case ADLMIDI_EMU_NUKED_CQM: return "Nuked CQM";
     case ADLMIDI_EMU_DOSBOX_OPL2: return "DOSBox OPL2";
+    case ADLMIDI_EMU_ADLPLUG_OPL3: return "ADLplug-Next OPL3";
     default: return "?";
     }
 }

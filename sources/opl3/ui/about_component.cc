@@ -65,7 +65,7 @@ About_Component::About_Component ()
     label2 = std::make_unique<Label> ("new label",
                              TRANS("Vitaly Novichkov for the ADLMIDI library\n"
                              "Joel Yliluoma for the original ADLMIDI software\n"
-                             "Alexey Khokholov (Nuke.YKT) for the Nuked cores\n"
+                             "Alexey Khokholov (Nuke.YKT) for the Nuked and LLE cores\n"
                              "Tony Gies for Nuked OPL3 Fast\n"
                              "The DOSBox Team for DOSBox OPL\n"
                              "Jarek Burczynski and Tatsuyuki Satoh for MAME OPL2\n"

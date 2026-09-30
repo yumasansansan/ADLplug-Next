@@ -65,7 +65,7 @@ About_Component::About_Component ()
     label2 = std::make_unique<Label> ("new label",
                              CharPointer_UTF8 ("Vitaly Novichkov for the OPNMIDI library\n"
                              "Joel Yliluoma for the original ADLMIDI software\n"
-                             "Alexey Khokholov (Nuke.YKT) for the Nuked cores\n"
+                             "Alexey Khokholov (Nuke.YKT) for the Nuked and LLE cores\n"
                              "MAMEDev and contributors for MAME YM2612 and YM2608\n"
                              "St\xc3\xa9phane Dallongeville and Shay Green for GENS OPN2\n"
                              "cisc for fmgen, the Neko Project II Kai OPNA core\n"

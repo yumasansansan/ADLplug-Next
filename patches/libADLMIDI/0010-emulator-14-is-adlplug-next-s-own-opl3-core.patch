@@ -1,0 +1,98 @@
+SPDX-FileCopyrightText: 2010-2014 Joel Yliluoma <bisqwit@iki.fi>
+SPDX-FileCopyrightText: 2015-2026 Vitaly Novichkov <admin@wohlnet.ru>
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Emulator 14 is ADLplug-Next's own OPL3 core
+
+ADLMIDI_EMU_ADLPLUG_OPL3 comes after ADLMIDI_EMU_DOSBOX_OPL2 in the list of emulators, so it is emulator 14, and every number before it, and every setting saved with one, stays as it is. The library makes it with adlplug::opl3::create_adlmidi_chip(), which it declares and does not define: the core's code is ADLplug-Next's (sources/opl3/core), and ADLplug-Next builds it into the library.
+
+The CMake option USE_ADLPLUG_OPL3_EMULATOR, off unless asked for, defines ADLMIDI_ENABLE_ADLPLUG_OPL3_EMULATOR for the library and for what links it. With it defined, the emulator is available (adl_isEmulatorAvailable), adl_switchEmulator() makes it, and it counts among the emulators that keep the library from refusing to build with none. The option adds no source of its own: a build that turns it on and does not add the core's code does not link.
+
+The code is C++98, as the library's is.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures. The core it adds is ADLplug-Next's, and so is the patch: it is not for upstream.
+
+diff --git a/include/adlmidi.h b/include/adlmidi.h
+--- a/include/adlmidi.h
++++ b/include/adlmidi.h
+@@ -802,6 +802,8 @@
+     ADLMIDI_EMU_NUKED_CQM,
+     /*! DosBox ran in OPL2 mode */
+     ADLMIDI_EMU_DOSBOX_OPL2,
++    /*! ADLplug-Next's own OPL3 core, in ADLplug-Next's builds of the library only */
++    ADLMIDI_EMU_ADLPLUG_OPL3,
+     /*! Count instrument on the level */
+     ADLMIDI_EMU_end,
+ 
+diff --git a/src/adlmidi_opl3.cpp b/src/adlmidi_opl3.cpp
+--- a/src/adlmidi_opl3.cpp
++++ b/src/adlmidi_opl3.cpp
+@@ -41,6 +41,7 @@
+        defined(ADLMIDI_DISABLE_YMFM_EMULATOR) && \
+        !defined(ADLMIDI_ENABLE_OPL2_LLE_EMULATOR) && \
+        !defined(ADLMIDI_ENABLE_OPL3_LLE_EMULATOR) && \
++       !defined(ADLMIDI_ENABLE_ADLPLUG_OPL3_EMULATOR) && \
+        !defined(ADLMIDI_ENABLE_HW_SERIAL)
+ #       error "No emulators enabled. You must enable at least one emulator to use this library!"
+ #   endif
+@@ -95,6 +96,13 @@
+ #       include "chips/ymf262_lle.h"
+ #   endif
+ 
++// ADLplug-Next's own OPL3 core: its code is ADLplug-Next's, which builds it into
++// the library, and this makes it
++#   ifdef ADLMIDI_ENABLE_ADLPLUG_OPL3_EMULATOR
++#       include "chips/opl_chip_base.h"
++namespace adlplug { namespace opl3 { OPLChipBase *create_adlmidi_chip(); } }
++#   endif
++
+ // HW OPL Serial
+ #   ifdef ADLMIDI_ENABLE_HW_SERIAL
+ #       include "chips/opl_serial_port.h"
+@@ -140,6 +148,10 @@
+ #   ifdef ADLMIDI_ENABLE_OPL3_LLE_EMULATOR
+     | (1u << ADLMIDI_EMU_NUKED_OPL3_LLE)
+ #   endif
++
++#   ifdef ADLMIDI_ENABLE_ADLPLUG_OPL3_EMULATOR
++    | (1u << ADLMIDI_EMU_ADLPLUG_OPL3)
++#   endif
+ #endif
+ ;
+ 
+@@ -1203,6 +1215,11 @@
+             chip = new Ymf262LLEOPL3;
+             break;
+ #endif
++#ifdef ADLMIDI_ENABLE_ADLPLUG_OPL3_EMULATOR
++        case ADLMIDI_EMU_ADLPLUG_OPL3:
++            chip = adlplug::opl3::create_adlmidi_chip();
++            break;
++#endif
+         }
+ #endif // ENABLE_HW_OPL_DOS
+ 
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -254,6 +254,7 @@
+ endif()
+ option(USE_NUKED_OPL2_LLE_EMULATOR  "Use Nuked OPL2-LLE emulator [!EXTRA HEAVY!]" OFF)
+ option(USE_NUKED_OPL3_LLE_EMULATOR  "Use Nuked OPL3-LLE emulator [!EXTRA HEAVY!]" OFF)
++option(USE_ADLPLUG_OPL3_EMULATOR    "Use ADLplug-Next's own OPL3 core (ADLplug-Next's code, which ADLplug-Next builds into the library)" OFF)
+ option(USE_HW_SERIAL        "Use the hardware OPL3 chip via Serial on modern systems" OFF)
+ 
+ option(WITH_GENADLDATA      "Build and run full rebuild of embedded banks cache" OFF)
+@@ -495,6 +496,11 @@
+             target_compile_definitions(${targetLib} PUBLIC ADLMIDI_ENABLE_OPL3_LLE_EMULATOR)
+         endif()
+ 
++        if(USE_ADLPLUG_OPL3_EMULATOR)
++            set(HAS_EMULATOR TRUE)
++            target_compile_definitions(${targetLib} PUBLIC ADLMIDI_ENABLE_ADLPLUG_OPL3_EMULATOR)
++        endif()
++
+         if(USE_HW_SERIAL)
+             set(HAS_EMULATOR TRUE)
+             target_sources(${targetLib} PRIVATE

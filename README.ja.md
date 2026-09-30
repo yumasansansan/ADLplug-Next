@@ -86,7 +86,7 @@ ADLplug-Next と OPNplug-Next は，ADLplug や OPNplug とは別のプラグイ
 
 エミュレータコア（以下，コア）は，音源チップの動作をソフトウェアで再現するプログラムです．同じチップでも，コアによって音の正確さや処理の重さが異なり，プラグインのエミュレータメニューで切り替えることができます．
 
-ADLplug-Next は，libADLMIDI と libOPNMIDI が提供するすべてのエミュレータコアをビルドします．動作に必須なものを除いては，どのコアも，ビルドオプションで除くことができます（[ビルド方法](#ビルド方法) を参照）．コアの名前はプラグインのエミュレータメニューに表示されるもので，備考は，ライブラリとコアが自身について説明している内容をまとめたものです．
+ADLplug-Next は，libADLMIDI と libOPNMIDI が提供するすべてのエミュレータコアと，独自のコア 1 つをビルドします．動作に必須なものを除いては，どのコアも，ビルドオプションで除くことができます（[ビルド方法](#ビルド方法) を参照）．コアの名前はプラグインのエミュレータメニューに表示されるもので，備考は，ライブラリとコアが自身について説明している内容をまとめたものです．
 
 表の*速度*は，Intel Core i7-1360P で，1 つのチップに 9 音を 44.1 kHz で鳴らしたときに，リアルタイムの何倍の速さで処理できたかを表します（`-O3` でビルドしたもの）．たとえば 100× なら，1 秒分の音を 0.01 秒で作ることができます．1 つのインスタンス（DAW で読み込んだプラグイン 1 つ）は，デフォルトで 2 つのチップを動かします．*フルパンニング*に対応したコアでは，音を左右の好きな位置に置くことができます．対応していないコアでは，左・中央・右のいずれかにしか置けません．OPL2 はモノラルなので，左右の区別がありません．
 
@@ -103,6 +103,7 @@ ADLplug-Next は，libADLMIDI と libOPNMIDI が提供するすべてのエミ�
 | Opal OPL3 | OPL3（YMF262） | 不正確（libADLMIDI の説明）．Reality Adlib Tracker の曲のために書かれ，パーカッションモードがない | 109× | あり | `USE_OPAL_EMULATOR` |
 | Java 1.0.6 OPL3 | OPL3（YMF262） | 部分的に正確（libADLMIDI の説明） | 76× | あり | `USE_JAVA_EMULATOR` |
 | YMF262-LLE OPL3 | OPL3（YMF262） | 低レベル．一般的な CPU には重すぎる（libADLMIDI の説明） | 1.7× | なし | `USE_NUKED_OPL3_LLE_EMULATOR` |
+| ADLplug-Next OPL3 | OPL3（YMF262） | ADLplug-Next 独自のコア．YMF262-LLE と 1 サンプルずつ同じ音を，リアルタイムに間に合う速さで作る | 107× | あり | `USE_ADLPLUG_OPL3_EMULATOR` |
 | DOSBox 0.74-r4111 OPL2 | OPL2（YM3812） | DOSBox のコアを OPL2 として動かしたもの | 515× | モノラル | `USE_DOSBOX_EMULATOR` |
 | MAME OPL2 | OPL2（YM3812） | MAME の YM3812 コア | 214× | モノラル | `USE_MAME_EMULATOR` |
 | YMFM OPL2 | OPL2（YM3812） | YMFM OPL3 と同様 | 184× | モノラル | `USE_YMFM_EMULATOR` |
@@ -444,6 +445,7 @@ GPLv3 の第 13 条は，GPLv3 の著作物と AGPLv3 の著作物を組み合�
 | `patches/libADLMIDI`，`patches/libOPNMIDI` | それぞれが変更するコードと同じライセンス（各パッチの先頭に書いてあります） |
 | `patches/JUCE` | 変更する側のコードと同じ GNU AGPL v3 |
 | `sources/opl3/ui/components/opl3_waves.cc` | GNU LGPL v2.1+ |
+| `sources/opl3/core/ymf262_logic.h` | GNU GPL v2+ と GNU LGPL v2.1+（沿って書いたコードのライセンス） |
 | `resources/opn2/LICENSE-DMXOPN2.txt` | MIT（DMXOPN2 バンクのライセンス） |
 | ビルドで生成される音色バンク | それぞれの利用条件（[音色バンク](#音色バンク) を参照） |
 | `resources/ui/fonts` | SIL Open Font License 1.1（Liberation，名前を変更） |

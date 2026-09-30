@@ -35,6 +35,10 @@ set(ADLplug_UNIT_TEST_SOURCES
   "unit/utility_tests.cc")
 if(ADLplug_CHIP STREQUAL "OPL3")
   list(APPEND ADLplug_UNIT_TEST_SOURCES "unit/opl3_tests.cc")
+  # ADLplug-Next's own OPL3 core, which the library links in (cmake/OPL3Core.cmake).
+  if(USE_ADLPLUG_OPL3_EMULATOR)
+    list(APPEND ADLplug_UNIT_TEST_SOURCES "unit/opl3_core_tests.cc")
+  endif()
 endif()
 
 # The plugin's own sources under test, compiled again here against JUCE's core
@@ -138,6 +142,11 @@ if(ADLplug_CHIP STREQUAL "OPL3")
   # out (cmake/Cores.cmake), so the test is told whether it is there.
   if(USE_NUKED_EMULATOR)
     target_compile_definitions(ADLplug_unit_tests PRIVATE ADLPLUG_TESTS_HAVE_NUKED_OPL3)
+  endif()
+  # ADLplug-Next's own OPL3 core is compared with the low-level core, sample for
+  # sample, where the build has that one.
+  if(USE_NUKED_OPL3_LLE_EMULATOR)
+    target_compile_definitions(ADLplug_unit_tests PRIVATE ADLPLUG_TESTS_HAVE_OPL3_LLE)
   endif()
 else()
   target_link_libraries(ADLplug_unit_tests PRIVATE wopn OPNMIDI_static)
@@ -357,9 +366,9 @@ foreach(core IN LISTS cores)
 
   # A core that the build leaves out plays as the one in its place, or as the
   # default core when the build leaves that one out too: asking for it gives
-  # the output of that core. The parameters keep the number asked for (plan
-  # D54), so the outputs are compared rather than the names. Only builds that
-  # leave cores out have these tests, such as those CI makes on a push to main.
+  # the output of that core. The parameters keep the number asked for, so the
+  # outputs are compared rather than the names. Only builds that leave cores
+  # out have these tests, such as those CI makes on a push to main.
   foreach(other IN LISTS cores)
     string(REPLACE "|" ";" other_fields "${other}")
     list(GET other_fields 0 other_index)

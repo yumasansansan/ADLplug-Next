@@ -76,6 +76,9 @@ set(USE_NUKED_OPL2_LLE_EMULATOR ON CACHE BOOL "Use Nuked OPL2-LLE emulator [!EXT
 set(USE_NUKED_OPL3_LLE_EMULATOR ON CACHE BOOL "Use Nuked OPL3-LLE emulator [!EXTRA HEAVY!]")
 set(USE_NUKED_OPN2_LLE_EMULATOR ON CACHE BOOL "Use Nuked OPN2-LLE emulator [!EXTRA HEAVY!]")
 set(USE_NUKED_OPNA_LLE_EMULATOR ON CACHE BOOL "Use Nuked OPNA-LLE emulator [!EXTRA HEAVY!]")
+# ADLplug-Next's own OPL3 core, emulator 14 of libADLMIDI with this project's
+# patch. The library only declares it; its code is built by cmake/OPL3Core.cmake.
+set(USE_ADLPLUG_OPL3_EMULATOR ON CACHE BOOL "Use ADLplug-Next's own OPL3 core")
 
 set(libADLMIDI_STATIC ON CACHE BOOL "" FORCE)
 set(libADLMIDI_SHARED OFF CACHE BOOL "" FORCE)
@@ -122,8 +125,8 @@ endforeach()
 # else, and -fwrapv promises exactly that. These sources are compiled with it in
 # every build: the code means the same thing whether or not the sanitizers are
 # on, and the flag only keeps the compiler from assuming the overflow cannot
-# happen. The shifts are in hundreds of places here, so the patches of D79,
-# which are for faults with one right answer each, are not the way.
+# happen. The shifts are in hundreds of places here, so the patches of
+# patches/, which are for faults with one right answer each, are not the way.
 set(ADLplug_ADLMIDI_LLE_SOURCES
   "src/chips/ym3812_lle/nopl2.c" "src/chips/ym3812_lle/nuked_fmopl2.c"
   "src/chips/ymf262_lle/nopl3.c" "src/chips/ymf262_lle/nuked_fmopl3.c")

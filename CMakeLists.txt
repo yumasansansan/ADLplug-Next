@@ -1226,6 +1226,12 @@ include("${CMAKE_CURRENT_LIST_DIR}/cmake/MediaPerch.cmake")
 target_link_libraries(ADLplug PUBLIC mediaperch-resample)
 
 # --------------------------------------------------------------------------
+# ADLplug-Next's own OPL3 core, which libADLMIDI makes and this project builds,
+# with its own flags, after the function that applies them.
+
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/OPL3Core.cmake")
+
+# --------------------------------------------------------------------------
 # Tests
 
 if(ADLplug_BUILD_TESTS)

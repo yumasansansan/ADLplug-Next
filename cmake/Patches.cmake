@@ -10,7 +10,9 @@
 # that every build has them. They are for the faults that ADLplug-Next finds in
 # the libraries and the framework it ships, the sanitizers' among them: the
 # fault is fixed rather than left alone, and the patch is offered upstream. A
-# patch goes away once it is upstream and the submodule has moved on.
+# patch goes away once it is upstream and the submodule has moved on. The one
+# that fixes nothing, which gives ADLplug-Next's own OPL3 core its number in
+# libADLMIDI (sources/opl3/core), stays.
 #
 # Configuring twice is not an error: a patch that is already in place is left
 # alone. Editing one makes CMake configure again.
@@ -121,6 +123,8 @@ adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0008-dosbox-a-rhythm-mode-drum-is-panned-by-its-own-channel.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0009-a-generation-writes-doubles-through-pointers-to-doubles.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0010-emulator-14-is-adlplug-next-s-own-opl3-core.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
 adlplug_patch("thirdparty/libOPNMIDI"

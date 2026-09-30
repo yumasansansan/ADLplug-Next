@@ -16,7 +16,8 @@
  * each resource is spelled out. Only the resources of the chip variant being
  * built are embedded. The logos of emulator cores are those whose origin and
  * license are known (REUSE.toml): ADLplug's drawings for Nuke.YKT's cores and,
- * for the OPL3, ESFMu's own logo. The other cores show their name instead.
+ * for the OPL3, ESFMu's own logo and, for ADLplug-Next's own core, the icon of
+ * the plugin's executables. The other cores show their name instead.
  */
 
 #include "resources.h"
@@ -42,6 +43,11 @@ static const unsigned char emu_esfmu[] = {
 #embed "../resources/ui/cores/ESFMu.png"
 };
 const struct Res_Data adlplug_res_emu_esfmu = { emu_esfmu, sizeof emu_esfmu };
+
+static const unsigned char emu_adlplug[] = {
+#embed "../resources/application/ADLplug-96.png"
+};
+const struct Res_Data adlplug_res_emu_adlplug = { emu_adlplug, sizeof emu_adlplug };
 
 static const unsigned char emoji_u1f4a1[] = {
 #embed "../resources/ui/noto-emoji/emoji_u1f4a1.png"

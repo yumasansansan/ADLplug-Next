@@ -86,6 +86,7 @@ Emulator_Icons::Emulator_Icons()
     const Image icon_nuked = load(Res::emu_nuked);
     const Image icon_nuked2 = load(Res::emu_nuked2);
     const Image icon_esfmu = load(Res::emu_esfmu);
+    const Image icon_adlplug = load(Res::emu_adlplug);
 
     // The labels are gathered and drawn together, into one image, afterwards
     // (Image_Utils::make_text_icons).
@@ -113,6 +114,11 @@ Emulator_Icons::Emulator_Icons()
             break;
         case ADLMIDI_EMU_ESFMu:
             images[i] = icon_esfmu;
+            break;
+        // ADLplug-Next's own core takes the icon of the plugin's executables
+        // (resources/application).
+        case ADLMIDI_EMU_ADLPLUG_OPL3:
+            images[i] = icon_adlplug;
             break;
         default:
             // The other cores show the first word of their name. The resources
