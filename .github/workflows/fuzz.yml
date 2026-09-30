@@ -16,18 +16,20 @@
 # choice when it is started by hand.
 #
 # The targets of a build are fuzzed in parts side by side: the two whose corpora
-# take the longest to replay, the measurement of an instrument and the synth that
-# MIDI drives (ADLplug_FUZZ_HEAVY below), have a part each, and one more takes
-# every other target. One job fuzzed all seven in turn until the memory
-# sanitizer's builds outgrew the time a job is allowed, and one job then took the
-# two heavy targets together until they outgrew it as well: a target replays its
-# corpus before it is fuzzed and, when the run changed it, again when it is merged
-# down (ci/fuzz.sh), and under that sanitizer one replay of the measurement's
-# corpus came to 55 minutes and one of the synth's to 72, on a runner without
-# AVX-512. That sanitizer is slow on those runners as neither of the others is,
-# and each part is fuzzed on a runner with AVX-512 where one can be had, which it
-# tries runners one after another for: .github/workflows/fuzz-part.yml, which
-# does the fuzzing of a part and says what was measured.
+# take the longest to replay, the measurement of an instrument and the synth
+# that MIDI drives (ADLplug_FUZZ_HEAVY below), have a part each, and one more
+# takes every other target. One job fuzzed all seven in turn until the memory
+# sanitizer's builds outgrew the time a job is allowed, and one job then took
+# the two heavy targets together until they outgrew it as well: a target replays
+# its corpus before it is fuzzed and, when the run changed it, again when it is
+# merged down (ci/fuzz.sh), and under that sanitizer one replay of the
+# measurement's corpus came to 55 minutes and one of the synth's to 72, on one
+# of AMD's Zen 3 or Zen 4 runners. That sanitizer is slow on AMD's Zen 3 and
+# Zen 4 as neither of the others is, and each part is fuzzed on the kind of
+# runner that is fast for its sanitizer where one can be had -- an Intel one or
+# a later AMD one for the memory sanitizer, one with AVX-512 for the others --
+# which it tries runners one after another for: .github/workflows/fuzz-part.yml,
+# which does the fuzzing of a part and says what was measured.
 #
 # A run carries on from the corpus that the last decided run grew and kept as an
 # artifact -- the last one that fuzzed at all, which is one the schedule or a

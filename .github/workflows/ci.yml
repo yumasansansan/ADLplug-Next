@@ -478,17 +478,20 @@ jobs:
   # generator, the helpers of JUCE that load the plugin to write its manifests,
   # the training of profile-guided optimisation -- and the tests run it after, so
   # it can only be made on a runner whose processor has AVX-512. GitHub's runners
-  # have it about one time in three, and there is no asking for it: in the runs of
-  # 2026-09-26 to 09-28, 23 of 66 Ubuntu jobs and 2 of 6 Windows jobs had it. So
-  # each job tries one runner after another (max-parallel: 1), twelve at the most,
-  # and builds on the first that has it. A try that finds the packs of its job
-  # kept already, by an earlier try of the run, or finds no AVX-512 on its runner,
-  # ends after its first step, in seconds, and the next try gets a runner of its
-  # own; so do the tries after the one that built. At one time in three, all
-  # twelve miss less than once in a hundred runs ((2/3)^12 is 0.8 %); then the
-  # publish job finds the packs missing and makes no Nightly (ci/publish.sh
-  # assemble). A try that fails stops those after it (fail-fast), since what
-  # failed is the build and not the runner.
+  # have it about one time in three, and there is no asking for it: of the Linux
+  # runners seen from 2026-09-29 to 09-30, 55 of 172 had it, and 2 of 10 Windows
+  # ones. Not every AMD EPYC 9V74 (Zen 4) shows the AVX-512 it has, and how many
+  # runners have it changes with the hour: on 2026-09-30, twelve Ubuntu tries in a
+  # row found none, nine on a Zen 3 and three on a Zen 4 that hid it. So each job
+  # tries one runner after another (max-parallel: 1), thirty at the most, and
+  # builds on the first that has it. A try that finds the packs of its job kept
+  # already, by an earlier try of the run, or finds no AVX-512 on its runner, ends
+  # after its first step, in seconds, and the next try gets a runner of its own;
+  # so do the tries after the one that built. Even at one time in five, all thirty
+  # miss about once in a thousand runs (0.8^30 is 0.12 %); then the publish job
+  # finds the packs missing and makes no Nightly (ci/publish.sh assemble). A try
+  # that fails stops those after it (fail-fast), since what failed is the build
+  # and not the runner.
   avx512-windows:
     name: AVX-512 Release (windows-2025-vs2026, try ${{ matrix.try }})
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -503,7 +506,8 @@ jobs:
       fail-fast: true
       max-parallel: 1
       matrix:
-        try: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        try: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+              16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
 
     # The steps of the Ubuntu job as well, and its first step that of the rpm job:
     # YAML anchors, which GitHub reads.
@@ -613,7 +617,8 @@ jobs:
       fail-fast: true
       max-parallel: 1
       matrix:
-        try: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        try: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+              16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
     steps: *avx512-steps
 
   avx512-rpm:
@@ -632,7 +637,8 @@ jobs:
       fail-fast: true
       max-parallel: 1
       matrix:
-        try: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        try: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+              16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
 
     steps:
       - *avx512-try

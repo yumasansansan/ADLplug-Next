@@ -11,24 +11,38 @@
 # heavy ones, or one heavy target by its name -- and says how long each target
 # is to be fuzzed.
 #
-# **On a runner with AVX-512 when one can be had.** GitHub hands out two kinds of
-# runner, about two without AVX-512 to one with it, and there is no asking for
-# either. Fuzzing is faster on the second kind, and under the memory sanitizer by
-# far: in the daily runs of 2026-09-26 to 09-28, that sanitizer got through 2 to
-# 13 times as many inputs a second there as on the first kind with the other five
-# targets, and 11 to 17 times as many with the heavy two, which on the first kind
-# spent all their time replaying their corpora and on the second fuzzed for all
-# of it; the address sanitizer got through 1.2 to 1.7 times as many, and the
-# thread sanitizer 1.4 to 1.8 times. So a part tries one runner after another
-# (max-parallel: 1), eight at the most. A try that finds the corpus or the failed
-# inputs of its part kept already, by an earlier try of the run, or finds no
-# AVX-512 on its runner, ends after its first step, in seconds, and the next try
-# gets a runner of its own; the first try on a runner with AVX-512 fuzzes, and
-# the tries after it end the same way. The last try fuzzes on whatever runner it
-# has, since fuzzing needs no AVX-512 and is only slower without it -- which is
-# how every part fuzzed before -- and the seven before it all miss about one time
-# in twenty ((2/3)^7 is 6 %). A try that fails stops those after it (fail-fast):
-# what failed is the fuzzing, not the runner.
+# **On a runner that fuzzes fast, when one can be had.** GitHub hands out several
+# kinds of runner, and there is no asking for any of them. The address and the
+# thread sanitizer are faster on one with AVX-512, about one runner in three: in
+# the daily runs of 2026-09-26 to 09-28 they got through 1.2 to 1.7 and 1.4 to
+# 1.8 times as many inputs a second there as elsewhere. The memory sanitizer
+# turns on something else. It keeps the shadow of an address at the address XOR
+# 0x500000000000 and its origin 0x100000000000 above that, so the three share
+# their low 44 bits, and AMD's Zen 3 and Zen 4 (cpu family 25) predict the way of
+# their L1 data cache from a hash of the address that leaves those high bits out:
+# an address, its shadow and its origin cannot stay in that cache together. On
+# sixty runners of 2026-09-30, three lines 44 and 46 bits apart were read and
+# written 15 to 17 times as slowly as three lines that differ in bits 20 and 21
+# on those two, and as fast on Zen 5 (family 26) and on Intel's Ice Lake,
+# Emerald Rapids and Granite Rapids; the sanitizer made a vectorised loop 11 to
+# 18 times slower on the first two and 2 to 4 times on the others, and the
+# fuzzing replayed the same corpora 2.7 to 8 times as slowly on a Zen 4 as on a
+# Granite Rapids. A Zen 4 has AVX-512, so under the memory sanitizer a part
+# looks for an Intel runner or an AMD one of family 26 or later instead, about
+# one runner in five.
+#
+# So a part tries one runner after another (max-parallel: 1), twenty at the most
+# under the memory sanitizer and eight under the others. A try that finds the
+# corpus or the failed inputs of its part kept already, by an earlier try of the
+# run, or finds its runner not of the kind it looks for, ends after its first
+# step, in seconds, and the next try gets a runner of its own; the first try on
+# the right kind fuzzes, and the tries after it end the same way. The last try
+# fuzzes on whatever runner it has, since fuzzing is only slower on the other
+# kinds -- which is how every part fuzzed before -- and the tries before it all
+# miss about one time in twenty under the address and the thread sanitizer
+# ((2/3)^7 is 6 %) and one time in seventy under the memory sanitizer (0.8^19 is
+# 1.4 %). A try that fails stops those after it (fail-fast): what failed is the
+# fuzzing, not the runner.
 #
 # The build is the fuzz targets alone, with every coverage feature libFuzzer can
 # steer by (ci/build.sh --fuzz-only). These runs are where the fuzzer has the
@@ -73,7 +87,7 @@ jobs:
   fuzz:
     name: try ${{ matrix.try }} (ubuntu-26.04)
     runs-on: ubuntu-26.04
-    # What each choice is allowed, set for a runner without AVX-512, which the
+    # What each choice is allowed, set for a runner of the slower kind, which the
     # last try may have: a job's targets run one after another after a build, and
     # each replays its corpus when it starts and, when the run changed it, again
     # when the corpus is merged down, which under the memory sanitizer can take
@@ -101,7 +115,12 @@ jobs:
       fail-fast: true
       max-parallel: 1
       matrix:
-        try: [1, 2, 3, 4, 5, 6, 7, 8]
+        # Twenty tries under the memory sanitizer and eight under the others, as
+        # said at the top.
+        try: >-
+          ${{ fromJSON(endsWith(inputs.preset, '-msan')
+                && '[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]'
+                || '[1, 2, 3, 4, 5, 6, 7, 8]') }}
     env:
       ADLplug_FUZZ_PRESET: ${{ inputs.preset }}
       ADLplug_FUZZ_PART: ${{ inputs.part }}
@@ -126,23 +145,40 @@ jobs:
               exit 0
             fi
           done
-          # What x86-64-v4 has beyond x86-64-v3, as Linux lists it.
+          # The kind of runner this part looks for, as said at the top: under the
+          # memory sanitizer an Intel processor or an AMD one of family 26 or
+          # later; under the others one with what x86-64-v4 has beyond x86-64-v3,
+          # as Linux lists it.
           grep -m 1 '^model name' /proc/cpuinfo || true
-          flags=" $(grep -m 1 '^flags' /proc/cpuinfo | cut -d : -f 2) "
-          missing=
-          for feature in avx512f avx512bw avx512cd avx512dq avx512vl; do
-            if [[ $flags != *" $feature "* ]]; then
-              missing+=" $feature"
+          if [[ $ADLplug_FUZZ_PRESET == *-msan ]]; then
+            wanted="an Intel processor or an AMD one of family 26 or later"
+            vendor=$(grep -m 1 '^vendor_id' /proc/cpuinfo | cut -d : -f 2 | tr -d ' \t')
+            family=$(grep -m 1 '^cpu family' /proc/cpuinfo | cut -d : -f 2 | tr -d ' \t')
+            if [ "$vendor" = GenuineIntel ] ||
+               { [ "$vendor" = AuthenticAMD ] && [[ $family =~ ^[0-9]+$ ]] && (( family >= 26 )); }; then
+              why=
+            else
+              why="it has $vendor, family $family"
             fi
-          done
-          if [ -z "$missing" ]; then
-            echo "This runner's processor has AVX-512: this try fuzzes."
+          else
+            wanted=AVX-512
+            flags=" $(grep -m 1 '^flags' /proc/cpuinfo | cut -d : -f 2) "
+            missing=
+            for feature in avx512f avx512bw avx512cd avx512dq avx512vl; do
+              if [[ $flags != *" $feature "* ]]; then
+                missing+=" $feature"
+              fi
+            done
+            why=${missing:+it lacks$missing}
+          fi
+          if [ -z "$why" ]; then
+            echo "This runner has $wanted: this try fuzzes."
             echo "fuzz=true" >> "$GITHUB_OUTPUT"
           elif [ "${{ strategy.job-index }}" -eq $(( ${{ strategy.job-total }} - 1 )) ]; then
-            echo "This runner's processor lacks$missing, and this is the last try: it fuzzes all the same, more slowly."
+            echo "This runner does not have $wanted ($why), and this is the last try: it fuzzes all the same, more slowly."
             echo "fuzz=true" >> "$GITHUB_OUTPUT"
           else
-            echo "This runner's processor lacks$missing; the next try looks for one that has it."
+            echo "This runner does not have $wanted ($why); the next try looks for one that has."
             echo "fuzz=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -231,8 +267,8 @@ jobs:
             select=(--only "$ADLplug_FUZZ_PART")
           fi
           # A heavy target under the memory sanitizer replays its corpus for more
-          # than an hour before it fuzzes, on a runner without AVX-512, which
-          # ci/fuzz.sh would take for a hang after the hour it allows that
+          # than an hour before it fuzzes, on a runner that sanitizer is slow on,
+          # which ci/fuzz.sh would take for a hang after the hour it allows that
           # sanitizer; it is given two.
           grace=()
           if [[ $ADLplug_FUZZ_PRESET == *-msan && $ADLplug_FUZZ_PART != rest ]]; then
