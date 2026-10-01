@@ -77,7 +77,9 @@ set(USE_NUKED_OPL3_LLE_EMULATOR ON CACHE BOOL "Use Nuked OPL3-LLE emulator [!EXT
 set(USE_NUKED_OPN2_LLE_EMULATOR ON CACHE BOOL "Use Nuked OPN2-LLE emulator [!EXTRA HEAVY!]")
 set(USE_NUKED_OPNA_LLE_EMULATOR ON CACHE BOOL "Use Nuked OPNA-LLE emulator [!EXTRA HEAVY!]")
 # ADLplug-Next's own OPL3 core, emulator 14 of libADLMIDI with this project's
-# patch. The library only declares it; its code is built by cmake/OPL3Core.cmake.
+# patch, and the core ADLplug-Next plays on by default, which its builds cannot
+# leave out (below). The library only declares it; its code is built by
+# cmake/OPL3Core.cmake.
 set(USE_ADLPLUG_OPL3_EMULATOR ON CACHE BOOL "Use ADLplug-Next's own OPL3 core")
 
 set(libADLMIDI_STATIC ON CACHE BOOL "" FORCE)
@@ -146,9 +148,14 @@ foreach(ADLplug_LIBRARY IN ITEMS ADLMIDI OPNMIDI)
     TARGET_DIRECTORY ${ADLplug_LIBRARY}_static APPEND PROPERTY COMPILE_OPTIONS -fwrapv)
 endforeach()
 
-# The measurers (sources/*/adl/measurer) run on these cores, and the plugins
-# select them by default.
-if(ADLplug_CHIP STREQUAL "OPL3" AND NOT USE_DOSBOX_EMULATOR)
+# The cores a plugin cannot do without: the one it plays on by default, which a
+# core that a build leaves out plays as (sources/*/adl/chip_settings.cc), and the
+# one its measurer (sources/*/adl/measurer) runs on. ADLplug-Next plays on its own
+# OPL3 core and measures on the DOSBox one; OPNplug-Next does both on the MAME
+# YM2612 core.
+if(ADLplug_CHIP STREQUAL "OPL3" AND NOT USE_ADLPLUG_OPL3_EMULATOR)
+  message(FATAL_ERROR "ADLplug needs USE_ADLPLUG_OPL3_EMULATOR: it plays on its own OPL3 core by default.")
+elseif(ADLplug_CHIP STREQUAL "OPL3" AND NOT USE_DOSBOX_EMULATOR)
   message(FATAL_ERROR "ADLplug needs USE_DOSBOX_EMULATOR: its measurer runs on the DOSBox OPL3 core.")
 elseif(ADLplug_CHIP STREQUAL "OPN2" AND NOT USE_MAME_EMULATOR)
   message(FATAL_ERROR "OPNplug needs USE_MAME_EMULATOR: its measurer runs on the MAME YM2612 core.")

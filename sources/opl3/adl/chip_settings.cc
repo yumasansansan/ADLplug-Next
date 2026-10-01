@@ -36,8 +36,8 @@ Emulator_Defaults make_emulator_defaults()
     for (const std::string &choice : choices)
         defaults.choices.add(choice);
 
-    // Always built: the measurer runs on it (see cmake/ADLMIDI.cmake).
-    defaults.default_index = static_cast<unsigned>(ADLMIDI_EMU_DOSBOX);
+    // ADLplug-Next's own core, which every build has (see cmake/ADLMIDI.cmake).
+    defaults.default_index = static_cast<unsigned>(ADLMIDI_EMU_ADLPLUG_OPL3);
     assert(defaults.is_built(defaults.default_index));
 
     return defaults;

@@ -35,10 +35,9 @@ set(ADLplug_UNIT_TEST_SOURCES
   "unit/utility_tests.cc")
 if(ADLplug_CHIP STREQUAL "OPL3")
   list(APPEND ADLplug_UNIT_TEST_SOURCES "unit/opl3_tests.cc")
-  # ADLplug-Next's own OPL3 core, which the library links in (cmake/OPL3Core.cmake).
-  if(USE_ADLPLUG_OPL3_EMULATOR)
-    list(APPEND ADLplug_UNIT_TEST_SOURCES "unit/opl3_core_tests.cc")
-  endif()
+  # ADLplug-Next's own OPL3 core, which every build of ADLplug-Next has
+  # (cmake/ADLMIDI.cmake) and the library links in (cmake/OPL3Core.cmake).
+  list(APPEND ADLplug_UNIT_TEST_SOURCES "unit/opl3_core_tests.cc")
 endif()
 
 # The plugin's own sources under test, compiled again here against JUCE's core
@@ -134,6 +133,9 @@ target_compile_definitions(ADLplug_unit_tests PRIVATE
   JUCE_USE_WINDOWS_MEDIA_FORMAT=0
   JUCE_USE_CURL=0
   JUCE_WEB_BROWSER=0)
+# The tests that a build compiles out, for want of what they test, and that are
+# not registered either (below).
+set(ADLplug_UNIT_TESTS_LEFT_OUT "")
 if(ADLplug_CHIP STREQUAL "OPL3")
   target_link_libraries(ADLplug_unit_tests PRIVATE wopl ADLMIDI_static)
   target_include_directories(ADLplug_unit_tests SYSTEM PRIVATE "${PROJECT_SOURCE_DIR}/thirdparty/libADLMIDI/src")
@@ -144,9 +146,13 @@ if(ADLplug_CHIP STREQUAL "OPL3")
     target_compile_definitions(ADLplug_unit_tests PRIVATE ADLPLUG_TESTS_HAVE_NUKED_OPL3)
   endif()
   # ADLplug-Next's own OPL3 core is compared with the low-level core, sample for
-  # sample, where the build has that one.
+  # sample, where the build has that one. A build without it, such as the one CI
+  # makes without the optional cores, has no such test: the program would answer
+  # that it knows of none by that name.
   if(USE_NUKED_OPL3_LLE_EMULATOR)
     target_compile_definitions(ADLplug_unit_tests PRIVATE ADLPLUG_TESTS_HAVE_OPL3_LLE)
+  else()
+    list(APPEND ADLplug_UNIT_TESTS_LEFT_OUT opl3_core_matches_low_level_core)
   endif()
 else()
   target_link_libraries(ADLplug_unit_tests PRIVATE wopn OPNMIDI_static)
@@ -169,6 +175,9 @@ foreach(source IN LISTS ADLplug_UNIT_TEST_SOURCES)
   file(STRINGS "${source}" declarations REGEX "^ADLPLUG_TEST\\([A-Za-z0-9_]+\\)")
   foreach(declaration IN LISTS declarations)
     string(REGEX REPLACE "^ADLPLUG_TEST\\(([A-Za-z0-9_]+)\\).*$" "\\1" name "${declaration}")
+    if(name IN_LIST ADLplug_UNIT_TESTS_LEFT_OUT)
+      continue()
+    endif()
     add_test(NAME "unit.${name}" COMMAND ADLplug_unit_tests "${name}")
   endforeach()
 endforeach()
@@ -271,7 +280,7 @@ file(WRITE "${render_out}/reference" "${ADLplug_RENDER_REFERENCE}")
 
 set(sequence 20 5000)   # seconds, and milliseconds of warm-up
 if(ADLplug_CHIP STREQUAL "OPL3")
-  set(default_emulator "DOSBox 0.74-r4111 OPL3")
+  set(default_emulator "ADLplug-Next OPL3")
 else()
   set(default_emulator "MAME YM2612")
 endif()

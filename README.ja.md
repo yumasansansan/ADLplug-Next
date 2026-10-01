@@ -96,14 +96,14 @@ ADLplug-Next は，libADLMIDI と libOPNMIDI が提供するすべてのエミ�
 
 | コア | チップ | 備考 | 速度 | フルパンニング | ビルドオプション |
 |------|--------|------|-----:|----------------|------------------|
-| DOSBox 0.74-r4111 OPL3（デフォルト） | OPL3（YMF262） | 正確で高速（libADLMIDI の説明） | 346× | あり | `USE_DOSBOX_EMULATOR`，必須 |
+| ADLplug-Next OPL3（デフォルト） | OPL3（YMF262） | ADLplug-Next 独自のコア．YMF262-LLE と 1 サンプルずつ同じ音を，リアルタイムに間に合う速さで作る | 107× | あり | `USE_ADLPLUG_OPL3_EMULATOR`，必須 |
+| DOSBox 0.74-r4111 OPL3 | OPL3（YMF262） | 正確で高速（libADLMIDI の説明） | 346× | あり | `USE_DOSBOX_EMULATOR`，必須 |
 | Nuked OPL3 (v 1.8) | OPL3（YMF262） | 非常に正確だが，より多くの CPU パワーを要する（libADLMIDI の説明） | 57× | あり | `USE_NUKED_EMULATOR` |
 | Nuked OPL3 Fast (by tgies) | OPL3（YMF262） | Nuked OPL3 を高速化した派生版（フォーク）で，出力はビット単位で同一．Nuked OPL3 1.7.4 の代わりに入っている | 73× | あり | `USE_NUKED_EMULATOR` |
 | YMFM OPL3 | OPL3（YMF262） | ビット単位の正確さより，耳で区別できないことを，妥当な速度で目指す（ymfm の説明） | 101× | なし | `USE_YMFM_EMULATOR` |
 | Opal OPL3 | OPL3（YMF262） | 不正確（libADLMIDI の説明）．Reality Adlib Tracker の曲のために書かれ，パーカッションモードがない | 109× | あり | `USE_OPAL_EMULATOR` |
 | Java 1.0.6 OPL3 | OPL3（YMF262） | 部分的に正確（libADLMIDI の説明） | 76× | あり | `USE_JAVA_EMULATOR` |
 | YMF262-LLE OPL3 | OPL3（YMF262） | 低レベル．一般的な CPU には重すぎる（libADLMIDI の説明） | 1.7× | なし | `USE_NUKED_OPL3_LLE_EMULATOR` |
-| ADLplug-Next OPL3 | OPL3（YMF262） | ADLplug-Next 独自のコア．YMF262-LLE と 1 サンプルずつ同じ音を，リアルタイムに間に合う速さで作る | 107× | あり | `USE_ADLPLUG_OPL3_EMULATOR` |
 | DOSBox 0.74-r4111 OPL2 | OPL2（YM3812） | DOSBox のコアを OPL2 として動かしたもの | 515× | モノラル | `USE_DOSBOX_EMULATOR` |
 | MAME OPL2 | OPL2（YM3812） | MAME の YM3812 コア | 214× | モノラル | `USE_MAME_EMULATOR` |
 | YMFM OPL2 | OPL2（YM3812） | YMFM OPL3 と同様 | 184× | モノラル | `USE_YMFM_EMULATOR` |
@@ -227,7 +227,7 @@ cmake --build --preset adl-release     # 上と同様です．
 
 `ADLplug_COVERAGE` は，ADLplug-Next 自身のコードのうち**どこまでが実行されたか**を数えます．この計画のソースはすべて「何が走ったか」を数える形でコンパイルされ，JUCE やライブラリは数えません．`ci/coverage.sh` がテスト——単体テスト，プラグインを通した描画，各 fuzz 対象での種入力と回帰入力の再生——を回し，数えた結果をまとめて報告します．`adl-coverage`・`opn-coverage` のプリセットがこれを指定します．ビルドは Debug です：最適化で他の行に畳み込まれた行は，「どの行が走ったか」に答えられないからです．これは門ではありません——数字が低いことで失敗になることはありません．目的は報告の最後にあります．**どのテストもどの入力も届いていないファイル**を並べるので，次のテストや fuzz 対象をどこに向けるかがそこで決まります．残るページは行ごとに示します．
 
-エミュレータコアは，デフォルトですべてビルドされます．コアを除くには，[FM 音源コアの特徴](#fm-音源コアの特徴) の表の「ビルドオプション」の列にあるオプションを OFF にします（例: `-DUSE_OPAL_EMULATOR=OFF`）．`USE_NUKED_EMULATOR` のように，1 つで複数のコアをまとめて除くオプションや，libADLMIDI と libOPNMIDI の両方にある名前のオプションもあります．両方にある名前でも，影響するのはビルドするプラグインの側（ADLplug-Next なら libADLMIDI）だけです．`USE_DOSBOX_EMULATOR`（ADLplug-Next）と `USE_MAME_EMULATOR`（OPNplug-Next）は，プラグインが音色の計測に使うため，OFF にすることはできません（configure の時点でエラーになります）．
+エミュレータコアは，デフォルトですべてビルドされます．コアを除くには，[FM 音源コアの特徴](#fm-音源コアの特徴) の表の「ビルドオプション」の列にあるオプションを OFF にします（例: `-DUSE_OPAL_EMULATOR=OFF`）．`USE_NUKED_EMULATOR` のように，1 つで複数のコアをまとめて除くオプションや，libADLMIDI と libOPNMIDI の両方にある名前のオプションもあります．両方にある名前でも，影響するのはビルドするプラグインの側（ADLplug-Next なら libADLMIDI）だけです．`USE_ADLPLUG_OPL3_EMULATOR` と `USE_DOSBOX_EMULATOR`（ADLplug-Next），`USE_MAME_EMULATOR`（OPNplug-Next）は，OFF にすることはできません（configure の時点でエラーになります）．ADLplug-Next は独自のコアをデフォルトで使い，DOSBox のコアで音色を計測します．OPNplug-Next は，MAME YM2612 のコアでその両方を行います．
 
 除いたコアを使って保存したプロジェクトは，そのビルドでは，同じチップのデフォルトのコアで鳴ります．コアの選択は保存されたままなので，そのコアを含むビルドで開くと，再びそのコアで鳴ります．
 

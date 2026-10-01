@@ -170,23 +170,23 @@ sound to a file) in a DAW.
 
 **ADLplug-Next**
 
-| Core                             | Chip           | Notes                                                                                                  | Speed | Full panning | Build option                  |
-|----------------------------------|----------------|--------------------------------------------------------------------------------------------------------|------:|--------------|-------------------------------|
-| DOSBox 0.74-r4111 OPL3 (default) | OPL3 (YMF262)  | Accurate and fast, per libADLMIDI                                                                      |  346× | yes          | `USE_DOSBOX_EMULATOR`, needed |
-| Nuked OPL3 (v 1.8)               | OPL3 (YMF262)  | Very accurate, and needs more CPU power, per libADLMIDI                                                |   57× | yes          | `USE_NUKED_EMULATOR`          |
-| Nuked OPL3 Fast (by tgies)       | OPL3 (YMF262)  | A faster derivative (fork) of Nuked OPL3 with bit-identical output; replaces Nuked OPL3 1.7.4          |   73× | yes          | `USE_NUKED_EMULATOR`          |
-| YMFM OPL3                        | OPL3 (YMF262)  | Aims to be indistinguishable by ear rather than exact to the bit, at a reasonable speed, per ymfm      |  101× | no           | `USE_YMFM_EMULATOR`           |
-| Opal OPL3                        | OPL3 (YMF262)  | Inaccurate, per libADLMIDI; written for Reality Adlib Tracker tunes, and has no percussion mode        |  109× | yes          | `USE_OPAL_EMULATOR`           |
-| Java 1.0.6 OPL3                  | OPL3 (YMF262)  | Partly accurate, per libADLMIDI                                                                        |   76× | yes          | `USE_JAVA_EMULATOR`           |
-| YMF262-LLE OPL3                  | OPL3 (YMF262)  | Low-level; too heavy for ordinary CPUs, per libADLMIDI                                                 |  1.7× | no           | `USE_NUKED_OPL3_LLE_EMULATOR` |
-| ADLplug-Next OPL3                | OPL3 (YMF262)  | ADLplug-Next's own: the same output as YMF262-LLE, sample for sample, fast enough for real time        |  107× | yes          | `USE_ADLPLUG_OPL3_EMULATOR`   |
-| DOSBox 0.74-r4111 OPL2           | OPL2 (YM3812)  | DOSBox's core run as an OPL2                                                                           |  515× | mono         | `USE_DOSBOX_EMULATOR`         |
-| MAME OPL2                        | OPL2 (YM3812)  | MAME's YM3812 core                                                                                     |  214× | mono         | `USE_MAME_EMULATOR`           |
-| YMFM OPL2                        | OPL2 (YM3812)  | As YMFM OPL3                                                                                           |  184× | mono         | `USE_YMFM_EMULATOR`           |
-| Nuked OPL2 Lite                  | OPL2 (YM3812)  | By Nuke.YKT, version 0.9 beta                                                                          |   88× | mono         | `USE_NUKED_EMULATOR`          |
-| YM3812-LLE OPL2                  | OPL2 (YM3812)  | As YMF262-LLE                                                                                          |  3.5× | mono         | `USE_NUKED_OPL2_LLE_EMULATOR` |
-| ESFMu                            | ESFM (ESS)     | ESS's extended OPL3 clone, emulated on the basis of Nuked OPL3; libADLMIDI plays it as an OPL3         |  9.7× | yes          | `USE_ESFMU_EMULATOR`          |
-| Nuked CQM                        | CQM (Creative) | Creative's OPL3 clone chip, by Nuke.YKT, version 0.9 beta                                              |   22× | no           | `USE_NUKED_EMULATOR`          |
+| Core                             | Chip           | Notes                                                                                                  | Speed | Full panning | Build option                        |
+|----------------------------------|----------------|--------------------------------------------------------------------------------------------------------|------:|--------------|-------------------------------------|
+| ADLplug-Next OPL3 (default)      | OPL3 (YMF262)  | ADLplug-Next's own: the same output as YMF262-LLE, sample for sample, fast enough for real time        |  107× | yes          | `USE_ADLPLUG_OPL3_EMULATOR`, needed |
+| DOSBox 0.74-r4111 OPL3           | OPL3 (YMF262)  | Accurate and fast, per libADLMIDI                                                                      |  346× | yes          | `USE_DOSBOX_EMULATOR`, needed       |
+| Nuked OPL3 (v 1.8)               | OPL3 (YMF262)  | Very accurate, and needs more CPU power, per libADLMIDI                                                |   57× | yes          | `USE_NUKED_EMULATOR`                |
+| Nuked OPL3 Fast (by tgies)       | OPL3 (YMF262)  | A faster derivative (fork) of Nuked OPL3 with bit-identical output; replaces Nuked OPL3 1.7.4          |   73× | yes          | `USE_NUKED_EMULATOR`                |
+| YMFM OPL3                        | OPL3 (YMF262)  | Aims to be indistinguishable by ear rather than exact to the bit, at a reasonable speed, per ymfm      |  101× | no           | `USE_YMFM_EMULATOR`                 |
+| Opal OPL3                        | OPL3 (YMF262)  | Inaccurate, per libADLMIDI; written for Reality Adlib Tracker tunes, and has no percussion mode        |  109× | yes          | `USE_OPAL_EMULATOR`                 |
+| Java 1.0.6 OPL3                  | OPL3 (YMF262)  | Partly accurate, per libADLMIDI                                                                        |   76× | yes          | `USE_JAVA_EMULATOR`                 |
+| YMF262-LLE OPL3                  | OPL3 (YMF262)  | Low-level; too heavy for ordinary CPUs, per libADLMIDI                                                 |  1.7× | no           | `USE_NUKED_OPL3_LLE_EMULATOR`       |
+| DOSBox 0.74-r4111 OPL2           | OPL2 (YM3812)  | DOSBox's core run as an OPL2                                                                           |  515× | mono         | `USE_DOSBOX_EMULATOR`               |
+| MAME OPL2                        | OPL2 (YM3812)  | MAME's YM3812 core                                                                                     |  214× | mono         | `USE_MAME_EMULATOR`                 |
+| YMFM OPL2                        | OPL2 (YM3812)  | As YMFM OPL3                                                                                           |  184× | mono         | `USE_YMFM_EMULATOR`                 |
+| Nuked OPL2 Lite                  | OPL2 (YM3812)  | By Nuke.YKT, version 0.9 beta                                                                          |   88× | mono         | `USE_NUKED_EMULATOR`                |
+| YM3812-LLE OPL2                  | OPL2 (YM3812)  | As YMF262-LLE                                                                                          |  3.5× | mono         | `USE_NUKED_OPL2_LLE_EMULATOR`       |
+| ESFMu                            | ESFM (ESS)     | ESS's extended OPL3 clone, emulated on the basis of Nuked OPL3; libADLMIDI plays it as an OPL3         |  9.7× | yes          | `USE_ESFMU_EMULATOR`                |
+| Nuked CQM                        | CQM (Creative) | Creative's OPL3 clone chip, by Nuke.YKT, version 0.9 beta                                              |   22× | no           | `USE_NUKED_EMULATOR`                |
 
 **OPNplug-Next**
 
@@ -403,9 +403,11 @@ in the Build option column of the tables under
 `-DUSE_OPAL_EMULATOR=OFF`. Some options, such as `USE_NUKED_EMULATOR`, leave
 several cores out at once, and some names exist in both libADLMIDI and
 libOPNMIDI; such a name affects only the plugin being built (libADLMIDI for
-ADLplug-Next). `USE_DOSBOX_EMULATOR` (ADLplug-Next) and `USE_MAME_EMULATOR`
-(OPNplug-Next) cannot be turned off, because the plugins measure their
-instruments on those cores (the configuration stops with an error).
+ADLplug-Next). `USE_ADLPLUG_OPL3_EMULATOR` and `USE_DOSBOX_EMULATOR`
+(ADLplug-Next) and `USE_MAME_EMULATOR` (OPNplug-Next) cannot be turned off
+(the configuration stops with an error): ADLplug-Next plays on its own core by
+default and measures its instruments on the DOSBox core, and OPNplug-Next does
+both on the MAME YM2612 core.
 
 A project saved with a core that a build leaves out plays on that build's
 default core for the same chip. The choice of the core stays saved, so a
