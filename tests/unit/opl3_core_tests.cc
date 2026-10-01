@@ -187,8 +187,8 @@ ADLPLUG_TEST(opl3_core_soft_panning)
     CHECK(b_silent);
 }
 
-// The pass written by hand for AVX2 (pass_avx2.S), adding up the outputs with
-// AVX2's instructions and with AVX-VNNI's, makes the C++ pass's samples, sample
+// The pass written by hand for AVX2 (pass_avx2.S), in its forms for the
+// processors without AVX-VNNI and with it, makes the C++ pass's samples, sample
 // for sample, for random writes at random times, with a channel soft panned
 // every 500 samples and every third time back to the centre. A pass that does
 // not run here, for want of the build or of the processor, is left out, and

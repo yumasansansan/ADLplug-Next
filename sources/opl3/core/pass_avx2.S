@@ -26,37 +26,49 @@
 // (core.cc) written by hand for AVX2, and what it works out for a slot is what
 // ymf262_logic.h works out: the envelope, the phase, the operator, the
 // modulation and the rhythm phases, which follow the code of YMF262-LLE by
-// nukeykt, an emulator of the YMF262 (OPL3) drawn from a die shot of the chip. The notice at the top is that one's, as the file
-// stands in libADLMIDI (nuked_fmopl3.c, under the GNU General Public License,
-// version 2 or any later version, LICENSES/GPL-2.0-or-later.txt); the counters
-// that ymf262_logic.h takes from Nuked OPL3 stay in core.cc, which hands this
-// pass what they give. The SPDX lines name the copyright holders and licenses
-// in the machine-readable form of the REUSE specification, with ADLplug-Next's
-// code under the GNU General Public License, version 3 or any later version
+// nukeykt, an emulator of the YMF262 (OPL3) drawn from a die shot of the chip.
+// The notice at the top is that one's, as the file stands in libADLMIDI
+// (nuked_fmopl3.c, under the GNU General Public License, version 2 or any later
+// version, LICENSES/GPL-2.0-or-later.txt); the counters that ymf262_logic.h
+// takes from Nuked OPL3 stay in core.cc, which hands this pass what they give.
+// The SPDX lines name the copyright holders and licenses in the
+// machine-readable form of the REUSE specification, with ADLplug-Next's code
+// under the GNU General Public License, version 3 or any later version
 // (LICENSES/GPL-3.0-or-later.txt).
 //
 //     void adlplug_opl3_pass_avx2(Core *core, const Pass_inputs *inputs,
 //                                 std::int32_t *frame);
+//     void adlplug_opl3_pass_avx2_vnni(Core *core, const Pass_inputs *inputs,
+//                                      std::int32_t *frame);
 //
-// It does what Core::generate() does between taking its writes in and moving
+// Each does what Core::generate() does between taking its writes in and moving
 // its counters on (pass_avx2.h): the envelopes and the phases, the rhythm
 // phases, the operators stage by stage, the feedback history and the sums of
-// the two outputs. It needs AVX2, which the build asks for, and AVX-VNNI when
-// the inputs ask for its sums (vnni), which core.cc does where the processor
-// has it.
+// the two outputs. The first needs AVX2, which the build asks for, the second
+// AVX-VNNI as well, which core.cc asks the processor for: Intel's have it from
+// Alder Lake on, AMD's from Zen 5.
 //
 // The lanes are those of the core, eight to a vector of 32 bits, but for the
 // envelopes, which are worked out sixteen to a vector of 16 bits: every value
 // they go by fits, and so twice as many lanes go through each instruction. AVX2
 // has no shift by a count for each 16-bit lane, so the two that the envelope
 // needs are a small table (vpshufb) and a multiplication by a power of two. The
-// stages of operators wait for each other, through two table lookups each
-// (vpgatherdd), so each stage starts with what does not wait for the stage
-// before, and the envelopes and phases of the next stage come between stages,
-// for the processor to work on while it waits. The sums of the outputs are
-// multiplications that add pairs (vpmaddwd) and additions, or, where the
-// processor has AVX-VNNI, as Intel's have from Alder Lake on and AMD's from
-// Zen 5, its multiplications that add into the sums as well (vpdpwssd).
+// stages of operators wait for each other, through two table lookups each, so
+// each stage starts with what does not wait for the stage before, and the
+// envelopes and phases of the next stage come between stages, for the
+// processor to work on while it waits.
+//
+// The two passes differ in the lookups and in the sums of the outputs, and are
+// assembled from the same macros. Measured on GitHub's runners and on the
+// i7-1360P here, the processors with AVX-VNNI (Raptor Lake, Emerald Rapids,
+// Granite Rapids, Zen 5) gather fast, and the second pass looks tables up by
+// vpgatherdd and adds up with AVX-VNNI's multiplications that add into the sums
+// (vpdpwssd). Those without it (Ice Lake under the microcode that mitigates
+// Downfall, where a gather waits 42 cycles and they go no faster than one in
+// 28, Zen 3, Zen 4) look tables up as fast or faster by loads one a lane, as
+// the earlier processors of both makers, whose gathers are slower still, are
+// to; the first pass loads the eight lanes one by one, and adds up with
+// multiplications that add pairs (vpmaddwd) and additions.
 //
 // Assembled by Clang, in Intel's syntax, for ELF (Linux) and COFF (Windows).
 
@@ -125,7 +137,6 @@
         .set IN_SOFT_PAN, ADLPLUG_OPL3_IN_SOFT_PAN
         .set IN_HI_HAT_NOISE, ADLPLUG_OPL3_IN_HI_HAT_NOISE
         .set IN_SNARE_NOISE, ADLPLUG_OPL3_IN_SNARE_NOISE
-        .set IN_VNNI, ADLPLUG_OPL3_IN_VNNI
         .set IN_LOGSIN, ADLPLUG_OPL3_IN_LOGSIN
         .set IN_EXP, ADLPLUG_OPL3_IN_EXP
 
@@ -397,11 +408,42 @@
         PHASE     \g + 32, ymm8
 .endm
 
+// The eight lanes of \idx looked up in the table at \table, into \dst, \dstx and
+// \idxx being the low halves of the two: by vpgatherdd in the pass for the
+// processors with AVX-VNNI (\vnni 1), with ymm6 for its mask; in the other one
+// by one, with rax, r11, xmm12 and xmm13, which the operators leave free.
+.macro LOOKUP vnni, dst, dstx, idx, idxx, table
+.if \vnni
+        vpcmpeqd  ymm6, ymm6, ymm6
+        vpxor     \dstx, \dstx, \dstx
+        vpgatherdd \dst, dword ptr [\table + 4*\idx], ymm6
+.else
+        vmovd     eax, \idxx
+        vpextrd   r11d, \idxx, 1
+        vmovd     \dstx, dword ptr [\table + 4*rax]
+        vpinsrd   \dstx, \dstx, dword ptr [\table + 4*r11], 1
+        vpextrd   eax, \idxx, 2
+        vpextrd   r11d, \idxx, 3
+        vpinsrd   \dstx, \dstx, dword ptr [\table + 4*rax], 2
+        vpinsrd   \dstx, \dstx, dword ptr [\table + 4*r11], 3
+        vextracti128 xmm12, \idx, 1
+        vmovd     eax, xmm12
+        vpextrd   r11d, xmm12, 1
+        vmovd     xmm13, dword ptr [\table + 4*rax]
+        vpinsrd   xmm13, xmm13, dword ptr [\table + 4*r11], 1
+        vpextrd   eax, xmm12, 2
+        vpextrd   r11d, xmm12, 3
+        vpinsrd   xmm13, xmm13, dword ptr [\table + 4*rax], 2
+        vpinsrd   xmm13, xmm13, dword ptr [\table + 4*r11], 3
+        vinserti128 \dst, \dst, xmm13, 1
+.endif
+.endm
+
 // The operators of the eight lanes at byte \v (ymf262::modulation() and
 // operator_output()), modulated, when they are by the stage before, by the
 // lanes at byte \source. rcx and rdx point at the tables of the log-sine and of
 // the exponent.
-.macro OPERATOR v, source
+.macro OPERATOR v, source, vnni
         // First what does not wait for the stage before: the feedback, added to
         // the phase as the modulation, to which the stage before's modulation is
         // added later (no slot has both).
@@ -426,9 +468,7 @@
         vpxor     ymm4, ymm4, ymm2                                    // phase2, in its low nine bits
         vpor      ymm5, ymm4, ymm3
         vpand     ymm5, ymm5, ymmword ptr [rip + .Lc_255]            // the log-sine's index
-        vpcmpeqd  ymm6, ymm6, ymm6
-        vpxor     xmm7, xmm7, xmm7
-        vpgatherdd ymm7, dword ptr [rcx + 4*ymm5], ymm6               // sine
+        LOOKUP    \vnni, ymm7, xmm7, ymm5, xmm5, rcx                  // sine
         // While it loads: the ramp, the sign (bit 9 of shifted, which turning
         // back leaves alone) and the mute.
         vpsubd    ymm6, ymm15, ymmword ptr [r8 + SAWTOOTH + \v]      // sawtooth: all ones
@@ -448,9 +488,7 @@
         vpor      ymm7, ymm7, ymm4                                    // shape
         vpaddd    ymm7, ymm7, ymm0                                    // att
         vpand     ymm3, ymm7, ymmword ptr [rip + .Lc_255]
-        vpcmpeqd  ymm6, ymm6, ymm6
-        vpxor     xmm5, xmm5, xmm5
-        vpgatherdd ymm5, dword ptr [rdx + 4*ymm3], ymm6
+        LOOKUP    \vnni, ymm5, xmm5, ymm3, xmm3, rdx
         vpsrld    ymm7, ymm7, 8
         vpsrlvd   ymm5, ymm5, ymm7                                    // magnitude, below 4096
         // The value: nought when muted, and when negative the magnitude's
@@ -667,41 +705,45 @@
 .endm
 
 // The envelopes and phases and the operators, for a pass with the envelope
-// timer's second half off (\second 0) or on (1). Each stage's envelopes and
-// phases come before it, and the next stage's after it: stage 0 is lanes 0 to 15,
-// stage 1 lanes 16 to 31, modulated by stage 0, stage 2 lanes 32 to 39 and
-// stage 3 lanes 40 to 47, modulated by stages 1 and 2. The hi-hat's phase comes
-// before stage 0, and the snare's and the top cymbal's before stage 1.
-.macro PASS second
+// timer's second half off (\second 0) or on (1), in the pass for the processors
+// with AVX-VNNI (\vnni 1) or in the other. Each stage's envelopes and phases come
+// before it, and the next stage's after it: stage 0 is lanes 0 to 15, stage 1
+// lanes 16 to 31, modulated by stage 0, stage 2 lanes 32 to 39 and stage 3 lanes
+// 40 to 47, modulated by stages 1 and 2. The hi-hat's phase comes before stage
+// 0, and the snare's and the top cymbal's before stage 1.
+.macro PASS second, vnni
         mov       rcx, qword ptr [r9 + IN_LOGSIN]
         mov       rdx, qword ptr [r9 + IN_EXP]
         ENVELOPES_AND_PHASES \second, 0
         HI_HAT
-        OPERATOR  0, 0
-        OPERATOR  32, 32
+        OPERATOR  0, 0, \vnni
+        OPERATOR  32, 32, \vnni
         ENVELOPES_AND_PHASES \second, 64
         SNARE_AND_TOP_CYMBAL
-        OPERATOR  64, 0
-        OPERATOR  96, 32
+        OPERATOR  64, 0, \vnni
+        OPERATOR  96, 32, \vnni
         ENVELOPES_AND_PHASES \second, 128
-        OPERATOR  128, 64
-        OPERATOR  160, 128
+        OPERATOR  128, 64, \vnni
+        OPERATOR  160, 128, \vnni
 .endm
 
-        .globl    adlplug_opl3_pass_avx2
+// The pass \name, for the processors with AVX-VNNI (\vnni 1) or for the
+// others. Its labels end in \vnni.
+.macro PASS_FUNCTION name, vnni
+        .globl    \name
 #if defined(_WIN32)
-        .def      adlplug_opl3_pass_avx2
+        .def      \name
         .scl      2
         .type     32
         .endef
 #else
-        .hidden   adlplug_opl3_pass_avx2
-        .type     adlplug_opl3_pass_avx2, @function
+        .hidden   \name
+        .type     \name, @function
 #endif
         .p2align  5
-adlplug_opl3_pass_avx2:
+\name:
 #if defined(_WIN32)
-        .seh_proc adlplug_opl3_pass_avx2
+        .seh_proc \name
         // xmm6 to xmm15 are the caller's: their low halves are kept on the
         // stack.
         sub       rsp, 168
@@ -740,12 +782,12 @@ adlplug_opl3_pass_avx2:
         SHARED_READ 0, 7, 10, IN_HOLD_13
         SHARED_READ 1, 8, 11, IN_HOLD_14
         cmp       dword ptr [r9 + IN_EG_SECOND], 0
-        jne       .Lsecond
-        PASS      0
-        jmp       .Lsums
-.Lsecond:
-        PASS      1
-.Lsums:
+        jne       .Lsecond\vnni
+        PASS      0, \vnni
+        jmp       .Lsums\vnni
+.Lsecond\vnni:
+        PASS      1, \vnni
+.Lsums\vnni:
         HISTORY   0
         HISTORY   32
         HISTORY   64
@@ -759,25 +801,14 @@ adlplug_opl3_pass_avx2:
         vpxor     xmm10, xmm10, xmm10
         vpxor     xmm11, xmm11, xmm11
         cmp       dword ptr [r9 + IN_SOFT_PAN], 0
-        jne       .Lsoft
+        jne       .Lsoft\vnni
         // Core::accumulate() without soft panning.
-        cmp       dword ptr [r9 + IN_VNNI], 0
-        jne       .Lheard_vnni
-        HEARD     0, 0
-        HEARD     32, 0
-        HEARD     64, 0
-        HEARD     96, 0
-        HEARD     128, 0
-        HEARD     160, 0
-        jmp       .Lheard
-.Lheard_vnni:
-        HEARD     0, 1
-        HEARD     32, 1
-        HEARD     64, 1
-        HEARD     96, 1
-        HEARD     128, 1
-        HEARD     160, 1
-.Lheard:
+        HEARD     0, \vnni
+        HEARD     32, \vnni
+        HEARD     64, \vnni
+        HEARD     96, \vnni
+        HEARD     128, \vnni
+        HEARD     160, \vnni
         vphaddd   ymm8, ymm8, ymm9
         vphaddd   ymm10, ymm10, ymm11
         vphaddd   ymm8, ymm8, ymm10
@@ -796,31 +827,20 @@ adlplug_opl3_pass_avx2:
         vpmovsxdq xmm4, xmm3
         vpsllq    xmm4, xmm4, 16
         vmovdqu   xmmword ptr [r8 + CARRY_SOFT], xmm4
-        jmp       .Ldone
-.Lsoft:
+        jmp       .Ldone\vnni
+.Lsoft\vnni:
         // With soft panning: the sums exact in 64 bits, and one rounding at
         // the end.
         vpxor     xmm12, xmm12, xmm12
         vpxor     xmm13, xmm13, xmm13
         vpxor     xmm14, xmm14, xmm14
         vpxor     xmm15, xmm15, xmm15
-        cmp       dword ptr [r9 + IN_VNNI], 0
-        jne       .Lheard_soft_vnni
-        HEARD_SOFT 0, 0
-        HEARD_SOFT 32, 0
-        HEARD_SOFT 64, 0
-        HEARD_SOFT 96, 0
-        HEARD_SOFT 128, 0
-        HEARD_SOFT 160, 0
-        jmp       .Lheard_soft
-.Lheard_soft_vnni:
-        HEARD_SOFT 0, 1
-        HEARD_SOFT 32, 1
-        HEARD_SOFT 64, 1
-        HEARD_SOFT 96, 1
-        HEARD_SOFT 128, 1
-        HEARD_SOFT 160, 1
-.Lheard_soft:
+        HEARD_SOFT 0, \vnni
+        HEARD_SOFT 32, \vnni
+        HEARD_SOFT 64, \vnni
+        HEARD_SOFT 96, \vnni
+        HEARD_SOFT 128, \vnni
+        HEARD_SOFT 160, \vnni
         vphaddd   ymm12, ymm12, ymm13
         vphaddd   ymm14, ymm14, ymm15
         vphaddd   ymm12, ymm12, ymm14
@@ -859,7 +879,7 @@ adlplug_opl3_pass_avx2:
         mov       dword ptr [r10 + 4], eax
         ROUND16   r11, rcx
         mov       dword ptr [r8 + CARRY + 4], r11d
-.Ldone:
+.Ldone\vnni:
         vzeroupper
 #if defined(_WIN32)
         vmovaps   xmm6, xmmword ptr [rsp]
@@ -877,6 +897,13 @@ adlplug_opl3_pass_avx2:
         .seh_endproc
 #else
         ret
-        .size     adlplug_opl3_pass_avx2, . - adlplug_opl3_pass_avx2
+        .size     \name, . - \name
+#endif
+.endm
+
+        PASS_FUNCTION adlplug_opl3_pass_avx2, 0
+        PASS_FUNCTION adlplug_opl3_pass_avx2_vnni, 1
+
+#if !defined(_WIN32)
         .section  .note.GNU-stack, "", @progbits
 #endif

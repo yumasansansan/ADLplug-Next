@@ -31,9 +31,10 @@ namespace adlplug::opl3 {
 class Core {
 public:
     // How a pass is worked out: in C++, which every build has, or by the pass
-    // written by hand for AVX2 (pass_avx2.S), which adds up the outputs with
-    // AVX2's instructions or, where the processor has them, with AVX-VNNI's.
-    // All make the same samples.
+    // written by hand for AVX2 (pass_avx2.S), in its form for the processors
+    // without AVX-VNNI, which look tables up one lane at a time, or in its form
+    // for those with it, which gather and add up the outputs with AVX-VNNI's
+    // instructions. All make the same samples.
     enum class Pass { cpp, avx2, avx2_vnni };
 
     // Whether this build has the pass, and this processor the instructions

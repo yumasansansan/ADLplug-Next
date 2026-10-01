@@ -793,10 +793,10 @@ void Core::accumulate(std::int32_t *frame)
 }
 
 #if defined(OPL3_HAND_WRITTEN)
-// The pass written by hand (pass_avx2.S), given what it goes by besides the
-// core: what the counters and the noise give for this pass, what the routing
-// says of the drums and of the shared feedback history, and whether it adds up
-// the outputs with AVX-VNNI's instructions.
+// The pass written by hand (pass_avx2.S), for the processors without AVX-VNNI
+// or for those with it, given what it goes by besides the core: what the
+// counters and the noise give for this pass, and what the routing says of the
+// drums and of the shared feedback history.
 void Core::hand_written_pass(std::int32_t *frame)
 {
     static_assert(offsetof(Core, rates_) == ADLPLUG_OPL3_RATES);
@@ -860,7 +860,6 @@ void Core::hand_written_pass(std::int32_t *frame)
     static_assert(offsetof(Pass_inputs, soft_pan) == ADLPLUG_OPL3_IN_SOFT_PAN);
     static_assert(offsetof(Pass_inputs, hi_hat_noise) == ADLPLUG_OPL3_IN_HI_HAT_NOISE);
     static_assert(offsetof(Pass_inputs, snare_noise) == ADLPLUG_OPL3_IN_SNARE_NOISE);
-    static_assert(offsetof(Pass_inputs, vnni) == ADLPLUG_OPL3_IN_VNNI);
     static_assert(offsetof(Pass_inputs, logsin) == ADLPLUG_OPL3_IN_LOGSIN);
     static_assert(offsetof(Pass_inputs, exp) == ADLPLUG_OPL3_IN_EXP);
 
@@ -898,10 +897,12 @@ void Core::hand_written_pass(std::int32_t *frame)
     in.soft_pan = soft_pan_ ? 1 : 0;
     in.hi_hat_noise = static_cast<std::int32_t>(ymf262::hi_hat_noise(noise_));
     in.snare_noise = static_cast<std::int32_t>(ymf262::snare_noise(noise_));
-    in.vnni = pass_ == Pass::avx2_vnni ? 1 : 0;
     in.logsin = logsin_rom.data();
     in.exp = exp_magnitude.data();
-    adlplug_opl3_pass_avx2(this, &in, frame);
+    if (pass_ == Pass::avx2_vnni)
+        adlplug_opl3_pass_avx2_vnni(this, &in, frame);
+    else
+        adlplug_opl3_pass_avx2(this, &in, frame);
 }
 #endif
 

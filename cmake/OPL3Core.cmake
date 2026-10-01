@@ -30,8 +30,8 @@ set(ADLplug_OPL3_CORE_SOURCES
 # build has it (ADLplug_wide_vectors: avx512, and native on a machine with
 # AVX-512); Apple's builds are for arm64. Clang, the build's C compiler,
 # assembles it with the warning flags of the project's own sources, and the core
-# takes it, adding up the outputs with AVX-VNNI's instructions on a processor
-# that has them (core.cc).
+# takes it in its form for the processors without AVX-VNNI or for those with it
+# (core.cc).
 set(ADLplug_OPL3_AVX2 OFF)
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$" AND NOT APPLE AND NOT ADLplug_wide_vectors)
   set(ADLplug_OPL3_AVX2 ON)
