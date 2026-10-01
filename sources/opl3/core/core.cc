@@ -15,6 +15,18 @@
 #include "core.h"
 
 #include <cmath>
+#include <cstddef>
+
+// The pass written by hand for AVX2, where the build has it
+// (cmake/OPL3Core.cmake): an x86-64 build whose C++ is not for AVX-512, the
+// whole width of which the C++ passes use. The memory sanitizer has to see every
+// write to memory, and it sees none of the assembly's: under it the core keeps
+// to the C++ pass, which it can check.
+#if defined(ADLPLUG_OPL3_AVX2) && !defined(__AVX512F__) && !__has_feature(memory_sanitizer)
+#define OPL3_HAND_WRITTEN 1
+#include "pass_avx2.h"
+#include <cpuid.h>
+#endif
 
 // Every loop over the lanes is vectorized. The pragma asks for it whatever the
 // cost model makes of it (for x86-64-v3 it would leave the loops that look up
@@ -175,6 +187,17 @@ constexpr ymf262::Counters counters_after_reset = [] {
     return c;
 }();
 
+#if defined(OPL3_HAND_WRITTEN)
+// The exponent's ROM as the hand-written pass looks it up: with the 0x400 that
+// the operator puts above it, shifted up one.
+alignas(64) constexpr std::array<std::int32_t, 256> exp_magnitude = [] {
+    std::array<std::int32_t, 256> t{};
+    for (std::size_t i = 0; i < t.size(); ++i)
+        t[i] = (exp_rom[i] | 0x400) << 1;
+    return t;
+}();
+#endif
+
 constexpr std::uint32_t noise_after_reset = [] {
     std::uint32_t s = 0;
     for (int i = 0; i < noise_steps_after_reset; ++i)
@@ -183,6 +206,31 @@ constexpr std::uint32_t noise_after_reset = [] {
 }();
 
 }  // namespace
+
+bool Core::runs(Pass pass)
+{
+    if (pass == Pass::cpp)
+        return true;
+#if defined(OPL3_HAND_WRITTEN)
+    // The build asks for AVX2 itself. AVX-VNNI is bit 4 of EAX in leaf 7,
+    // subleaf 1, of CPUID.
+    if (pass == Pass::avx2)
+        return true;
+    unsigned eax = 0, ebx = 0, ecx = 0, edx = 0;
+    return __get_cpuid_count(7, 1, &eax, &ebx, &ecx, &edx) != 0 && (eax & (1u << 4)) != 0;
+#else
+    return false;
+#endif
+}
+
+Core::Pass Core::fastest()
+{
+    if (runs(Pass::avx2_vnni))
+        return Pass::avx2_vnni;
+    if (runs(Pass::avx2))
+        return Pass::avx2;
+    return Pass::cpp;
+}
 
 void Core::reset()
 {
@@ -214,6 +262,8 @@ void Core::reset()
     phase_.fill(0);
     level_.fill(0x1ff);
     state_.fill(ymf262::release);
+    level16_.fill(0x1ff);
+    state16_.fill(ymf262::release);
     out_.fill(0);
     out_1_.fill(0);
     out_2_.fill(0);
@@ -742,6 +792,119 @@ void Core::accumulate(std::int32_t *frame)
     b_carry_ = round16(b_late);
 }
 
+#if defined(OPL3_HAND_WRITTEN)
+// The pass written by hand (pass_avx2.S), given what it goes by besides the
+// core: what the counters and the noise give for this pass, what the routing
+// says of the drums and of the shared feedback history, and whether it adds up
+// the outputs with AVX-VNNI's instructions.
+void Core::hand_written_pass(std::int32_t *frame)
+{
+    static_assert(offsetof(Core, rates_) == ADLPLUG_OPL3_RATES);
+    static_assert(offsetof(Core, key_scale_low_) == ADLPLUG_OPL3_KEY_SCALE_LOW);
+    static_assert(offsetof(Core, sustain_) == ADLPLUG_OPL3_SUSTAIN);
+    static_assert(offsetof(Core, key_on_) == ADLPLUG_OPL3_KEY_ON);
+    static_assert(offsetof(Core, level_offset_) == ADLPLUG_OPL3_LEVEL_OFFSET);
+    static_assert(offsetof(Core, tremolo_depth_) == ADLPLUG_OPL3_TREMOLO_DEPTH);
+    static_assert(offsetof(Core, fnum_v_) == ADLPLUG_OPL3_FNUM);
+    static_assert(offsetof(Core, block_v_) == ADLPLUG_OPL3_BLOCK);
+    static_assert(offsetof(Core, multiple_v_) == ADLPLUG_OPL3_MULTIPLE);
+    static_assert(offsetof(Core, vibrato_) == ADLPLUG_OPL3_VIBRATO);
+    static_assert(offsetof(Core, vibrato_depth_) == ADLPLUG_OPL3_VIBRATO_DEPTH);
+    static_assert(offsetof(Core, phase_shift_) == ADLPLUG_OPL3_PHASE_SHIFT);
+    static_assert(offsetof(Core, turn_bit_) == ADLPLUG_OPL3_TURN_BIT);
+    static_assert(offsetof(Core, mute_bit_) == ADLPLUG_OPL3_MUTE_BIT);
+    static_assert(offsetof(Core, sign_bit_) == ADLPLUG_OPL3_SIGN_BIT);
+    static_assert(offsetof(Core, square_) == ADLPLUG_OPL3_SQUARE);
+    static_assert(offsetof(Core, sawtooth_) == ADLPLUG_OPL3_SAWTOOTH);
+    static_assert(offsetof(Core, modulated_by_) == ADLPLUG_OPL3_MODULATED_BY);
+    static_assert(offsetof(Core, feedback_shift_) == ADLPLUG_OPL3_FEEDBACK_SHIFT);
+    static_assert(offsetof(Core, a_now_) == ADLPLUG_OPL3_A_NOW);
+    static_assert(offsetof(Core, a_late_) == ADLPLUG_OPL3_A_LATE);
+    static_assert(offsetof(Core, b_now_) == ADLPLUG_OPL3_B_NOW);
+    static_assert(offsetof(Core, b_late_) == ADLPLUG_OPL3_B_LATE);
+    static_assert(offsetof(Core, soft_a_now_) == ADLPLUG_OPL3_SOFT_A_NOW);
+    static_assert(offsetof(Core, soft_a_late_) == ADLPLUG_OPL3_SOFT_A_LATE);
+    static_assert(offsetof(Core, soft_b_now_) == ADLPLUG_OPL3_SOFT_B_NOW);
+    static_assert(offsetof(Core, soft_b_late_) == ADLPLUG_OPL3_SOFT_B_LATE);
+    static_assert(offsetof(Core, phase_) == ADLPLUG_OPL3_PHASE);
+    static_assert(offsetof(Core, out_) == ADLPLUG_OPL3_OUT);
+    static_assert(offsetof(Core, out_1_) == ADLPLUG_OPL3_OUT_1);
+    static_assert(offsetof(Core, out_2_) == ADLPLUG_OPL3_OUT_2);
+    static_assert(offsetof(Core, eg_out_) == ADLPLUG_OPL3_EG_OUT);
+    static_assert(offsetof(Core, phase_out_) == ADLPLUG_OPL3_PHASE_OUT);
+    static_assert(offsetof(Core, level16_) == ADLPLUG_OPL3_LEVEL16);
+    static_assert(offsetof(Core, state16_) == ADLPLUG_OPL3_STATE16);
+    static_assert(offsetof(Core, a_carry_soft_) == ADLPLUG_OPL3_CARRY_SOFT);
+    static_assert(offsetof(Core, b_carry_soft_) == ADLPLUG_OPL3_CARRY_SOFT + 8);
+    static_assert(offsetof(Core, a_carry_) == ADLPLUG_OPL3_CARRY);
+    static_assert(offsetof(Core, b_carry_) == ADLPLUG_OPL3_CARRY + 4);
+    static_assert(offsetof(Core, rhythm_bits_) == ADLPLUG_OPL3_RHYTHM_BITS);
+    static_assert(offsetof(ymf262::Rhythm_bits, hh2) == 0 && offsetof(ymf262::Rhythm_bits, hh3) == 4);
+    static_assert(offsetof(ymf262::Rhythm_bits, hh7) == 8 && offsetof(ymf262::Rhythm_bits, hh8) == 12);
+    static_assert(offsetof(ymf262::Rhythm_bits, tc3) == 16 && offsetof(ymf262::Rhythm_bits, tc5) == 20);
+    static_assert(offsetof(Core, shared_history_) == ADLPLUG_OPL3_SHARED_HISTORY);
+    static_assert(sizeof(shared_history_) == 32);
+    static_assert(offsetof(Pass_inputs, high_from_less_1) == ADLPLUG_OPL3_IN_HIGH_FROM_LESS_1);
+    static_assert(offsetof(Pass_inputs, add) == ADLPLUG_OPL3_IN_ADD);
+    static_assert(offsetof(Pass_inputs, tremolo) == ADLPLUG_OPL3_IN_TREMOLO);
+    static_assert(offsetof(Pass_inputs, vibrato_shift) == ADLPLUG_OPL3_IN_VIBRATO_SHIFT);
+    static_assert(offsetof(Pass_inputs, vibrato_mask) == ADLPLUG_OPL3_IN_VIBRATO_MASK);
+    static_assert(offsetof(Pass_inputs, vibrato_sign) == ADLPLUG_OPL3_IN_VIBRATO_SIGN);
+    static_assert(offsetof(Pass_inputs, vibrato_wrap) == ADLPLUG_OPL3_IN_VIBRATO_WRAP);
+    static_assert(offsetof(Pass_inputs, eg_second) == ADLPLUG_OPL3_IN_EG_SECOND);
+    static_assert(offsetof(Pass_inputs, rhythm_13) == ADLPLUG_OPL3_IN_RHYTHM_13);
+    static_assert(offsetof(Pass_inputs, rhythm_16) == ADLPLUG_OPL3_IN_RHYTHM_16);
+    static_assert(offsetof(Pass_inputs, rhythm_17) == ADLPLUG_OPL3_IN_RHYTHM_17);
+    static_assert(offsetof(Pass_inputs, hold_13) == ADLPLUG_OPL3_IN_HOLD_13);
+    static_assert(offsetof(Pass_inputs, hold_14) == ADLPLUG_OPL3_IN_HOLD_14);
+    static_assert(offsetof(Pass_inputs, soft_pan) == ADLPLUG_OPL3_IN_SOFT_PAN);
+    static_assert(offsetof(Pass_inputs, hi_hat_noise) == ADLPLUG_OPL3_IN_HI_HAT_NOISE);
+    static_assert(offsetof(Pass_inputs, snare_noise) == ADLPLUG_OPL3_IN_SNARE_NOISE);
+    static_assert(offsetof(Pass_inputs, vnni) == ADLPLUG_OPL3_IN_VNNI);
+    static_assert(offsetof(Pass_inputs, logsin) == ADLPLUG_OPL3_IN_LOGSIN);
+    static_assert(offsetof(Pass_inputs, exp) == ADLPLUG_OPL3_IN_EXP);
+
+    Pass_inputs in{};
+    const ymf262::Envelope_timing timing = counters_.envelope_timing();
+    const auto high_from_less_1 = static_cast<std::int16_t>(timing.high_from - 1);
+    const auto add = static_cast<std::int16_t>(timing.add);
+    OPL3_VECTOR_LOOP
+    for (std::size_t i = 0; i < 16; ++i) {
+        in.high_from_less_1[i] = high_from_less_1;
+        in.add[i] = add;
+    }
+    const std::int32_t tremolo_level = counters_.tremolo_level();
+    const auto shallow = static_cast<std::uint8_t>(tremolo_level >> 4), deep = static_cast<std::uint8_t>(tremolo_level >> 2);
+    in.tremolo[1] = shallow;
+    in.tremolo[2] = deep;
+    in.tremolo[17] = shallow;
+    in.tremolo[18] = deep;
+    const ymf262::Vibrato vibrato = ymf262::vibrato(counters_.vibrato_position);
+    const auto shift = static_cast<std::int32_t>(vibrato.shallow_shift), mask = static_cast<std::int32_t>(vibrato.deep_mask);
+    const std::int32_t sign = vibrato.down ? -1 : 1, wrap = vibrato.down ? 1023 : -1;
+    OPL3_VECTOR_LOOP
+    for (std::size_t i = 0; i < 8; ++i) {
+        in.vibrato_shift[i] = shift;
+        in.vibrato_mask[i] = mask;
+        in.vibrato_sign[i] = sign;
+        in.vibrato_wrap[i] = wrap;
+    }
+    in.eg_second = timing.second;
+    in.rhythm_13 = rhythm_phase_[lane_13];
+    in.rhythm_16 = rhythm_phase_[lane_16];
+    in.rhythm_17 = rhythm_phase_[lane_17];
+    in.hold_13 = hold_history_[lane_13];
+    in.hold_14 = hold_history_[lane_14];
+    in.soft_pan = soft_pan_ ? 1 : 0;
+    in.hi_hat_noise = static_cast<std::int32_t>(ymf262::hi_hat_noise(noise_));
+    in.snare_noise = static_cast<std::int32_t>(ymf262::snare_noise(noise_));
+    in.vnni = pass_ == Pass::avx2_vnni ? 1 : 0;
+    in.logsin = logsin_rom.data();
+    in.exp = exp_magnitude.data();
+    adlplug_opl3_pass_avx2(this, &in, frame);
+}
+#endif
+
 void Core::generate(std::int32_t *frame)
 {
     // The write that takes effect in this pass: one the last sample sent into
@@ -764,11 +927,17 @@ void Core::generate(std::int32_t *frame)
         relatch();
     }
 
-    envelope_and_phase();
-    rhythm_phases();
-    operators();
-    store_history();
-    accumulate(frame);
+    if (pass_ == Pass::cpp) {
+        envelope_and_phase();
+        rhythm_phases();
+        operators();
+        store_history();
+        accumulate(frame);
+    }
+#if defined(OPL3_HAND_WRITTEN)
+    else
+        hand_written_pass(frame);
+#endif
     counters_.advance();
     noise_ = ymf262::noise_pass(noise_);
     if (landed_age_ >= 0)

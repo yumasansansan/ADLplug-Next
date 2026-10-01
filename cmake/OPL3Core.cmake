@@ -25,11 +25,28 @@ set(ADLplug_OPL3_CORE_SOURCES
   "${PROJECT_SOURCE_DIR}/sources/opl3/core/core.cc"
   "${PROJECT_SOURCE_DIR}/sources/opl3/core/adlmidi_chip.cc")
 
+# The core's pass written by hand for AVX2 (pass_avx2.S), in the x86-64 builds
+# whose C++ is not for AVX-512, whose whole width the C++ passes use where the
+# build has it (ADLplug_wide_vectors: avx512, and native on a machine with
+# AVX-512); Apple's builds are for arm64. Clang, the build's C compiler,
+# assembles it with the warning flags of the project's own sources, and the core
+# takes it, adding up the outputs with AVX-VNNI's instructions on a processor
+# that has them (core.cc).
+set(ADLplug_OPL3_AVX2 OFF)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$" AND NOT APPLE AND NOT ADLplug_wide_vectors)
+  set(ADLplug_OPL3_AVX2 ON)
+  enable_language(ASM)
+  list(APPEND ADLplug_OPL3_CORE_SOURCES "${PROJECT_SOURCE_DIR}/sources/opl3/core/pass_avx2.S")
+endif()
+
 add_library(adlplug-opl3-core STATIC EXCLUDE_FROM_ALL ${ADLplug_OPL3_CORE_SOURCES})
 adlplug_set_language_standard(adlplug-opl3-core)
 set_property(TARGET adlplug-opl3-core PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_include_directories(adlplug-opl3-core SYSTEM PRIVATE
   "${PROJECT_SOURCE_DIR}/thirdparty/libADLMIDI/src/chips")
+if(ADLplug_OPL3_AVX2)
+  target_compile_definitions(adlplug-opl3-core PRIVATE ADLPLUG_OPL3_AVX2)
+endif()
 adlplug_own_sources(${ADLplug_OPL3_CORE_SOURCES})
 
 # A dependency of the build alone: the library's own install(EXPORT), which this

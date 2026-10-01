@@ -19,6 +19,7 @@ namespace {
 
 Case *first_case = nullptr;
 int failures = 0;
+const char *skip_reason = nullptr;
 
 }  // namespace
 
@@ -32,6 +33,11 @@ void fail(const char *file, int line, const char *condition) noexcept
 {
     ++failures;
     std::fprintf(stderr, "%s:%d: check failed: %s\n", file, line, condition);
+}
+
+void skip(const char *reason) noexcept
+{
+    skip_reason = reason;
 }
 
 }  // namespace Test
@@ -55,6 +61,10 @@ int main(int argc, char *argv[])
         if (Test::failures != 0) {
             std::fprintf(stderr, "%s: %d check(s) failed\n", test->name, Test::failures);
             return 1;
+        }
+        if (Test::skip_reason != nullptr) {
+            std::printf("%s: skipped: %s\n", test->name, Test::skip_reason);
+            return Test::skipped;
         }
         std::printf("%s: passed\n", test->name);
         return 0;

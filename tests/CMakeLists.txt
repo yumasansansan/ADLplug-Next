@@ -179,6 +179,9 @@ foreach(source IN LISTS ADLplug_UNIT_TEST_SOURCES)
       continue()
     endif()
     add_test(NAME "unit.${name}" COMMAND ADLplug_unit_tests "${name}")
+    # A test that cannot run on the machine it runs on exits with Test::skipped
+    # (unit/test.h).
+    set_tests_properties("unit.${name}" PROPERTIES SKIP_RETURN_CODE 77)
   endforeach()
 endforeach()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ADLplug_UNIT_TEST_SOURCES})

@@ -7,9 +7,10 @@
 // (LICENSES/GPL-3.0-or-later.txt).
 //
 // ADLplug-Next's own OPL3 core (sources/opl3/core): its ROMs as the functions
-// they tabulate give them, its soft panning, its samples against those of the
-// low-level core as libADLMIDI drives it, which they are to equal, and the
-// icon the emulator menu shows for it.
+// they tabulate give them, its soft panning, its passes written by hand against
+// its C++ pass, its samples against those of the low-level core as libADLMIDI
+// drives it, which they are to equal, and the icon the emulator menu shows for
+// it.
 
 #include "test.h"
 #include "adl/chip_settings.h"
@@ -184,6 +185,53 @@ ADLPLUG_TEST(opl3_core_soft_panning)
     }
     CHECK(a_heard);
     CHECK(b_silent);
+}
+
+// The pass written by hand for AVX2 (pass_avx2.S), adding up the outputs with
+// AVX2's instructions and with AVX-VNNI's, makes the C++ pass's samples, sample
+// for sample, for random writes at random times, with a channel soft panned
+// every 500 samples and every third time back to the centre. A pass that does
+// not run here, for want of the build or of the processor, is left out, and
+// the test is skipped when none runs.
+ADLPLUG_TEST(opl3_core_hand_written_passes)
+{
+    bool any = false;
+    for (const Core::Pass pass : {Core::Pass::avx2, Core::Pass::avx2_vnni}) {
+        if (!Core::runs(pass))
+            continue;
+        any = true;
+        constexpr unsigned samples = 20000;
+        for (unsigned seed = 1; seed <= 8; ++seed) {
+            const std::vector<Write> writes = random_writes(seed, samples);
+            Core cpp(Core::Pass::cpp), hand(pass);
+            CHECK(cpp.pass() == Core::Pass::cpp);
+            CHECK(hand.pass() == pass);
+            std::size_t k = 0, differ = 0;
+            for (unsigned n = 0; n < samples; ++n) {
+                for (; k < writes.size() && writes[k].at <= n; ++k) {
+                    const auto address = static_cast<std::uint16_t>(writes[k].address);
+                    const auto value = static_cast<std::uint8_t>(writes[k].value);
+                    cpp.write(address, value);
+                    hand.write(address, value);
+                }
+                if (n % 500 == 0) {
+                    const unsigned ch = (n / 500 * 7 + seed) % 18;
+                    const auto address = static_cast<std::uint16_t>((ch / 9) * 0x100 + ch % 9);
+                    const auto pan = static_cast<std::uint8_t>(n % 1500 == 0 ? 64 : (n / 500 * 37 + seed * 11) % 128);
+                    cpp.write_pan(address, pan);
+                    hand.write_pan(address, pan);
+                }
+                std::int32_t a[2], b[2];
+                cpp.generate(a);
+                hand.generate(b);
+                if (a[0] != b[0] || a[1] != b[1])
+                    ++differ;
+            }
+            CHECK(differ == 0);
+        }
+    }
+    if (!any)
+        Test::skip("the build or the processor has none of the passes written by hand");
 }
 
 // The emulator menu shows the core with the icon of the plugin's executables

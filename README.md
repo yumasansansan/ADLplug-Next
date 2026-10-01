@@ -163,6 +163,11 @@ in a DAW) runs two chips by default. With *full panning*, a sound can sit
 anywhere between left and right; without it, only on the left, in the centre
 or on the right. The OPL2 is mono, with no left or right at all.
 
+In the AVX2 builds, ADLplug-Next OPL3 does most of its work in a version
+written in assembly (directly in the CPU's instructions) for AVX2, which is the
+speed given here. The builds for AVX-512 and for Apple Silicon do that work as
+written in C++, which, built for the i7-1360P, made 107×.
+
 The low-level (LLE) cores recreate a chip's circuits as read from photos of
 its inside (die shots). They are the most faithful, and so heavy that most
 computers cannot play them in real time: use them when you render (write the
@@ -172,7 +177,7 @@ sound to a file) in a DAW.
 
 | Core                             | Chip           | Notes                                                                                                  | Speed | Full panning | Build option                        |
 |----------------------------------|----------------|--------------------------------------------------------------------------------------------------------|------:|--------------|-------------------------------------|
-| ADLplug-Next OPL3 (default)      | OPL3 (YMF262)  | ADLplug-Next's own: the same output as YMF262-LLE, sample for sample, fast enough for real time        |  107× | yes          | `USE_ADLPLUG_OPL3_EMULATOR`, needed |
+| ADLplug-Next OPL3 (default)      | OPL3 (YMF262)  | ADLplug-Next's own: the same output as YMF262-LLE, sample for sample, fast enough for real time        |  176× | yes          | `USE_ADLPLUG_OPL3_EMULATOR`, needed |
 | DOSBox 0.74-r4111 OPL3           | OPL3 (YMF262)  | Accurate and fast, per libADLMIDI                                                                      |  346× | yes          | `USE_DOSBOX_EMULATOR`, needed       |
 | Nuked OPL3 (v 1.8)               | OPL3 (YMF262)  | Very accurate, and needs more CPU power, per libADLMIDI                                                |   57× | yes          | `USE_NUKED_EMULATOR`                |
 | Nuked OPL3 Fast (by tgies)       | OPL3 (YMF262)  | A faster derivative (fork) of Nuked OPL3 with bit-identical output; replaces Nuked OPL3 1.7.4          |   73× | yes          | `USE_NUKED_EMULATOR`                |

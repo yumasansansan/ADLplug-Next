@@ -9,7 +9,8 @@
 // ADLplug-Next's emulator core of the YMF262 (OPL3). It makes what the
 // low-level core drawn from a die shot of the chip (YMF262-LLE) makes as
 // libADLMIDI drives it, sample for sample, and makes it fast: the 36 slots
-// are worked out together, in loops the compiler vectorizes.
+// are worked out together, in loops the compiler vectorizes, or, where the
+// processor has the instructions, in a pass written by hand for them.
 //
 // libADLMIDI feeds that core a register write every 2 2/9 samples, and each
 // write takes effect in the middle of a pass over the slots, for the slots that
@@ -29,7 +30,23 @@ namespace adlplug::opl3 {
 
 class Core {
 public:
-    Core() { reset(); }
+    // How a pass is worked out: in C++, which every build has, or by the pass
+    // written by hand for AVX2 (pass_avx2.S), which adds up the outputs with
+    // AVX2's instructions or, where the processor has them, with AVX-VNNI's.
+    // All make the same samples.
+    enum class Pass { cpp, avx2, avx2_vnni };
+
+    // Whether this build has the pass, and this processor the instructions
+    // it needs.
+    static bool runs(Pass pass);
+    // The fastest pass that runs here.
+    static Pass fastest();
+
+    // A core that works its passes out the given way, if it runs here, or else
+    // in C++.
+    explicit Core(Pass pass = fastest()) : pass_(runs(pass) ? pass : Pass::cpp) { reset(); }
+
+    [[nodiscard]] Pass pass() const { return pass_; }
 
     // The chip as libADLMIDI's wrapper of the low-level core leaves it when it
     // resets it.
@@ -84,6 +101,8 @@ private:
     [[gnu::always_inline]] void operators();
     [[gnu::always_inline]] void store_history();
     [[gnu::always_inline]] void accumulate(std::int32_t *frame);
+    // All of the above by the hand-written pass, where the build has it.
+    void hand_written_pass(std::int32_t *frame);
 
     // By lane: what the passes work with, worked out from what the slots read
     // (below) when that changes (ymf262_logic.h says what each is). These,
@@ -116,6 +135,11 @@ private:
     alignas(64) std::array<std::int32_t, lanes> out_{}, out_1_{}, out_2_{};  // this pass's, the last two
     alignas(64) std::array<std::int32_t, lanes> eg_out_{}, phase_out_{};
     alignas(64) std::array<std::int32_t, lanes> restart_{};  // keyed on from release in this pass
+    // The levels and states of the envelopes as the hand-written pass keeps
+    // them: in 16 bits, sixteen lanes, a vector, in the order pass_avx2.S says.
+    // It reads and writes what comes first here at the offsets of
+    // pass_avx2.h, which core.cc checks.
+    alignas(32) std::array<std::int16_t, lanes> level16_{}, state16_{};
 
     std::int64_t a_carry_soft_ = 0, b_carry_soft_ = 0;  // what the slots heard late made in the last pass, soft panned
     ymf262::Counters counters_;
@@ -152,6 +176,7 @@ private:
     std::uint8_t newm_ = 0, four_op_ = 0, nts_ = 0, rhythm_ = 0, drum_keys_ = 0, dam_ = 0, dvb_ = 0;
     std::uint8_t array_value_ = 0;
     bool soft_pan_ = false;
+    Pass pass_;
 
     // By lane: the channels' registers as they stand, for the slots that read
     // them (spread()), so that no loop over the lanes reads another lane's:

@@ -11,7 +11,9 @@
 // A small test registry, so the unit tests need no framework.
 // ADLPLUG_TEST(name) defines a test, and CHECK(condition) records a failure
 // and carries on. tests/CMakeLists.txt finds each ADLPLUG_TEST that starts a
-// line and registers it with CTest as unit.<name>.
+// line and registers it with CTest as unit.<name>. A test that cannot run on
+// the machine it is run on, for want of what it tests, says so with
+// Test::skip(reason) and returns, and CTest counts it as skipped.
 
 namespace Test {
 
@@ -23,6 +25,10 @@ struct Case {
 
 void add(Case &test) noexcept;
 void fail(const char *file, int line, const char *condition) noexcept;
+void skip(const char *reason) noexcept;
+
+// The exit status of a skipped test, which tests/CMakeLists.txt gives CTest.
+inline constexpr int skipped = 77;
 
 struct Registrar {
     explicit Registrar(Case &test) noexcept
