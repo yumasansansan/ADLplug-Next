@@ -719,13 +719,25 @@ void Generic_Main_Component<T>::build_chip_menu(PopupMenu &menu)
     const Emulator_Defaults &defaults = get_emulator_defaults();
     const std::vector<Image> &images = emulator_icons_->images;
 
+    // The default core first, which for ADLplug-Next is its own and for
+    // OPNplug-Next MAME's YM2612, first by its number anyway, and then the others
+    // in the order of their numbers, which is the library's. An item's id is the
+    // core's number and one wherever it stands (apply_chip_menu_choice), so the
+    // order is the menu's alone: a project and a host's automation keep the
+    // number.
     menu.clear();
-    for (int i = 0; i < defaults.choices.size(); ++i) {
+    const auto add_core = [&](int i) {
         const String &name = defaults.choices[i];
         if (name.isEmpty())
-            continue;
+            return;
         const auto index = static_cast<std::size_t>(i);
         menu.addItem(i + 1, name, true, false, (index < images.size()) ? images[index] : Image());
+    };
+    const auto first = static_cast<int>(defaults.default_index);
+    add_core(first);
+    for (int i = 0; i < defaults.choices.size(); ++i) {
+        if (i != first)
+            add_core(i);
     }
 
     // How a channel of the chip is taken for a new note, which the library chooses
