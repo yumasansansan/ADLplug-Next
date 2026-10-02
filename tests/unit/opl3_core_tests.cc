@@ -8,9 +8,9 @@
 //
 // ADLplug-Next's own OPL3 core (sources/opl3/core): its ROMs as the functions
 // they tabulate give them, its soft panning, its passes written by hand against
-// its C++ pass, its samples against those of the low-level core as libADLMIDI
-// drives it, which they are to equal, and the icon the emulator menu shows for
-// it.
+// its C++ pass, the pass it takes when nothing names one, its samples against
+// those of the low-level core as libADLMIDI drives it, which they are to equal,
+// and the icon the emulator menu shows for it.
 
 #include "test.h"
 #include "adl/chip_settings.h"
@@ -26,7 +26,11 @@
 #include <cstdint>
 #include <cstdio>
 #include <initializer_list>
+#include <string>
 #include <vector>
+#if defined(__x86_64__)
+#include <cpuid.h>
+#endif
 
 using adlplug::opl3::Core;
 
@@ -131,6 +135,45 @@ std::vector<std::int32_t> render(Core &core, const std::vector<Write> &writes, u
     return out;
 }
 
+// A pass by the name core.h gives it.
+const char *pass_name(Core::Pass pass)
+{
+    switch (pass) {
+    case Core::Pass::cpp: return "cpp";
+    case Core::Pass::avx2: return "avx2";
+    case Core::Pass::avx2_vnni: return "avx2_vnni";
+    case Core::Pass::avx512: return "avx512";
+    case Core::Pass::avx512_vnni: return "avx512_vnni";
+    case Core::Pass::avx512_vbmi: return "avx512_vbmi";
+    case Core::Pass::avx512_vbmi_vnni: return "avx512_vbmi_vnni";
+    }
+    return "?";
+}
+
+#if defined(__x86_64__)
+// The processor's name as CPUID gives it, sixteen characters in each of the
+// leaves 0x80000002 to 0x80000004, without the spaces some processors put
+// before it; empty where the processor has no such leaves.
+std::string processor_name()
+{
+    unsigned eax = 0, ebx = 0, ecx = 0, edx = 0;
+    if (__get_cpuid(0x80000000u, &eax, &ebx, &ecx, &edx) == 0 || eax < 0x80000004u)
+        return {};
+    std::string name;
+    for (unsigned leaf = 0x80000002u; leaf <= 0x80000004u; ++leaf) {
+        __get_cpuid(leaf, &eax, &ebx, &ecx, &edx);
+        for (const unsigned word : {eax, ebx, ecx, edx}) {
+            for (unsigned byte = 0; byte < 4; ++byte) {
+                if (const auto c = static_cast<char>((word >> (8 * byte)) & 0xffu); c != '\0')
+                    name.push_back(c);
+            }
+        }
+    }
+    const std::size_t first = name.find_first_not_of(' ');
+    return first == std::string::npos ? std::string() : name.substr(first);
+}
+#endif
+
 }  // namespace
 
 // The ROMs are what the functions they tabulate give (sources/opl3/core/ymf262_roms.h).
@@ -234,6 +277,38 @@ ADLPLUG_TEST(opl3_core_hand_written_passes)
     }
     if (!any)
         Test::skip("the build or the processor has none of the passes written by hand");
+}
+
+// The pass a core takes when nothing names one, which is how libADLMIDI's
+// emulator 14 makes the core (adlmidi_chip.cc), and so the pass ADLplug-Next
+// plays on: one written by hand in every x86-64 build, since each of them asks
+// for AVX2 at the least (CMakeLists.txt), and a form of the one for AVX-512 in
+// the builds whose C++ is compiled for what that pass asks for of AVX-512. The
+// builds left out are those that have no pass written by hand to take: Apple's,
+// which are for arm64, the memory sanitizer's, which keeps to the C++ pass
+// (core.cc), and a native build on a processor with AVX-512's foundation alone,
+// which has neither the pass for AVX2 nor what the one for AVX-512 asks for. The
+// test writes which pass the core takes and on what processor, which
+// ci/test.sh shows in the log of every job.
+ADLPLUG_TEST(opl3_core_takes_a_hand_written_pass)
+{
+    const Core core;
+#if defined(__x86_64__)
+    std::printf("a core made without a pass takes %s, on %s\n", pass_name(core.pass()), processor_name().c_str());
+#else
+    std::printf("a core made without a pass takes %s\n", pass_name(core.pass()));
+#endif
+    CHECK(core.pass() == Core::fastest());
+#if defined(__x86_64__) && !defined(__APPLE__) && !__has_feature(memory_sanitizer) && \
+    (!defined(__AVX512F__) || (defined(__AVX512DQ__) && defined(__AVX512BW__) && defined(__AVX512VL__)))
+    CHECK(core.pass() != Core::Pass::cpp);
+#if defined(__AVX512F__)
+    CHECK(core.pass() == Core::Pass::avx512 || core.pass() == Core::Pass::avx512_vnni ||
+          core.pass() == Core::Pass::avx512_vbmi || core.pass() == Core::Pass::avx512_vbmi_vnni);
+#endif
+#else
+    Test::skip("the build has no pass written by hand that it can take");
+#endif
 }
 
 // The emulator menu shows the core with the icon of the plugin's executables

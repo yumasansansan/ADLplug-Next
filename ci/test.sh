@@ -16,7 +16,8 @@
 # the Audio Unit also goes through auval. --no-hosts leaves out the programs
 # that load the plugins from outside, pluginval, lv2lint and auval: a build made
 # with the sanitizers cannot be loaded into them, since they are built without.
-# The render hashes are printed at the end, with a warning when
+# For ADLplug-Next, the pass its OPL3 core takes on this runner is printed after
+# the tests. The render hashes are printed at the end, with a warning when
 # tests/render/references.txt has none for this system.
 set -euo pipefail
 
@@ -47,6 +48,18 @@ else
     *) ctest --preset "$preset" ${exclude[@]+"${exclude[@]}"} || status=$? ;;
   esac
 fi
+
+# Which pass ADLplug-Next OPL3 takes on this runner, as its test writes it: the
+# test fails where the core takes the C++ pass in a build that has a pass
+# written by hand for it to take (tests/unit/opl3_core_tests.cc), but CTest
+# shows the output of a test that passed only for the presets that ask for all
+# of it, so it is run again here on its own, for the log.
+case $preset in
+  adl-*)
+    echo "== ADLplug-Next OPL3's pass"
+    ctest --preset "$preset" --tests-regex '^unit\.opl3_core_takes_a_hand_written_pass$' --verbose || status=$?
+    ;;
+esac
 
 if [ "$(uname -s)" = Darwin ] && [ "$hosts" = true ]; then
   case $preset in
