@@ -6,11 +6,12 @@
 // GNU General Public License, version 3 or any later version
 // (LICENSES/GPL-3.0-or-later.txt).
 //
-// The passes of ADLplug-Next OPL3's core written by hand for AVX2, for the
-// processors without AVX-VNNI and for those with it (pass_avx2.S): where they
-// find what they read and write, in the core and in what core.cc gives them for
-// a pass, and the functions themselves. The assembly takes the offsets from
-// here, and core.cc checks them against the core as it is compiled.
+// The passes of ADLplug-Next OPL3's core written by hand: for AVX2, for the
+// processors without AVX-VNNI and for those with it (pass_avx2.S), and for
+// AVX-512 (pass_avx512.S). Where they find what they read and write, in the
+// core and in what core.cc gives them for a pass, and the functions themselves.
+// The assembly takes the offsets from here, and core.cc checks them against the
+// core as it is compiled.
 
 #pragma once
 
@@ -75,6 +76,10 @@
 #define ADLPLUG_OPL3_IN_SNARE_NOISE 256
 #define ADLPLUG_OPL3_IN_LOGSIN 264
 #define ADLPLUG_OPL3_IN_EXP 272
+#define ADLPLUG_OPL3_IN_LOGSIN16 280
+#define ADLPLUG_OPL3_IN_EXP16 288
+#define ADLPLUG_OPL3_IN_LOGSIN8 296
+#define ADLPLUG_OPL3_IN_EXP8 304
 
 #if !defined(__ASSEMBLER__)
 
@@ -101,6 +106,10 @@ struct alignas(32) Pass_inputs {
     std::int32_t hi_hat_noise, snare_noise;
     const std::int32_t *logsin;         // the log-sine ROM
     const std::int32_t *exp;            // the exponent ROM with the 0x400 above it, shifted up one
+    const std::uint16_t *logsin16;      // both in 16 bits, for the pass for AVX-512
+    const std::uint16_t *exp16;
+    const std::uint8_t *logsin8;        // both as their low bytes, then their high bytes, for its forms with VBMI
+    const std::uint8_t *exp8;
 };
 
 // One pass over the 48 lanes, as Core::generate() works it out between taking
@@ -109,6 +118,12 @@ struct alignas(32) Pass_inputs {
 // them and add up the outputs with AVX-VNNI's instructions.
 extern "C" void adlplug_opl3_pass_avx2(Core *core, const Pass_inputs *inputs, std::int32_t *frame);
 extern "C" void adlplug_opl3_pass_avx2_vnni(Core *core, const Pass_inputs *inputs, std::int32_t *frame);
+// The same pass for AVX-512 (pass_avx512.S): with its foundation alone, adding
+// up with AVX-512 VNNI, looking the tables up by VBMI, and with both.
+extern "C" void adlplug_opl3_pass_avx512(Core *core, const Pass_inputs *inputs, std::int32_t *frame);
+extern "C" void adlplug_opl3_pass_avx512_vnni(Core *core, const Pass_inputs *inputs, std::int32_t *frame);
+extern "C" void adlplug_opl3_pass_avx512_vbmi(Core *core, const Pass_inputs *inputs, std::int32_t *frame);
+extern "C" void adlplug_opl3_pass_avx512_vbmi_vnni(Core *core, const Pass_inputs *inputs, std::int32_t *frame);
 
 }  // namespace adlplug::opl3
 

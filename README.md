@@ -163,10 +163,11 @@ in a DAW) runs two chips by default. With *full panning*, a sound can sit
 anywhere between left and right; without it, only on the left, in the centre
 or on the right. The OPL2 is mono, with no left or right at all.
 
-In the AVX2 builds, ADLplug-Next OPL3 does most of its work in a version
-written in assembly (directly in the CPU's instructions) for AVX2, which is the
-speed given here. The builds for AVX-512 and for Apple Silicon do that work as
-written in C++, which, built for the i7-1360P, made 107×.
+In the builds for x86-64, ADLplug-Next OPL3 does most of its work in a version
+written in assembly (directly in the CPU's instructions): the one for AVX-512
+on a CPU that has it, in the AVX2 builds too, and the one for AVX2 on the
+others, which is the speed given here. The builds for Apple Silicon do that
+work as written in C++, which, built for the i7-1360P, made 107×.
 
 The low-level (LLE) cores recreate a chip's circuits as read from photos of
 its inside (die shots). They are the most faithful, and so heavy that most

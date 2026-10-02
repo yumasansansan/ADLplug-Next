@@ -17,15 +17,35 @@
 #include <cmath>
 #include <cstddef>
 
-// The pass written by hand for AVX2, where the build has it
-// (cmake/OPL3Core.cmake): an x86-64 build whose C++ is not for AVX-512, the
-// whole width of which the C++ passes use. The memory sanitizer has to see every
-// write to memory, and it sees none of the assembly's: under it the core keeps
-// to the C++ pass, which it can check.
-#if defined(ADLPLUG_OPL3_AVX2) && !defined(__AVX512F__) && !__has_feature(memory_sanitizer)
+// The passes written by hand, where the build has them (cmake/OPL3Core.cmake):
+// the one for AVX-512 in every x86-64 build, and the one for AVX2 in those whose
+// C++ is not for AVX-512, which take the one for AVX-512 where the processor
+// has it. The memory sanitizer has to see every write to memory, and it sees
+// none of the assembly's: under it the core keeps to the C++ pass, which it can
+// check.
+#if !__has_feature(memory_sanitizer)
+#if defined(ADLPLUG_OPL3_AVX2) && !defined(__AVX512F__)
+#define OPL3_HAND_WRITTEN_AVX2 1
+#endif
+#if defined(ADLPLUG_OPL3_AVX512)
+#define OPL3_HAND_WRITTEN_AVX512 1
+#endif
+#endif
+#if defined(OPL3_HAND_WRITTEN_AVX2) || defined(OPL3_HAND_WRITTEN_AVX512)
 #define OPL3_HAND_WRITTEN 1
-#include "pass_avx2.h"
+#include "pass.h"
+
 #include <cpuid.h>
+#endif
+// What the pass for AVX-512 asks for of AVX-512, its foundation, DQ, BW and VL,
+// the builds whose C++ is compiled for all of it ask for themselves: those for
+// AVX-512 (x86-64-v4), and the native builds on the processors that have it.
+// The others ask the processor: the builds for AVX2, and a native build on a
+// processor with AVX-512's foundation alone, as Intel's Xeon Phi has it.
+#if defined(OPL3_HAND_WRITTEN_AVX512) && \
+    !(defined(__AVX512F__) && defined(__AVX512DQ__) && defined(__AVX512BW__) && defined(__AVX512VL__))
+#define OPL3_ASKS_FOR_AVX512 1
+#include <immintrin.h>
 #endif
 
 // Every loop over the lanes is vectorized. The pragma asks for it whatever the
@@ -188,7 +208,7 @@ constexpr ymf262::Counters counters_after_reset = [] {
 }();
 
 #if defined(OPL3_HAND_WRITTEN)
-// The exponent's ROM as the hand-written pass looks it up: with the 0x400 that
+// The exponent's ROM as the hand-written passes look it up: with the 0x400 that
 // the operator puts above it, shifted up one.
 alignas(64) constexpr std::array<std::int32_t, 256> exp_magnitude = [] {
     std::array<std::int32_t, 256> t{};
@@ -198,6 +218,37 @@ alignas(64) constexpr std::array<std::int32_t, 256> exp_magnitude = [] {
 }();
 #endif
 
+#if defined(OPL3_HAND_WRITTEN_AVX512)
+// The log-sine's ROM and the exponent's as above in 16 bits, which every entry
+// fits, for the pass for AVX-512 to hold in its registers.
+alignas(64) constexpr std::array<std::uint16_t, 256> logsin_rom16 = [] {
+    std::array<std::uint16_t, 256> t{};
+    for (std::size_t i = 0; i < t.size(); ++i)
+        t[i] = static_cast<std::uint16_t>(logsin_rom[i]);
+    return t;
+}();
+alignas(64) constexpr std::array<std::uint16_t, 256> exp_magnitude16 = [] {
+    std::array<std::uint16_t, 256> t{};
+    for (std::size_t i = 0; i < t.size(); ++i)
+        t[i] = static_cast<std::uint16_t>(exp_magnitude[i]);
+    return t;
+}();
+
+// The same as their low bytes, then their high bytes, for the forms of the pass
+// for AVX-512 that look them up by VBMI.
+constexpr std::array<std::uint8_t, 512> bytes_of(const std::array<std::uint16_t, 256> &words)
+{
+    std::array<std::uint8_t, 512> t{};
+    for (std::size_t i = 0; i < words.size(); ++i) {
+        t[i] = static_cast<std::uint8_t>(words[i] & 0xff);
+        t[words.size() + i] = static_cast<std::uint8_t>(words[i] >> 8);
+    }
+    return t;
+}
+alignas(64) constexpr std::array<std::uint8_t, 512> logsin_rom8 = bytes_of(logsin_rom16);
+alignas(64) constexpr std::array<std::uint8_t, 512> exp_magnitude8 = bytes_of(exp_magnitude16);
+#endif
+
 constexpr std::uint32_t noise_after_reset = [] {
     std::uint32_t s = 0;
     for (int i = 0; i < noise_steps_after_reset; ++i)
@@ -205,30 +256,96 @@ constexpr std::uint32_t noise_after_reset = [] {
     return s;
 }();
 
+#if defined(OPL3_HAND_WRITTEN_AVX2)
+// Whether the processor has AVX-VNNI: bit 4 of EAX in leaf 7, subleaf 1, of
+// CPUID.
+bool has_avx_vnni()
+{
+    unsigned eax = 0, ebx = 0, ecx = 0, edx = 0;
+    return __get_cpuid_count(7, 1, &eax, &ebx, &ecx, &edx) != 0 && (eax & (1u << 4)) != 0;
+}
+#endif
+
+#if defined(OPL3_ASKS_FOR_AVX512)
+// Whether the processor has what the pass for AVX-512 asks for, AVX-512 F, DQ,
+// BW and VL (bits 16, 17, 30 and 31 of EBX in leaf 7, subleaf 0, of CPUID), and
+// the system keeps the registers it uses: by XGETBV, which CPUID says the
+// system allows (bit 27 of ECX in leaf 1), the xmm and ymm registers, the mask
+// registers and the zmm registers' upper halves and zmm16 to zmm31 (bits 1, 2,
+// 5, 6 and 7 of XCR0).
+[[gnu::target("xsave")]] bool has_avx512()
+{
+    unsigned eax = 0, ebx = 0, ecx = 0, edx = 0;
+    if (__get_cpuid(1, &eax, &ebx, &ecx, &edx) == 0 || (ecx & (1u << 27)) == 0)
+        return false;
+    if ((_xgetbv(0) & 0xe6) != 0xe6)
+        return false;
+    constexpr unsigned wanted = (1u << 16) | (1u << 17) | (1u << 30) | (1u << 31);
+    return __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) != 0 && (ebx & wanted) == wanted;
+}
+#endif
+
+#if defined(OPL3_HAND_WRITTEN_AVX512)
+// Whether the processor has AVX-512 VNNI: bit 11 of ECX in leaf 7, subleaf 0,
+// of CPUID.
+bool has_avx512_vnni()
+{
+    unsigned eax = 0, ebx = 0, ecx = 0, edx = 0;
+    return __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) != 0 && (ecx & (1u << 11)) != 0;
+}
+
+// Whether the processor is one of Intel's and has VBMI, which the pass for
+// AVX-512 takes on Intel's processors alone (pass_avx512.S says why): the maker
+// CPUID's leaf 0 names in EBX, EDX and ECX, "Genu", "ineI" and "ntel" as
+// little-endian numbers, and bit 1 of ECX in leaf 7, subleaf 0.
+bool has_intel_vbmi()
+{
+    unsigned eax = 0, ebx = 0, ecx = 0, edx = 0;
+    if (__get_cpuid(0, &eax, &ebx, &ecx, &edx) == 0 || ebx != 0x756e6547 || edx != 0x49656e69 || ecx != 0x6c65746e)
+        return false;
+    return __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) != 0 && (ecx & (1u << 1)) != 0;
+}
+#endif
+
 }  // namespace
 
 bool Core::runs(Pass pass)
 {
     if (pass == Pass::cpp)
         return true;
-#if defined(OPL3_HAND_WRITTEN)
-    // The build asks for AVX2 itself. AVX-VNNI is bit 4 of EAX in leaf 7,
-    // subleaf 1, of CPUID.
+#if defined(OPL3_HAND_WRITTEN_AVX2)
+    // The build asks for AVX2 itself, and the processor for AVX-VNNI.
     if (pass == Pass::avx2)
         return true;
-    unsigned eax = 0, ebx = 0, ecx = 0, edx = 0;
-    return __get_cpuid_count(7, 1, &eax, &ebx, &ecx, &edx) != 0 && (eax & (1u << 4)) != 0;
-#else
-    return false;
+    if (pass == Pass::avx2_vnni)
+        return has_avx_vnni();
 #endif
+#if defined(OPL3_HAND_WRITTEN_AVX512)
+    // The builds for AVX-512 ask for its foundation themselves and the others
+    // ask the processor (OPL3_ASKS_FOR_AVX512); every build asks the processor
+    // for VNNI and VBMI.
+#if defined(OPL3_ASKS_FOR_AVX512)
+    if (!has_avx512())
+        return false;
+#endif
+    if (pass == Pass::avx512)
+        return true;
+    if (pass == Pass::avx512_vnni)
+        return has_avx512_vnni();
+    if (pass == Pass::avx512_vbmi)
+        return has_intel_vbmi();
+    if (pass == Pass::avx512_vbmi_vnni)
+        return has_avx512_vnni() && has_intel_vbmi();
+#endif
+    return false;
 }
 
 Core::Pass Core::fastest()
 {
-    if (runs(Pass::avx2_vnni))
-        return Pass::avx2_vnni;
-    if (runs(Pass::avx2))
-        return Pass::avx2;
+    for (const Pass pass :
+         {Pass::avx512_vbmi_vnni, Pass::avx512_vbmi, Pass::avx512_vnni, Pass::avx512, Pass::avx2_vnni, Pass::avx2})
+        if (runs(pass))
+            return pass;
     return Pass::cpp;
 }
 
@@ -793,10 +910,10 @@ void Core::accumulate(std::int32_t *frame)
 }
 
 #if defined(OPL3_HAND_WRITTEN)
-// The pass written by hand (pass_avx2.S), for the processors without AVX-VNNI
-// or for those with it, given what it goes by besides the core: what the
-// counters and the noise give for this pass, and what the routing says of the
-// drums and of the shared feedback history.
+// The pass written by hand, for AVX2 (pass_avx2.S) without AVX-VNNI or with it,
+// or for AVX-512 (pass_avx512.S), given what it goes by besides the core: what
+// the counters and the noise give for this pass, and what the routing says of
+// the drums and of the shared feedback history.
 void Core::hand_written_pass(std::int32_t *frame)
 {
     static_assert(offsetof(Core, rates_) == ADLPLUG_OPL3_RATES);
@@ -862,6 +979,10 @@ void Core::hand_written_pass(std::int32_t *frame)
     static_assert(offsetof(Pass_inputs, snare_noise) == ADLPLUG_OPL3_IN_SNARE_NOISE);
     static_assert(offsetof(Pass_inputs, logsin) == ADLPLUG_OPL3_IN_LOGSIN);
     static_assert(offsetof(Pass_inputs, exp) == ADLPLUG_OPL3_IN_EXP);
+    static_assert(offsetof(Pass_inputs, logsin16) == ADLPLUG_OPL3_IN_LOGSIN16);
+    static_assert(offsetof(Pass_inputs, exp16) == ADLPLUG_OPL3_IN_EXP16);
+    static_assert(offsetof(Pass_inputs, logsin8) == ADLPLUG_OPL3_IN_LOGSIN8);
+    static_assert(offsetof(Pass_inputs, exp8) == ADLPLUG_OPL3_IN_EXP8);
 
     Pass_inputs in{};
     const ymf262::Envelope_timing timing = counters_.envelope_timing();
@@ -899,10 +1020,34 @@ void Core::hand_written_pass(std::int32_t *frame)
     in.snare_noise = static_cast<std::int32_t>(ymf262::snare_noise(noise_));
     in.logsin = logsin_rom.data();
     in.exp = exp_magnitude.data();
+#if defined(OPL3_HAND_WRITTEN_AVX512)
+    in.logsin16 = logsin_rom16.data();
+    in.exp16 = exp_magnitude16.data();
+    in.logsin8 = logsin_rom8.data();
+    in.exp8 = exp_magnitude8.data();
+    if (pass_ == Pass::avx512_vbmi_vnni) {
+        adlplug_opl3_pass_avx512_vbmi_vnni(this, &in, frame);
+        return;
+    }
+    if (pass_ == Pass::avx512_vbmi) {
+        adlplug_opl3_pass_avx512_vbmi(this, &in, frame);
+        return;
+    }
+    if (pass_ == Pass::avx512_vnni) {
+        adlplug_opl3_pass_avx512_vnni(this, &in, frame);
+        return;
+    }
+    if (pass_ == Pass::avx512) {
+        adlplug_opl3_pass_avx512(this, &in, frame);
+        return;
+    }
+#endif
+#if defined(OPL3_HAND_WRITTEN_AVX2)
     if (pass_ == Pass::avx2_vnni)
         adlplug_opl3_pass_avx2_vnni(this, &in, frame);
     else
         adlplug_opl3_pass_avx2(this, &in, frame);
+#endif
 }
 #endif
 

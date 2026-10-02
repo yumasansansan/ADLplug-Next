@@ -116,8 +116,9 @@ grep -o -E -- '-m(arch|cpu)=[a-z0-9.-]+' "build/$preset/compile_commands.json" |
 # Release builds are made with ThinLTO throughout, and a compile command
 # without it would mean code left out of link-time optimisation with nothing
 # to say so. Windows resource scripts are not code, and an assembly file
-# (sources/opl3/core/pass_avx2.S) is machine code as it is written, which
-# link-time optimisation has nothing to do with: CMake gives it no -flto.
+# (sources/opl3/core/pass_avx2.S and pass_avx512.S) is machine code as it is
+# written, which link-time optimisation has nothing to do with: CMake gives it
+# no -flto.
 case $preset in
   *-release)
     commands=$(grep '"command"' "build/$preset/compile_commands.json" | grep -v -E 'cmake_llvm_rc|\.rc\.res|\.(S|s|asm)\.o(bj)? ' || true)

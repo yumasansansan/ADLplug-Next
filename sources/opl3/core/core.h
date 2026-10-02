@@ -30,12 +30,16 @@ namespace adlplug::opl3 {
 
 class Core {
 public:
-    // How a pass is worked out: in C++, which every build has, or by the pass
-    // written by hand for AVX2 (pass_avx2.S), in its form for the processors
-    // without AVX-VNNI, which look tables up one lane at a time, or in its form
-    // for those with it, which gather and add up the outputs with AVX-VNNI's
-    // instructions. All make the same samples.
-    enum class Pass { cpp, avx2, avx2_vnni };
+    // How a pass is worked out: in C++, which every build has, or by a pass
+    // written by hand, in the x86-64 builds: the one for AVX-512
+    // (pass_avx512.S) where the processor has AVX-512, adding up the outputs
+    // with AVX-512 VNNI where it has that, and looking the tables up by VBMI on
+    // Intel's processors that have it, in a form for each of the four; and
+    // else, in the builds for AVX2, the one for AVX2 (pass_avx2.S), in its form
+    // for the processors without AVX-VNNI, which look tables up one lane at a
+    // time, or in its form for those with it, which gather and add up the
+    // outputs with AVX-VNNI's instructions. All make the same samples.
+    enum class Pass { cpp, avx2, avx2_vnni, avx512, avx512_vnni, avx512_vbmi, avx512_vbmi_vnni };
 
     // Whether this build has the pass, and this processor the instructions
     // it needs.
@@ -136,10 +140,10 @@ private:
     alignas(64) std::array<std::int32_t, lanes> out_{}, out_1_{}, out_2_{};  // this pass's, the last two
     alignas(64) std::array<std::int32_t, lanes> eg_out_{}, phase_out_{};
     alignas(64) std::array<std::int32_t, lanes> restart_{};  // keyed on from release in this pass
-    // The levels and states of the envelopes as the hand-written pass keeps
-    // them: in 16 bits, sixteen lanes, a vector, in the order pass_avx2.S says.
-    // It reads and writes what comes first here at the offsets of
-    // pass_avx2.h, which core.cc checks.
+    // The levels and states of the envelopes as the hand-written passes keep
+    // them: in 16 bits, in the order the core's pass says (pass_avx2.S,
+    // pass_avx512.S), a core keeping to one pass. The passes read and write
+    // what comes first here at the offsets of pass.h, which core.cc checks.
     alignas(32) std::array<std::int16_t, lanes> level16_{}, state16_{};
 
     std::int64_t a_carry_soft_ = 0, b_carry_soft_ = 0;  // what the slots heard late made in the last pass, soft panned

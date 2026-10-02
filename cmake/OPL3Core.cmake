@@ -25,18 +25,25 @@ set(ADLplug_OPL3_CORE_SOURCES
   "${PROJECT_SOURCE_DIR}/sources/opl3/core/core.cc"
   "${PROJECT_SOURCE_DIR}/sources/opl3/core/adlmidi_chip.cc")
 
-# The core's pass written by hand for AVX2 (pass_avx2.S), in the x86-64 builds
-# whose C++ is not for AVX-512, whose whole width the C++ passes use where the
-# build has it (ADLplug_wide_vectors: avx512, and native on a machine with
-# AVX-512); Apple's builds are for arm64. Clang, the build's C compiler,
-# assembles it with the warning flags of the project's own sources, and the core
-# takes it in its form for the processors without AVX-VNNI or for those with it
-# (core.cc).
+# The core's passes written by hand, in the x86-64 builds (Apple's builds are
+# for arm64): the one for AVX-512 (pass_avx512.S) in all of them, and the one
+# for AVX2 (pass_avx2.S) where the C++ is not for AVX-512 (ADLplug_wide_vectors:
+# avx512, and native on a machine with AVX-512). Clang, the build's C compiler,
+# assembles them with the warning flags of the project's own sources. The core
+# takes the pass for AVX-512 where the processor has AVX-512, which the builds
+# for it ask for, in its form for what the processor has of VNNI and VBMI, and
+# else the one for AVX2, in its form for the processors without AVX-VNNI or for
+# those with it (core.cc).
 set(ADLplug_OPL3_AVX2 OFF)
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$" AND NOT APPLE AND NOT ADLplug_wide_vectors)
-  set(ADLplug_OPL3_AVX2 ON)
+set(ADLplug_OPL3_AVX512 OFF)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$" AND NOT APPLE)
   enable_language(ASM)
-  list(APPEND ADLplug_OPL3_CORE_SOURCES "${PROJECT_SOURCE_DIR}/sources/opl3/core/pass_avx2.S")
+  set(ADLplug_OPL3_AVX512 ON)
+  list(APPEND ADLplug_OPL3_CORE_SOURCES "${PROJECT_SOURCE_DIR}/sources/opl3/core/pass_avx512.S")
+  if(NOT ADLplug_wide_vectors)
+    set(ADLplug_OPL3_AVX2 ON)
+    list(APPEND ADLplug_OPL3_CORE_SOURCES "${PROJECT_SOURCE_DIR}/sources/opl3/core/pass_avx2.S")
+  endif()
 endif()
 
 add_library(adlplug-opl3-core STATIC EXCLUDE_FROM_ALL ${ADLplug_OPL3_CORE_SOURCES})
@@ -46,6 +53,9 @@ target_include_directories(adlplug-opl3-core SYSTEM PRIVATE
   "${PROJECT_SOURCE_DIR}/thirdparty/libADLMIDI/src/chips")
 if(ADLplug_OPL3_AVX2)
   target_compile_definitions(adlplug-opl3-core PRIVATE ADLPLUG_OPL3_AVX2)
+endif()
+if(ADLplug_OPL3_AVX512)
+  target_compile_definitions(adlplug-opl3-core PRIVATE ADLPLUG_OPL3_AVX512)
 endif()
 adlplug_own_sources(${ADLplug_OPL3_CORE_SOURCES})
 

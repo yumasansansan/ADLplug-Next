@@ -61,9 +61,9 @@ clang-tidy --version | sed -n 's/^ *//p' | head -n 4
 # target -- and clang-tidy reads the file once for every command it finds. The
 # checks say the same thing every time, so the commands are reduced to the first
 # of each file, which is the difference between minutes and half an hour. The
-# files of assembly (sources/opl3/core/pass_avx2.S) are left out: clang-tidy
-# reads C and C++, and given an assembly file it parses it as C and reports
-# every line.
+# files of assembly (sources/opl3/core/pass_avx2.S and pass_avx512.S) are left
+# out: clang-tidy reads C and C++, and given an assembly file it parses it as C
+# and reports every line.
 commands=$(mktemp -d)
 trap 'rm -rf "$commands"' EXIT
 python3 - "$build/compile_commands.json" "$commands/compile_commands.json" <<'REDUCE'

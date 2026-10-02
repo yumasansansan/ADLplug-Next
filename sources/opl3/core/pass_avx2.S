@@ -42,7 +42,7 @@
 //                                      std::int32_t *frame);
 //
 // Each does what Core::generate() does between taking its writes in and moving
-// its counters on (pass_avx2.h): the envelopes and the phases, the rhythm
+// its counters on (pass.h): the envelopes and the phases, the rhythm
 // phases, the operators stage by stage, the feedback history and the sums of
 // the two outputs. The first needs AVX2, which the build asks for, the second
 // AVX-VNNI as well, which core.cc asks the processor for: Intel's have it from
@@ -72,7 +72,7 @@
 //
 // Assembled by Clang, in Intel's syntax, for ELF (Linux) and COFF (Windows).
 
-#include "pass_avx2.h"
+#include "pass.h"
 
         .intel_syntax noprefix
 

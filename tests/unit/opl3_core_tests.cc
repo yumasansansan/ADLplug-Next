@@ -187,16 +187,18 @@ ADLPLUG_TEST(opl3_core_soft_panning)
     CHECK(b_silent);
 }
 
-// The pass written by hand for AVX2 (pass_avx2.S), in its forms for the
-// processors without AVX-VNNI and with it, makes the C++ pass's samples, sample
-// for sample, for random writes at random times, with a channel soft panned
-// every 500 samples and every third time back to the centre. A pass that does
-// not run here, for want of the build or of the processor, is left out, and
-// the test is skipped when none runs.
+// The passes written by hand, for AVX2 (pass_avx2.S) in its forms for the
+// processors without AVX-VNNI and with it, and for AVX-512 (pass_avx512.S) in
+// its forms without VNNI and VBMI, with either and with both, make the C++
+// pass's samples, sample for sample, for random writes at random times, with a
+// channel soft panned every 500 samples and every third time back to the
+// centre. A pass that does not run here, for want of the build or of the
+// processor, is left out, and the test is skipped when none runs.
 ADLPLUG_TEST(opl3_core_hand_written_passes)
 {
     bool any = false;
-    for (const Core::Pass pass : {Core::Pass::avx2, Core::Pass::avx2_vnni}) {
+    for (const Core::Pass pass : {Core::Pass::avx2, Core::Pass::avx2_vnni, Core::Pass::avx512, Core::Pass::avx512_vnni,
+                                  Core::Pass::avx512_vbmi, Core::Pass::avx512_vbmi_vnni}) {
         if (!Core::runs(pass))
             continue;
         any = true;
