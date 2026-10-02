@@ -132,7 +132,10 @@ earlier=${5:-}
 # is many times slower than elsewhere (.github/workflows/fuzz-part.yml),
 # whatever time it was asked to fuzz for: an hour would call it hung on any run
 # of fewer than twelve minutes, and leave it eight minutes to spare on a run of
-# twenty, which a slower runner does not have.
+# twenty, which a slower runner does not have. It gives each heavy target under
+# the other sanitizers half an hour, since OPNplug-Next's synth came to take
+# some sixteen minutes to replay its corpus under them, more than ten minutes
+# past a run of five.
 if [ -n "$grace" ]; then
   guard=$((seconds + grace))
 else

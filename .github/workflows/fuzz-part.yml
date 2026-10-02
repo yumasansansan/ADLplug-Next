@@ -266,13 +266,27 @@ jobs:
           else
             select=(--only "$ADLplug_FUZZ_PART")
           fi
-          # A heavy target under the memory sanitizer replays its corpus for more
-          # than an hour before it fuzzes, on a runner that sanitizer is slow on,
-          # which ci/fuzz.sh would take for a hang after the hour it allows that
-          # sanitizer; it is given two.
+          # A heavy target replays its corpus before it fuzzes for longer than
+          # ci/fuzz.sh allows the other targets past the time they are asked for,
+          # and the script would take it for a hang. Under the memory sanitizer,
+          # on a runner that sanitizer is slow on, the replay takes more than an
+          # hour, past the hour the script allows that sanitizer; such a target
+          # is given two. Under the address and the thread sanitizers,
+          # OPNplug-Next's synth replays its corpus in some sixteen minutes on an
+          # Emerald Rapids runner, at two inputs a second (2,743 inputs under the
+          # one and 2,057 under the other, in the daily run of 2026-10-01), so the
+          # run of five minutes started by hand on 2026-10-02, which stopped it
+          # ten minutes past them, stopped it under both while it was still
+          # replaying. Such a target is given half an hour: room for twice that
+          # replay, which still stops one that hangs before a job of one minute
+          # reaches its limit of forty.
           grace=()
-          if [[ $ADLplug_FUZZ_PRESET == *-msan && $ADLplug_FUZZ_PART != rest ]]; then
-            grace=(--grace 7200)
+          if [[ $ADLplug_FUZZ_PART != rest ]]; then
+            if [[ $ADLplug_FUZZ_PRESET == *-msan ]]; then
+              grace=(--grace 7200)
+            else
+              grace=(--grace 1800)
+            fi
           fi
           bash ci/fuzz.sh --with-long "${select[@]}" ${grace[@]+"${grace[@]}"} "$ADLplug_FUZZ_PRESET" \
             "$((ADLplug_FUZZ_MINUTES * 60))" fuzz-run/corpora fuzz-run/crashes fuzz-run/earlier
