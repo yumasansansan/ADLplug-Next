@@ -91,12 +91,19 @@ Instrument Instrument::from_properties(const juce::PropertySet &set)
     ins.midi_velocity_offset = clamp_to<std::int8_t>(set.getIntValue("midi_velocity_offset"));
     ins.second_voice_detune = clamp_to<std::int8_t>(set.getIntValue("second_voice_detune"));
     ins.percussion_key_number = clamp_to<std::uint8_t>(set.getIntValue("percussion_key_number"));
-    // States saved without these read as no rhythm mode and no fixed note. A
-    // number that is no mode -- the field holds three bits and the modes are five
-    // -- means none of them, rather than the last of them: a project can hold any
-    // number, and taking it for a drum would put a drum where none was meant.
+    // States saved without these read as no rhythm mode and no fixed note. The
+    // rhythm mode comes back as any number its field of three bits can hold, 6
+    // and 7 as well as the five drums: libADLMIDI names no drum for those two,
+    // but does not take them for none either -- when it works out the chip's
+    // channels, a percussion bank that holds one turns the rhythm mode on, and
+    // in that mode such an instrument plays with one voice -- and a bank file
+    // can hold them, so the plugin holds them, and a project that read them as
+    // none would change by being opened and saved. A number the field cannot
+    // hold means none rather than the drum its low bits happen to name: a
+    // project can hold any number, and taking it for a drum would put a drum
+    // where none was meant.
     const int rhythm_mode = set.getIntValue("rhythm_mode");
-    ins.rhythm_mode((rhythm_mode >= 0 && rhythm_mode <= 5) ? rhythm_mode : 0);
+    ins.rhythm_mode((rhythm_mode >= 0 && rhythm_mode <= 7) ? rhythm_mode : 0);
     ins.fixed_note(set.getBoolValue("fixed_note"));
 
     for (unsigned opnum = 0; opnum < 4; ++opnum) {

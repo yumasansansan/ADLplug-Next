@@ -154,9 +154,11 @@ ADLPLUG_TEST(embedded_banks)
 
 ADLPLUG_TEST(instrument_flags_in_state)
 {
-    // The flags that no parameter holds come back from a saved state as well.
+    // The flags that no parameter holds come back from a saved state as well:
+    // every rhythm mode the field holds, the two that name no drum among them,
+    // which a bank file can hold and libADLMIDI does not take for none.
 #if defined(ADLPLUG_OPL3)
-    for (int mode = 0; mode <= 5; ++mode) {
+    for (int mode = 0; mode <= 7; ++mode) {
         for (const bool fixed : {false, true}) {
             Instrument ins;
             ins.blank(false);
@@ -175,16 +177,15 @@ ADLPLUG_TEST(instrument_flags_in_state)
     const Instrument from_old = Instrument::from_properties(old_state);
     CHECK(from_old.rhythm_mode() == 0 && !from_old.fixed_note());
 
-    // A damaged state cannot select a drum type that does not exist: a number that
-    // is no mode is no mode, rather than the last of them, which would put a drum
-    // where the project meant none.
+    // A damaged state cannot put into the field a number it cannot hold: such a
+    // number is no mode, rather than the drum its low bits happen to name, which
+    // would put a drum where the project meant none (13 would be the hi-hat, 5,
+    // and -1 would be 7).
     juce::PropertySet damaged = Instrument().to_properties();
-    damaged.setValue("rhythm_mode", 7);
+    damaged.setValue("rhythm_mode", 13);
     CHECK(Instrument::from_properties(damaged).rhythm_mode() == 0);
     damaged.setValue("rhythm_mode", -1);
     CHECK(Instrument::from_properties(damaged).rhythm_mode() == 0);
-    damaged.setValue("rhythm_mode", 5);
-    CHECK(Instrument::from_properties(damaged).rhythm_mode() == 5);
 #elif defined(ADLPLUG_OPN2)
     for (const bool pseudo : {false, true}) {
         Instrument ins;
