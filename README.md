@@ -437,9 +437,9 @@ permission of their authors, whose legal status is unclear, and has
 substitutes for them. Unless `-DADLplug_GREYZONE_BANKS=ON` is given, the
 plugins are built without the grey zone. With it, ADLplug-Next takes
 libADLMIDI's `banks.ini` instead, and OPNplug-Next also the banks that its
-list (`resources/opn2/banks.ini`) marks as grey zone, for which no license or
-permission of their authors is known. The binaries on Releases are built
-without the grey zone.
+list (`resources/opn2/banks.ini`) marks as grey zone, whose instruments were
+taken from games and other software on terms that are not known. The binaries
+on Releases are built without the grey zone.
 
 Each bank includes what its sources say of it, such as its authors and its
 terms of use. The plugins show it under "Bank information..." in the menu that

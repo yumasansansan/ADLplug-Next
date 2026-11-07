@@ -28,14 +28,14 @@ This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmak
 diff --git a/modules/juce_core/xml/juce_XmlDocument.cpp b/modules/juce_core/xml/juce_XmlDocument.cpp
 --- a/modules/juce_core/xml/juce_XmlDocument.cpp
 +++ b/modules/juce_core/xml/juce_XmlDocument.cpp
-@@ -720,6 +720,12 @@ void XmlDocument::readEntity (String& result)
+@@ -761,6 +761,12 @@ String XmlDocument::readEntity (String& result)
  
              while (input[0] != ';')
              {
 +                if (input[0] == 0)
 +                {
 +                    setLastError ("unexpected end of input", true);
-+                    return;
++                    return {};
 +                }
 +
                  auto hexValue = CharacterFunctions::getHexDigitValue (input[0]);

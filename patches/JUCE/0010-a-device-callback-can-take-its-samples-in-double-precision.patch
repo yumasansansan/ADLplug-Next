@@ -8,7 +8,7 @@ AudioIODeviceCallback is given floats. AudioProcessorPlayer plays a processor th
 
 AudioIODeviceCallback gets wantsDoublePrecision(), false unless it is overridden, and audioDeviceIOCallbackWithContextDouble(), the same callback with doubles, which writes silence unless it is overridden. A device that can convert between its own format and doubles asks the callback before each block, since the answer can change while the device runs -- a player's changes with its processor's precision -- and while it is yes, converts to and from doubles and calls the double method. A device that cannot keeps calling the float method, and a callback that overrides neither method is never called with doubles, so nothing changes for either.
 
-AudioDeviceManager wants doubles when every callback it has wants them, asked under the lock its callbacks are called under, and then adds the callbacks' outputs together in double precision, its level meters reading the doubles. A callback added between the question and the block it answers is called with doubles for that block, and one that does not want them writes silence, the default. CallbackMaxSizeEnforcer passes the question and the double blocks through. AudioProcessorPlayer wants doubles while its processor processes in double precision, and processes each block in the precision the device gives it: straight through when that is the processor's own, and through a copy in the processor's precision when it is not, as it always did for doubles. StandalonePluginHolder passes both on to its player, and mutes the input in either precision.
+AudioDeviceManager wants doubles when every callback it has wants them, asked under the lock its callbacks are called under, and then adds the callbacks' outputs together in double precision, its level meters reading the doubles. A callback added between the question and the block it answers is called with doubles for that block, and one that does not want them writes silence, the default. CallbackMaxSizeEnforcer passes the question and the double blocks through, and its guard against a buffer size of zero, which JACK can report while a device is reconfigured, sits where it serves both. AudioProcessorPlayer wants doubles while its processor processes in double precision, and processes each block in the precision the device gives it: straight through when that is the processor's own, and through a copy in the processor's precision when it is not, as it always did for doubles. StandalonePluginHolder passes both on to its player, and mutes the input in either precision.
 
 The double method has a name of its own rather than overloading audioDeviceIOCallbackWithContext(), so that the callbacks that override the float method alone -- in JUCE, and in the code of those who use it -- do not hide it and draw -Woverloaded-virtual.
 
@@ -153,8 +153,7 @@ diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp b/m
 -                                           [[maybe_unused]] int numInputChannels,
 +                                           int numInputChannels,
                                             float* const* outputChannelData,
--                                           [[maybe_unused]] int numOutputChannels,
-+                                           int numOutputChannels,
+                                            int numOutputChannels,
                                             int numSamples,
                                             const AudioIODeviceCallbackContext& context) override
      {
@@ -190,7 +189,7 @@ diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp b/m
 +    void inBlocks (const Sample* const* inputChannelData,
 +                   [[maybe_unused]] int numInputChannels,
 +                   Sample* const* outputChannelData,
-+                   [[maybe_unused]] int numOutputChannels,
++                   int numOutputChannels,
 +                   int numSamples,
 +                   const AudioIODeviceCallbackContext& context,
 +                   std::vector<const Sample*>& storedIns,
@@ -199,9 +198,9 @@ diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp b/m
 +        jassert ((int) storedIns.size()  == numInputChannels);
 +        jassert ((int) storedOuts.size() == numOutputChannels);
  
-         int position = 0;
- 
-@@ -118,28 +173,25 @@ public:
+         // During device reconfiguration JACK can transiently report a buffer size of 0.
+         if (maximumSize <= 0)
+@@ -128,28 +183,25 @@ public:
              const auto blockLength = jmin (maximumSize, numSamples - position);
  
              const auto addOffset = [position] (auto ptr) { return ptr + position; };
@@ -241,7 +240,7 @@ diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp b/m
      AudioIODeviceCallback& inner;
      int maximumSize = 0;
  };
-@@ -167,6 +219,21 @@ private:
+@@ -177,6 +229,21 @@ private:
          owner.audioDeviceIOCallbackInt (ins, numIns, outs, numOuts, numSamples, context);
      }
  
@@ -263,7 +262,7 @@ diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp b/m
      void audioDeviceAboutToStart (AudioIODevice* device) override
      {
          owner.audioDeviceAboutToStartInt (device);
-@@ -1068,9 +1135,10 @@ void AudioDeviceManager::removeAudioCallback (AudioIODeviceCallback* callbackToR
+@@ -1086,9 +1153,10 @@ void AudioDeviceManager::removeAudioCallback (AudioIODeviceCallback* callbackToR
      }
  }
  
@@ -276,7 +275,7 @@ diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp b/m
                                                     int numOutputChannels,
                                                     int numSamples,
                                                     const AudioIODeviceCallbackContext& context)
-@@ -1083,25 +1151,35 @@ void AudioDeviceManager::audioDeviceIOCallbackInt (const float* const* inputChan
+@@ -1101,25 +1169,35 @@ void AudioDeviceManager::audioDeviceIOCallbackInt (const float* const* inputChan
      {
          AudioProcessLoadMeasurer::ScopedTimer timer (loadMeasurer, numSamples);
  
@@ -326,7 +325,7 @@ diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp b/m
  
              for (int chan = 0; chan < numOutputChannels; ++chan)
              {
-@@ -1115,7 +1193,7 @@ void AudioDeviceManager::audioDeviceIOCallbackInt (const float* const* inputChan
+@@ -1133,7 +1211,7 @@ void AudioDeviceManager::audioDeviceIOCallbackInt (const float* const* inputChan
      else
      {
          for (int i = 0; i < numOutputChannels; ++i)
@@ -335,7 +334,7 @@ diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp b/m
      }
  
      if (testSound != nullptr)
-@@ -1137,6 +1215,21 @@ void AudioDeviceManager::audioDeviceIOCallbackInt (const float* const* inputChan
+@@ -1155,6 +1233,21 @@ void AudioDeviceManager::audioDeviceIOCallbackInt (const float* const* inputChan
      outputLevelGetter->updateLevel (outputChannelData, numOutputChannels, numSamples);
  }
  
@@ -357,7 +356,7 @@ diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp b/m
  void AudioDeviceManager::audioDeviceAboutToStartInt (AudioIODevice* const device)
  {
      loadMeasurer.reset (device->getCurrentSampleRate(),
-@@ -1294,13 +1387,9 @@ void AudioDeviceManager::setDefaultMidiOutputDevice (const String& identifier)
+@@ -1312,13 +1405,9 @@ void AudioDeviceManager::setDefaultMidiOutputDevice (const String& identifier)
  //==============================================================================
  AudioDeviceManager::LevelMeter::LevelMeter() noexcept : level() {}
  
@@ -373,7 +372,7 @@ diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp b/m
      if (numChannels > 0)
      {
          for (int j = 0; j < numSamples; ++j)
-@@ -1308,7 +1397,7 @@ void AudioDeviceManager::LevelMeter::updateLevel (const float* const* channelDat
+@@ -1326,7 +1415,7 @@ void AudioDeviceManager::LevelMeter::updateLevel (const float* const* channelDat
              float s = 0;
  
              for (int i = 0; i < numChannels; ++i)
@@ -382,7 +381,7 @@ diff --git a/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp b/m
  
              s /= (float) numChannels;
  
-@@ -1327,7 +1416,23 @@ void AudioDeviceManager::LevelMeter::updateLevel (const float* const* channelDat
+@@ -1345,7 +1434,23 @@ void AudioDeviceManager::LevelMeter::updateLevel (const float* const* channelDat
          localLevel = 0;
      }
  

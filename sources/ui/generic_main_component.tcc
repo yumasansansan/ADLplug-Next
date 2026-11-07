@@ -594,45 +594,42 @@ void Generic_Main_Component<T>::finish_add_program(int selection)
         msg.bank = bank;
         msg.program = pgm;
         msg.notify_back = true;
-        AlertWindow::showOkCancelBox(
+        confirm_action(
             AlertWindow::QuestionIcon, "Delete program",
             std::format("Confirm deletion of program {:c}{:03d}?", percussive ? 'P' : 'M', pgm),
-            {}, {}, this,
-            ModalCallbackFunction::create([safe, msg](int result) {
-                if (result == 1 && safe != nullptr)
+            TRANS("OK"), [safe, msg]() {
+                if (safe != nullptr)
                     safe->write_to_processor(msg);
-            }));
+            });
         break;
     }
     case 3: {
         Messages::User::DeleteBank msg;
         msg.bank = bank;
         msg.notify_back = true;
-        AlertWindow::showOkCancelBox(
+        confirm_action(
             AlertWindow::QuestionIcon, "Delete bank",
             std::format("Confirm deletion of bank {:03d}:{:03d}?", bank.msb, bank.lsb),
-            {}, {}, this,
-            ModalCallbackFunction::create([safe, msg](int result) mutable {
-                if (result != 1 || safe == nullptr)
+            TRANS("OK"), [safe, msg]() mutable {
+                if (safe == nullptr)
                     return;
                 // both the melodic and the percussion bank
                 safe->write_to_processor(msg);
                 msg.bank.percussive = !msg.bank.percussive;
                 safe->write_to_processor(msg);
-            }));
+            });
         break;
     }
     case 4: {
         Messages::User::ClearBanks msg;
         msg.notify_back = true;
-        AlertWindow::showOkCancelBox(
+        confirm_action(
             AlertWindow::QuestionIcon, "Delete all banks",
             "Confirm deletion of all banks?",
-            {}, {}, this,
-            ModalCallbackFunction::create([safe, msg](int result) {
-                if (result == 1 && safe != nullptr)
+            TRANS("OK"), [safe, msg]() {
+                if (safe != nullptr)
                     safe->write_to_processor(msg);
-            }));
+            });
         break;
     }
     default:
@@ -1010,13 +1007,25 @@ void Generic_Main_Component<T>::confirm_overwrite(const File &file, std::functio
         + file.getFullPathName() + "\n\n" +
         TRANS("Are you sure you want to overwrite it?");
 
-    AlertWindow::showOkCancelBox(
-        AlertWindow::WarningIcon, title, message,
-        TRANS("Overwrite"), TRANS("Cancel"), this,
-        ModalCallbackFunction::create([callback = std::move(on_confirmed)](int result) {
+    confirm_action(AlertWindow::WarningIcon, title, message, TRANS("Overwrite"), std::move(on_confirmed));
+}
+
+template <class T>
+void Generic_Main_Component<T>::confirm_action(MessageBoxIconType icon, const String &title, const String &message,
+                                               const String &confirm_text, std::function<void()> on_confirmed)
+{
+    confirm_box_ = AlertWindow::showScopedAsync(
+        MessageBoxOptions()
+            .withIconType(icon)
+            .withTitle(title)
+            .withMessage(message)
+            .withButton(MessageBoxButtonOptions(confirm_text, 1).withPreferredAction())
+            .withButton(MessageBoxButtonOptions(TRANS("Cancel"), 0).withRole(MessageBoxButtonRole::cancel))
+            .withAssociatedComponent(this),
+        [callback = std::move(on_confirmed)](int result) {
             if (result == 1)
                 callback();
-        }));
+        });
 }
 
 template <class T>

@@ -114,6 +114,11 @@ public:
     void handle_save_bank(Component *clicked);
     void finish_save_bank(int selection);
     void confirm_overwrite(const File &file, std::function<void()> on_confirmed);
+    // Asks before an action: the first button confirms it, with Return, and the
+    // second cancels it, with Escape, as AlertWindow::showOkCancelBox() did
+    // before JUCE 9.0.5 deprecated it. The box closes when the component goes.
+    void confirm_action(MessageBoxIconType icon, const String &title, const String &message,
+                        const String &confirm_text, std::function<void()> on_confirmed);
     void load_bank(const File &file, int format);
     void load_single_instrument(std::uint32_t program, const File &file, int format);
     // The loaders of WOPL and WOPN files take the file as writable memory,
@@ -244,6 +249,8 @@ protected:
     Component::SafePointer<DialogWindow> dlg_about_;
     Component::SafePointer<DialogWindow> dlg_bank_information_;
     Component::SafePointer<DialogWindow> dlg_resampling_;
+    // The box of confirm_action(), open for as long as it is held here.
+    ScopedMessageBox confirm_box_;
 
     // Made in the constructor of this base, before the T around it exists, so
     // it keeps the base and turns it into the T only when an event comes: a

@@ -8,7 +8,7 @@
 //
 // What libADLMIDI calls to make ADLplug-Next's OPL3 core, emulator 14. The
 // library declares it in the same words
-// (patches/libADLMIDI/0010-emulator-14-is-adlplug-next-s-own-opl3-core.patch).
+// (patches/libADLMIDI/0008-emulator-14-is-adlplug-next-s-own-opl3-core.patch).
 
 #pragma once
 

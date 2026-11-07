@@ -7,7 +7,7 @@
 // (LICENSES/GPL-3.0-or-later.txt).
 //
 // ADLplug-Next's OPL3 core as a chip of libADLMIDI, which makes it as emulator
-// 14 (patches/libADLMIDI/0010-emulator-14-is-adlplug-next-s-own-opl3-core.patch).
+// 14 (patches/libADLMIDI/0008-emulator-14-is-adlplug-next-s-own-opl3-core.patch).
 
 #include "adlmidi_chip.h"
 #include "core.h"

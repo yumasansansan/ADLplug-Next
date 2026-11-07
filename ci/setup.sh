@@ -24,21 +24,13 @@ set -euo pipefail
 llvm_major=23
 
 # Windows, macOS and the AlmaLinux container: LLVM's release archives.
-llvm_release=23.1.2
+llvm_release=23.1.5
 windows_archive=clang+llvm-$llvm_release-x86_64-pc-windows-msvc.tar.zst
-windows_sha256=ceaee048142fece144752c6f6431cb0905a7a6160f78ab8cf5cf0b6216f99418
+windows_sha256=b2be33385ddc86e83511417a060de927ae8b09d1f3017cc3cdce5c73cd5029d7
 macos_archive=LLVM-$llvm_release-macOS-ARM64.tar.zst
-macos_sha256=3da0e91b5dfe3a5ec795ad2be79b3f5e6f28c8b23edcd3847fad7742b25e0507
+macos_sha256=503de30ef90311e0b143623801b19af2250adac6d69faed65ad0051170202e3b
 linux_archive=LLVM-$llvm_release-Linux-X64.tar.zst
-linux_sha256=6382de1c1a210ce5a5cc49d18bc8444d137742e7cbf9b19f4ae602bb1ab52534
-
-# The Linux archive is built on Ubuntu 22.04, and its LLD needs that system's
-# ICU 70 (libicuuc.so.70, libicui18n.so.70), through the libxml2 linked into
-# it; AlmaLinux 10 has ICU 74. The libraries come from Ubuntu 22.04's package
-# and are found through LD_LIBRARY_PATH; nothing else asks for their version.
-icu70_package=libicu70_70.1-2_amd64.deb
-icu70_url=https://launchpad.net/ubuntu/+archive/primary/+files/$icu70_package
-icu70_sha256=58a154f6307289813da2276f900498ef536ae7c0522d2cf31a3c3c5cf62dfd9a
+linux_sha256=c3107384835f788768f614db610e87fba7077f125ca950eb02a78bab0a308065
 
 # Linux: the packages of apt.llvm.org, signed with this key.
 apt_key_fingerprint=6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
@@ -77,7 +69,7 @@ almalinux_packages=(
   alsa-lib-devel fontconfig-devel freetype-devel
   libX11-devel libXcomposite-devel libXcursor-devel libXext-devel libXi-devel
   libXinerama-devel libXrandr-devel libXrender-devel
-  cmake ninja-build gcc-c++ binutils git python3 tar xz zstd rpm-build
+  cmake ninja-build gcc-c++ git python3 tar xz zstd rpm-build
 )
 
 # Pipelines below are written so that no command stops reading early: with
@@ -231,16 +223,6 @@ setup_almalinux() {
   download "$(release_url "$linux_archive")" "$RUNNER_TEMP/$linux_archive" "$linux_sha256"
   extract "$RUNNER_TEMP/$linux_archive" "$RUNNER_TEMP/llvm" tar .a
   llvm_bin=$RUNNER_TEMP/llvm/bin
-
-  local package=$RUNNER_TEMP/$icu70_package icu=$RUNNER_TEMP/icu70
-  download "$icu70_url" "$package" "$icu70_sha256"
-  mkdir -p "$icu/deb"
-  (cd "$icu/deb" && ar x "$package")
-  tar -x -f "$icu/deb"/data.tar.* -C "$icu/deb" --wildcards './usr/lib/x86_64-linux-gnu/libicu*.so.70*'
-  mv "$icu/deb/usr/lib/x86_64-linux-gnu"/libicu* "$icu/"
-  rm -rf "$icu/deb" "$package"
-  export LD_LIBRARY_PATH=$icu
-  echo "LD_LIBRARY_PATH=$icu" >> "$GITHUB_ENV"
   "$llvm_bin/ld.lld" --version
 }
 

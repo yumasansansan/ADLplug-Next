@@ -68,63 +68,49 @@ function(adlplug_patch directory patch)
 endfunction()
 
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0001-xml-the-one-line-form-has-no-line-endings-to-write.patch")
+  "patches/JUCE/0001-a-string-of-no-text-reads-none-of-it.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0002-memory-block-two-blocks-of-no-bytes-are-equal.patch")
+  "patches/JUCE/0002-a-parameter-takes-no-value-that-is-no-number.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0003-no-bytes-to-zero-is-no-call-to-memset.patch")
+  "patches/JUCE/0003-the-time-of-a-file-is-read-where-it-lies.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0004-a-string-of-no-text-reads-none-of-it.patch")
+  "patches/JUCE/0004-a-parameter-tells-its-listeners-without-waiting.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0005-a-parameter-takes-no-value-that-is-no-number.patch")
+  "patches/JUCE/0005-a-hex-character-reference-the-text-ends-in-ends-there.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0006-the-message-manager-lock-releases-what-it-took.patch")
+  "patches/JUCE/0006-wasapi-asks-for-more-channels-in-one-sample-format.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0007-the-time-of-a-file-is-read-where-it-lies.patch")
+  "patches/JUCE/0007-direct2d-makes-devices-only-for-the-adapters-it-draws-with.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0008-a-parameter-tells-its-listeners-without-waiting.patch")
+  "patches/JUCE/0008-the-standalone-processes-in-double-precision-when-the-processor-can.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0009-asking-which-thread-this-is-takes-no-lock.patch")
+  "patches/JUCE/0009-audio-data-converts-samples-to-and-from-64-bit-floats.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0010-a-hex-character-reference-the-text-ends-in-ends-there.patch")
+  "patches/JUCE/0010-a-device-callback-can-take-its-samples-in-double-precision.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0011-wasapi-asks-for-more-channels-in-one-sample-format.patch")
+  "patches/JUCE/0011-wasapi-hands-doubles-to-a-callback-that-wants-them.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0012-direct2d-makes-devices-only-for-the-adapters-it-draws-with.patch")
+  "patches/JUCE/0012-asio-hands-doubles-to-a-callback-that-wants-them.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0013-the-standalone-processes-in-double-precision-when-the-processor-can.patch")
+  "patches/JUCE/0013-alsa-hands-doubles-to-a-callback-that-wants-them.patch")
 adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0014-audio-data-converts-samples-to-and-from-64-bit-floats.patch")
-adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0015-a-device-callback-can-take-its-samples-in-double-precision.patch")
-adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0016-wasapi-hands-doubles-to-a-callback-that-wants-them.patch")
-adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0017-asio-hands-doubles-to-a-callback-that-wants-them.patch")
-adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0018-alsa-hands-doubles-to-a-callback-that-wants-them.patch")
-adlplug_patch("thirdparty/JUCE"
-  "patches/JUCE/0019-a-negative-float-written-into-24-bits-of-32-goes-through-a-signed-integer.patch")
+  "patches/JUCE/0014-a-negative-float-written-into-24-bits-of-32-goes-through-a-signed-integer.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0001-models-the-frequency-models-stay-inside-their-tables.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0002-nuked-opl3-the-fast-path-silences-a-slot-as-the-other-does.patch")
+  "patches/libADLMIDI/0002-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0003-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
+  "patches/libADLMIDI/0003-a-panic-takes-every-note-a-channel-holds.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0004-nuked-opl3-the-fast-path-shifts-by-less-than-its-width.patch")
+  "patches/libADLMIDI/0004-a-number-of-chips-the-library-refuses-is-not-one-it-keeps.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0005-a-panic-takes-every-note-a-channel-holds.patch")
+  "patches/libADLMIDI/0005-a-note-with-one-chip-channel-has-no-second-one-to-read.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0006-a-number-of-chips-the-library-refuses-is-not-one-it-keeps.patch")
+  "patches/libADLMIDI/0006-dosbox-a-rhythm-mode-drum-is-panned-by-its-own-channel.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0007-a-note-with-one-chip-channel-has-no-second-one-to-read.patch")
+  "patches/libADLMIDI/0007-a-generation-writes-doubles-through-pointers-to-doubles.patch")
 adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0008-dosbox-a-rhythm-mode-drum-is-panned-by-its-own-channel.patch")
-adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0009-a-generation-writes-doubles-through-pointers-to-doubles.patch")
-adlplug_patch("thirdparty/libADLMIDI"
-  "patches/libADLMIDI/0010-emulator-14-is-adlplug-next-s-own-opl3-core.patch")
+  "patches/libADLMIDI/0008-emulator-14-is-adlplug-next-s-own-opl3-core.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
 adlplug_patch("thirdparty/libOPNMIDI"

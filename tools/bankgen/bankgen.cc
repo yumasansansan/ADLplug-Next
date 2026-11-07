@@ -439,7 +439,8 @@ std::vector<Pack_Entry> read_banks(Inputs &inputs, const Options &options)
 
         entry.info = wrapped(std::format("File: {}", where));
         if (item.greyzone)
-            entry.info += wrapped("Grey zone: no license or permission of its authors is known for this bank.");
+            entry.info += wrapped("Grey zone: the terms of the material the instruments of this bank come from "
+                                  "are not known.");
         if (!item.note.empty())
             entry.info += wrapped(item.note);
         entry.info += wrapped(notes);

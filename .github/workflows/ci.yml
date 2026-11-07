@@ -123,7 +123,7 @@ jobs:
 
       - name: Keep the pack
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && endsWith(matrix.preset, '-release') }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.preset }}
           path: package/
@@ -132,7 +132,7 @@ jobs:
 
       - name: Keep the editor pictures
         if: ${{ !cancelled() && runner.os == 'Windows' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: editor-${{ matrix.preset }}-${{ matrix.arch }}
           path: build/${{ matrix.preset }}/tests/render/*.png
@@ -197,7 +197,7 @@ jobs:
 
       - name: Keep the inputs that failed
         if: ${{ failure() && matrix.fuzz }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fuzz-crashes-${{ matrix.preset }}
           path: fuzz-run/crashes/
@@ -257,7 +257,7 @@ jobs:
 
       - name: Keep the inputs that failed
         if: ${{ failure() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fuzz-crashes-${{ matrix.preset }}
           path: fuzz-run/crashes/
@@ -303,7 +303,7 @@ jobs:
 
       - name: Keep the page it leaves
         if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-${{ matrix.preset }}
           path: build/${{ matrix.preset }}/coverage/html/
@@ -464,7 +464,7 @@ jobs:
         run: bash ci/package-rpm.sh "${{ matrix.preset }}" "${{ matrix.arch }}" package
 
       - name: Keep the package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package-rpm-${{ matrix.arch }}-${{ matrix.preset }}
           path: package/
@@ -596,7 +596,7 @@ jobs:
 
       - name: Keep the packs
         if: ${{ steps.try.outputs.build == 'true' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.ADLplug_AVX512_PACKS }}
           path: package/
@@ -686,7 +686,7 @@ jobs:
 
       - name: Keep the packages
         if: ${{ steps.try.outputs.build == 'true' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.ADLplug_AVX512_PACKS }}
           path: package/

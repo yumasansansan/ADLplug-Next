@@ -239,7 +239,7 @@ cmake --build --preset adl-release     # 上と同様です．
 - ADLplug-Next: libADLMIDI に含まれるバンクを，libADLMIDI の `banks-no-grey.ini` の一覧に従って，WOPLX ファイル（libADLMIDI のバンクの形式）から取り込みます（同じファイルは 1 回だけ）．
 - OPNplug-Next: `resources/opn2/banks.ini` の一覧にあるバンクを取り込みます．libOPNMIDI の WOPN バンクと，OPN2 Bank Editor に付属するサンプルの GYB・GEMS バンクで，GYB・GEMS バンクは，OPN2 Bank Editor で読み込んだときと同じように変換されます．
 
-libADLMIDI には，作者の明示的な許可なく作られ，法的な位置付けがはっきりしない「グレーゾーン」なバンクがあり，代替も用意されています．`-DADLplug_GREYZONE_BANKS=ON` を指定しない限り，グレーゾーンを含めずにビルドされます．指定すると，ADLplug-Next は代わりに libADLMIDI の `banks.ini` を使い，OPNplug-Next はリスト（`resources/opn2/banks.ini`）でグレーゾーンとされているバンク（ライセンスも作者の許可も知られていないもの）も取り込みます．Releases で配布されているバイナリは，グレーゾーンを含めずにビルドされています．
+libADLMIDI には，作者の明示的な許可なく作られ，法的な位置付けがはっきりしない「グレーゾーン」なバンクがあり，代替も用意されています．`-DADLplug_GREYZONE_BANKS=ON` を指定しない限り，グレーゾーンを含めずにビルドされます．指定すると，ADLplug-Next は代わりに libADLMIDI の `banks.ini` を使い，OPNplug-Next はリスト（`resources/opn2/banks.ini`）でグレーゾーンとされているバンク（ゲームなどのソフトウェアから取り出された楽器で，その利用条件がわからないもの）も取り込みます．Releases で配布されているバイナリは，グレーゾーンを含めずにビルドされています．
 
 各バンクには，作者や利用条件など，元のファイルに記されている情報が含まれます．この情報は，プラグインの画面でバンクを読み込むメニューの「Bank information...」から表示することができます．また，ビルドすると，すべてのバンクの情報が，ビルドディレクトリの `banks/<プラグイン名>-banks.txt` に書き出されます．
 

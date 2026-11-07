@@ -7,7 +7,7 @@
 # (LICENSES/GPL-3.0-or-later.txt).
 #
 # ADLplug-Next's own OPL3 core (sources/opl3/core), which libADLMIDI makes as
-# emulator 14 with this project's patch (patches/libADLMIDI/0010-...). The
+# emulator 14 with this project's patch (patches/libADLMIDI/0008-...). The
 # library declares the function that makes it and leaves the code to this
 # build: a library of its own, compiled with this project's warning flags, and
 # linked into libADLMIDI, which is where the function is called from. Built

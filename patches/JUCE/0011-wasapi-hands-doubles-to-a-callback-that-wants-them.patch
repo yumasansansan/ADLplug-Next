@@ -140,7 +140,7 @@ diff --git a/modules/juce_audio_devices/native/juce_WASAPI_windows.cpp b/modules
 +
              {
                  const ScopedTryLock sl (startStopLock);
-+                const auto started = sl.isLocked() && (loadedFlags & flagStarted) != 0;
++                const auto started = sl.isLocked() && (flags.load (std::memory_order_acquire) & flagStarted) != 0;
 +                useDouble = started && callback->wantsDoublePrecision();
 +
 +                if (inputDeviceActive)
@@ -151,7 +151,7 @@ diff --git a/modules/juce_audio_devices/native/juce_WASAPI_windows.cpp b/modules
 +                        inputDevice->copyBuffersFromReservoir (ins.getArrayOfWritePointers(), numInputBuffers, bufferSize);
 +                }
  
--                if (sl.isLocked() && (loadedFlags & flagStarted) != 0)
+-                if (sl.isLocked() && (flags.load (std::memory_order_acquire) & flagStarted) != 0)
 +                if (useDouble)
 +                {
 +                    callback->audioDeviceIOCallbackWithContextDouble (insDouble.getArrayOfReadPointers(),

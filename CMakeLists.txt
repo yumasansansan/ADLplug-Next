@@ -107,7 +107,7 @@ if(ADLplug_FUZZ_FULL_COVERAGE AND NOT ADLplug_BUILD_FUZZERS)
 endif()
 option(ADLplug_COVERAGE
   "Measure which of ADLplug-Next's own code the tests and the fuzz corpus reach (ci/coverage.sh)" OFF)
-option(ADLplug_GREYZONE_BANKS "Include the instrument banks of the grey zone, for which no license or permission of their authors is known" OFF)
+option(ADLplug_GREYZONE_BANKS "Include the instrument banks of the grey zone, whose legal status is unclear" OFF)
 
 set(ADLplug_CHIP "OPL3" CACHE STRING "Kind of synthesizer chip (OPL3, OPN2)")
 # The instruction sets a processor has here, the first of them the default
@@ -823,12 +823,14 @@ target_include_directories(ADLplug PUBLIC "sources")
 
 # ADLplug reads no audio files, so it needs none of JUCE's audio codecs. JUCE 9
 # builds the MP3 decoder by default, and its tables are computed when the
-# plug-in loads.
+# plug-in loads; JUCE 9.0.5 builds Opus as well, whose C expects <stdlib.h> to
+# declare alloca(), which ISO C does not have.
 target_compile_definitions(ADLplug PUBLIC
   JUCE_STRICT_REFCOUNTEDPOINTER=1
   JUCE_VST3_CAN_REPLACE_VST2=0
   JUCE_USE_FLAC=0
   JUCE_USE_OGGVORBIS=0
+  JUCE_USE_OPUS=0
   JUCE_USE_MP3AUDIOFORMAT=0
   JUCE_USE_WINDOWS_MEDIA_FORMAT=0
   JUCE_WEB_BROWSER=0
