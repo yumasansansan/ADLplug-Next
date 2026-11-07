@@ -1322,7 +1322,17 @@ void AdlplugAudioProcessor::read_state(const XmlElement &root)
     PropertySet common_set;
     if (const XmlElement *elt = root.getChildByName("common"))
         common_set.restoreFromXml(*elt);
-    common_set.getValue("bank_title").copyToUTF8(bank_title_, bank_title_size_max + 1);
+    // The title is kept as the text of the bytes that fit, as the title from the
+    // editor is and as the names of banks and programs are, for the reason
+    // bank_manager.cc gives (assign_name): a String need not be UTF-8 -- a
+    // character reference of the XML can make it hold half of a surrogate pair --
+    // and the text of bytes that are not is longer than they are, so what did not
+    // fit would be gone when the project was saved and read again.
+    const String title = common_set.getValue("bank_title");
+    const char *title_utf8 = title.toRawUTF8();
+    copy_name_bytes_to_field(std::span(bank_title_, bank_title_size_max),
+                             std::span(title_utf8, utf8_fitting_length(title_utf8, bank_title_size_max)));
+    bank_title_[bank_title_size_max] = 0;
     active_part_ = static_cast<unsigned>(jlimit(0, 15, common_set.getIntValue("part")));
     *pb.p_mastervol = static_cast<float>(common_set.getDoubleValue("master_volume", 1.0));
 

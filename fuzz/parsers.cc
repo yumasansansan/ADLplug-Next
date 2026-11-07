@@ -223,9 +223,10 @@ void the_configuration_file(const char *data, std::size_t size)
 
     // What the plugin writes back is what it read: a value that came out of a
     // file it was given has to survive being saved to one of its own, or the
-    // configuration of whoever runs it would change by being opened.
+    // configuration of whoever runs it would change by being opened. It is saved
+    // as save_ini saves it, with the UTF-8 signature first.
     std::string saved;
-    FUZZ_CHECK(ini.Save(saved, false) == SI_OK);
+    FUZZ_CHECK(ini.Save(saved, true) == SI_OK);
 
     CSimpleIniA again;
     again.SetUnicode();

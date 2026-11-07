@@ -111,6 +111,10 @@ adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0007-a-generation-writes-doubles-through-pointers-to-doubles.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0008-emulator-14-is-adlplug-next-s-own-opl3-core.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0009-nuked-cqm-the-phase-counts-in-the-unsigned-type-it-is-kept-in.patch")
+adlplug_patch("thirdparty/libADLMIDI"
+  "patches/libADLMIDI/0010-opal-the-vibrato-is-scaled-by-the-octave-without-shifting-a-negative.patch")
 adlplug_patch("thirdparty/libOPNMIDI"
   "patches/libOPNMIDI/0001-the-resampler-runs-the-chip-at-the-rate-asked-for.patch")
 adlplug_patch("thirdparty/libOPNMIDI"

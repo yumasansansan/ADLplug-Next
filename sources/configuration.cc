@@ -48,10 +48,16 @@ bool load_ini(CSimpleIniA &ini, const File &file)
         ini.LoadData(data.begin(), data.getSize()) == SI_OK;
 }
 
+// The file begins with the UTF-8 signature, as SaveFile writes it unless told
+// not to, and as upstream ADLplug's files did. LoadData takes those three bytes
+// at the start of a file for the signature and drops them, so in a file without
+// it, a first key whose name begins with U+FEFF -- the same bytes -- would lose
+// them on the way back in, and the rest of its line could read as the name of a
+// section.
 bool save_ini(const CSimpleIniA &ini, const File &file)
 {
     std::string data;
-    return ini.Save(data, false) == SI_OK &&
+    return ini.Save(data, true) == SI_OK &&
         file.getParentDirectory().createDirectory().wasOk() &&
         file.replaceWithData(data.data(), data.size());
 }

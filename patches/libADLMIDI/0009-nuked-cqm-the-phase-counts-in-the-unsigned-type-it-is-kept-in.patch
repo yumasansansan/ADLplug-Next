@@ -1,0 +1,31 @@
+SPDX-FileCopyrightText: 2026 Nuke.YKT
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+Nuked CQM: the phase counts in the unsigned type it is kept in
+
+CQM_Generate() keeps the phase of each slot in slot->phase, a uint32_t that nothing masks: every sample adds the slot's step to it, and only a key-on sets it back. What is read of it are its low bits -- the waveform takes slot->phase >> 3 down to sixteen bits, and the rhythm sounds take bits 11 to 16 -- so the counter is meant to wrap around. The step is added up in a local int, though, which a counter past INT_MAX overflows, and that is undefined behaviour. A note that is held long enough gets there, and UndefinedBehaviorSanitizer stops the program:
+
+  src/chips/nuked_cqm/cqm.c:584:23: runtime error: signed integer overflow: 2147459456 + 249600 cannot be represented in type 'int'
+      #0 CQM_Generate src/chips/nuked_cqm/cqm.c:584:23
+      #1 NukedCQM::nativeGenerate(short*) src/chips/nuked_cqm.cpp:70:5
+
+The local is a uint32_t now, the type of the counter it comes from and goes back to. The modulation and the steps, which may be negative, are added to it modulo 2^32: where the sum of ints was defined, that gives the same bits, and where it was not, the bits the counter is meant to have. What the chip puts out does not change.
+
+ADLplug-Next's fuzz target for the MIDI synthesizer found it, in the build with ThreadSanitizer and UndefinedBehaviorSanitizer. ADLplug-Next keeps the input as a regression, and a build of it without this patch still fails on it.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/src/chips/nuked_cqm/cqm.c b/src/chips/nuked_cqm/cqm.c
+--- a/src/chips/nuked_cqm/cqm.c
++++ b/src/chips/nuked_cqm/cqm.c
+@@ -201,7 +201,8 @@ void CQM_Generate(cqm_t* chip, int16_t* sample)
+     {
+         int wave, key, kon;
+         int pmulti, fnum_lo, fnum_hi, fnum, block, multi;
+-        int fb_con, phase, modsub, modadd, fb, modshift, fnum_ps;
++        int fb_con, modsub, modadd, fb, modshift, fnum_ps;
++        uint32_t phase;
+         int shift_l;
+ 
+         int ch = 0;

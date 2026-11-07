@@ -1,0 +1,30 @@
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: LicenseRef-Public-Domain
+
+Opal: the vibrato is scaled by the octave without shifting a negative number
+
+OpalChannel_Output() works out the vibrato of a channel as a small offset that follows the eight positions of the vibrato clock -- 0, 3, 7, 3, 0, -3, -7, -3, as its comment has it, scaled by the top three bits of the frequency number -- and then scales it by the channel's octave with a left shift. Shifting a negative value left is undefined behaviour in C. The offset is negative at three of the eight positions for every channel whose frequency number is 128 or more with deep vibrato, or 256 or more without, and the clock moves on every 1024 samples, so such a note gets there within a sixth of a second, which is one turn of the clock. UndefinedBehaviorSanitizer stops the program there:
+
+  src/chips/opal/opal.c:678:13: runtime error: left shift of negative value -2
+      #0 OpalChannel_Output src/chips/opal/opal.c:678:13
+      #1 Opal_Output src/chips/opal/opal.c:558:9
+      #2 Opal_Sample src/chips/opal/opal.c:531:9
+
+A multiplication by the same power of two says the same thing and is defined. The offset is at most 7 either way and the octave at most 7, so the product, 896 at the most, stays far inside the int16_t it is kept in.
+
+ADLplug-Next's fuzz target for what a host does found it. ADLplug-Next keeps the input as a regression, and a build of it without this patch still fails on it.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream. Opal's code is in the public domain, and so is this change (LICENSES/LicenseRef-Public-Domain.txt).
+
+diff --git a/src/chips/opal/opal.c b/src/chips/opal/opal.c
+--- a/src/chips/opal/opal.c
++++ b/src/chips/opal/opal.c
+@@ -675,7 +675,7 @@ static void OpalChannel_Output(OpalChannel *self, int16_t *left, int16_t *right)
+             vibrato = -vibrato;     /* The second half positions are negative */
+     }
+ 
+-    vibrato <<= self->Octave;
++    vibrato *= 1 << self->Octave;
+ 
+     /* Combine individual operator outputs */
+ 
