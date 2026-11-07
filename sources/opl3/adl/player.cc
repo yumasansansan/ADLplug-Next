@@ -170,15 +170,19 @@ std::vector<std::string> Player::enumerate_emulators()
     if (!pl)
         throw std::runtime_error("cannot initialize player");
 
-    std::vector<std::string> names(32);
-    std::size_t count = 0;
+    // A name for every number the library gives a core, and an empty one for the
+    // cores this build leaves out, which the parameter shows as reserved
+    // (parameter_block.cc) and the menu leaves out: the emulator parameter then
+    // has the same choices in every build, so that a project keeps the number it
+    // holds and a host's value stands for the same core in a build that leaves
+    // cores out as in one that has them all. Named only up to the highest core
+    // built, a build with the default core alone, as CI makes of OPNplug-Next,
+    // had a parameter of one choice, which JUCE's AudioParameterChoice does not
+    // take: its range runs from nought to nought.
+    std::vector<std::string> names(static_cast<std::size_t>(ADLMIDI_EMU_end));
     for (std::size_t i = 0; i < names.size(); ++i) {
-        if (adl_switchEmulator(pl.get(), static_cast<int>(i)) == 0) {
+        if (adl_switchEmulator(pl.get(), static_cast<int>(i)) == 0)
             names[i] = adl_chipEmulatorName(pl.get());
-            count = i + 1;
-        }
     }
-
-    names.resize(count);
     return names;
 }

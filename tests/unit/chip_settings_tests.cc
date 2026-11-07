@@ -52,3 +52,20 @@ ADLPLUG_TEST(chip_settings_keep_a_channel_allocation_that_is_no_mode)
     cs.chan_alloc = 9;
     CHECK(Chip_Settings::from_properties(cs.to_properties()).chan_alloc == 9);
 }
+
+// The emulators offered are every number the library gives a core, whichever of
+// the cores a build has, those it leaves out by an empty name: the emulator
+// parameter then has the same choices in every build, and a build with the
+// default core alone, as one of CI's is, still offers more than one, which JUCE's
+// AudioParameterChoice asks for.
+ADLPLUG_TEST(emulator_choices_cover_every_core_number)
+{
+    const Emulator_Defaults &defaults = get_emulator_defaults();
+#if defined(ADLPLUG_OPL3)
+    CHECK(defaults.choices.size() == ADLMIDI_EMU_end);
+#elif defined(ADLPLUG_OPN2)
+    CHECK(defaults.choices.size() == OPNMIDI_EMU_end);
+#endif
+    CHECK(defaults.choices.size() > 1);
+    CHECK(defaults.is_built(defaults.default_index));
+}
