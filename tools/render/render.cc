@@ -12,7 +12,6 @@
 //                    [--editor] [--snapshot <file.png>] [--no-teardown]
 //                    [--state <file>] [--restore <file>] [--emulator <number>]
 //                    [--save-hashes <file>] [checks]
-//     ADLplug_render --compare <hashes file> <output hash> <state hash>
 //
 // Writes the plugin's output as interleaved binary64 samples, which is what the
 // plug-in is asked to process in, and prints a
@@ -74,9 +73,6 @@
 // parameters of upstream ADLplug 1 to come first, in their order and with
 // their VST3 IDs, which projects saved with upstream refer to. A failed check
 // is printed and makes the exit status 1, after the teardown has run as usual.
-// --compare checks a file from
-// --save-hashes against given hashes without loading any plug-in; "-" skips a
-// hash.
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -97,7 +93,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -392,26 +387,6 @@ std::vector<Scheduled_Event> make_sequence(double seconds)
 
 int main(int argc, char *argv[])
 {
-    if (argc == 5 && std::strcmp(argv[1], "--compare") == 0) {
-        std::uint64_t output = 0;
-        std::uint64_t state = 0;
-        if (!read_hashes(argv[2], output, state)) {
-            print_line(std::string("error: cannot read hashes from ") + argv[2]);
-            return 2;
-        }
-        bool same = true;
-        const auto compare = [&same](const char *what, std::uint64_t actual, const std::string &expected) {
-            if (expected == "-")
-                return;
-            const bool equal = parse_hash(expected) == actual;
-            print_line(std::string(what) + " " + hash_text(actual) + (equal ? " as expected" : ", expected " + expected));
-            same = same && equal;
-        };
-        compare("output", output, argv[3]);
-        compare("state", state, argv[4]);
-        return same ? 0 : 1;
-    }
-
     std::vector<std::string> args;
     bool open_editor = false;
     bool teardown = true;
@@ -477,8 +452,7 @@ int main(int argc, char *argv[])
                    "[--snapshot <file.png>] [--no-teardown] [--state <file>] [--restore <file>] [--emulator <number>] "
                    "[--save-hashes <file>] [--expect-output <hash>] [--expect-state <hash>] [--expect-output-of <file>] "
                    "[--expect-state-of <file>] [--require-emulator <name>] [--require-sound] [--prepare-again] "
-                   "[--upstream-parameters <OPL3|OPN2>]\n"
-                   "       ADLplug_render --compare <hashes file> <output hash|-> <state hash|->");
+                   "[--upstream-parameters <OPL3|OPN2>]");
         return 2;
     }
 

@@ -120,6 +120,9 @@ public:
     // What is left for the host to make up for: zero for a linear-phase filter,
     // whose delay is taken out where the output is sampled from.
     [[nodiscard]] double latency_frames() const noexcept { return active_ ? cascade_.latency_frames() : 0.0; }
+    // The filter itself, stage by stage, for a test that works out what it ought
+    // to give from the prototypes it holds (tests/unit/accuracy_tests.cc).
+    [[nodiscard]] const mp::resample::Cascade &cascade() const noexcept { return cascade_; }
 
     // Writes `frames` frames at the host's rate, asking `generate(left, right, n)`
     // for the chip's as it needs them. Without a filter it is the generator's

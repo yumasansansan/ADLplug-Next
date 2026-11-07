@@ -177,7 +177,7 @@ void Parameter_Block::setup_parameters(AudioProcessorEx &p)
     // Added by ADLplug-Next: the ways the library takes a channel of the chip for a
     // new note, with its own choice first. The parameter counts them from nought and
     // the library from -1, and it comes last because everything the upstream plugin
-    // had keeps the place it had (tests/render, the upstream parameters).
+    // had keeps the place it had (render.upstream_parameters in tests/CMakeLists.txt).
     const StringArray chan_alloc_choices { "Automatic", "Off-delay", "Same instrument",
                                            "Any released" };
     p_chan_alloc = add_parameter_since<Pt::Choice>(3, p, Parameter_Tag::chip, "chan_alloc",

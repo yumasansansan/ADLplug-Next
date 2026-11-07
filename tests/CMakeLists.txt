@@ -25,6 +25,8 @@ endif()
 
 set(ADLplug_UNIT_TEST_SOURCES
   "unit/main.cc"
+  # The arithmetic from the chip to the host, held to the bounds of binary64.
+  "unit/accuracy_tests.cc"
   "unit/bank_tests.cc"
   "unit/chip_settings_tests.cc"
   "unit/device_tests.cc"
@@ -245,43 +247,8 @@ if(NOT ADLplug_BUILD_TOOLS)
   return()
 endif()
 
-# References are kept per system, processor and instruction set: where the
-# target has FMA instructions, Clang fuses multiply-adds, and the systems'
-# maths libraries differ. Debug and Release builds share a key.
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-  set(ADLplug_RENDER_SYSTEM "macos")
-else()
-  string(TOLOWER "${CMAKE_SYSTEM_NAME}" ADLplug_RENDER_SYSTEM)
-endif()
-# A Linux distribution other than Ubuntu has its own version of the maths
-# library, so its references have a key of their own, as AlmaLinux has in CI.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  cmake_host_system_information(RESULT ADLplug_DISTRIBUTION QUERY DISTRIB_ID)
-  if(ADLplug_DISTRIBUTION AND NOT ADLplug_DISTRIBUTION STREQUAL "ubuntu")
-    string(TOLOWER "linux-${ADLplug_DISTRIBUTION}" ADLplug_RENDER_SYSTEM)
-  endif()
-endif()
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
-  set(ADLplug_RENDER_KEY "${ADLplug_RENDER_SYSTEM}-x86_64-${ADLplug_ARCH}")
-else()
-  string(TOLOWER "${ADLplug_RENDER_SYSTEM}-${CMAKE_SYSTEM_PROCESSOR}-${ADLplug_ARCH}"
-    ADLplug_RENDER_KEY)
-endif()
-
-set(ADLplug_RENDER_REFERENCES "${CMAKE_CURRENT_SOURCE_DIR}/render/references.txt")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${ADLplug_RENDER_REFERENCES}")
-file(STRINGS "${ADLplug_RENDER_REFERENCES}" ADLplug_RENDER_REFERENCE
-  REGEX "^${ADLplug_RENDER_KEY} ${ADLplug_NAME} ")
-list(LENGTH ADLplug_RENDER_REFERENCE ADLplug_RENDER_REFERENCE_COUNT)
-if(ADLplug_RENDER_REFERENCE_COUNT GREATER 1)
-  message(FATAL_ERROR "tests/render/references.txt has more than one line for ${ADLplug_RENDER_KEY} ${ADLplug_NAME}")
-endif()
-
 set(render_out "${CMAKE_CURRENT_BINARY_DIR}/render")
 file(MAKE_DIRECTORY "${render_out}")
-# ci/test.sh reads these to print a line for references.txt.
-file(WRITE "${render_out}/key" "${ADLplug_RENDER_KEY} ${ADLplug_NAME}\n")
-file(WRITE "${render_out}/reference" "${ADLplug_RENDER_REFERENCE}")
 
 set(sequence 20 5000)   # seconds, and milliseconds of warm-up
 if(ADLplug_CHIP STREQUAL "OPL3")
@@ -290,27 +257,16 @@ else()
   set(default_emulator "MAME YM2612")
 endif()
 
-# The render the other render tests are compared with. It checks only that the
-# default emulator plays; the comparison with references.txt is a test of its
-# own, so a changed reference does not hide the other results.
+# The render the other render tests are compared with, which checks that the
+# default emulator plays. It is compared with nothing that another build gave:
+# two builds whose arithmetic is as accurate as binary64 allows may differ in
+# its last bits, and how accurate it is is what unit.output_path_accuracy
+# checks (unit/accuracy_tests.cc).
 add_test(NAME render
   COMMAND ADLplug_render "${plugin}" "${render_out}/render.f64" ${sequence}
     --state "${render_out}/render.state" --save-hashes "${render_out}/render.hashes"
     --require-emulator "${default_emulator}" --require-sound)
 set_tests_properties(render PROPERTIES FIXTURES_SETUP render TIMEOUT 900)
-
-if(ADLplug_RENDER_REFERENCE)
-  string(REPLACE " " ";" reference_fields "${ADLplug_RENDER_REFERENCE}")
-  list(GET reference_fields 2 reference_output)
-  list(GET reference_fields 3 reference_state)
-  add_test(NAME render.reference
-    COMMAND ADLplug_render --compare "${render_out}/render.hashes" "${reference_output}" "${reference_state}")
-else()
-  add_test(NAME render.reference
-    COMMAND ADLplug_render --compare "${render_out}/render.hashes" - -)
-  set_tests_properties(render.reference PROPERTIES DISABLED TRUE)
-endif()
-set_tests_properties(render.reference PROPERTIES FIXTURES_REQUIRED render)
 
 # Opening the editor after rendering changes neither the output nor the state.
 add_test(NAME render.editor

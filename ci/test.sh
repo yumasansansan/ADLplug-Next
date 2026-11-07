@@ -17,8 +17,8 @@
 # that load the plugins from outside, pluginval, lv2lint and auval: a build made
 # with the sanitizers cannot be loaded into them, since they are built without.
 # For ADLplug-Next, the pass its OPL3 core takes on this runner is printed after
-# the tests. The render hashes are printed at the end, with a warning when
-# tests/render/references.txt has none for this system.
+# the tests, and for both plugins how near the output comes to the bounds that
+# binary64 holds it to.
 set -euo pipefail
 
 preset=$1
@@ -61,6 +61,14 @@ case $preset in
     ;;
 esac
 
+# How near the output of this build comes to the bounds that binary64 holds it
+# to, at each stage from the chip to the host (tests/unit/accuracy_tests.cc).
+# This is what the log says of the arithmetic, rather than the hash of a
+# render, which builds that are as accurate need not share. It is run again on
+# its own for the log, as the pass is.
+echo "== The output against the bounds of binary64"
+ctest --preset "$preset" --tests-regex '^unit\.output_(path|constants)_accuracy$' --verbose || status=$?
+
 if [ "$(uname -s)" = Darwin ] && [ "$hosts" = true ]; then
   case $preset in
     adl-*) subtype=ADLM ;;
@@ -81,17 +89,6 @@ if [ "$(uname -s)" = Darwin ] && [ "$hosts" = true ]; then
     echo "== pluginval, Audio Unit"
     pluginval --strictness-level 5 --timeout-ms 300000 \
       --validate "$components/$(basename "$component")" || status=1
-  fi
-fi
-
-render=$build/tests/render
-if [ -f "$render/render.hashes" ]; then
-  # Windows builds write these with CRLF line ends.
-  read -r key plugin < <(tr -d '\r' < "$render/key")
-  read -r output state < <(tr -d '\r' < "$render/render.hashes")
-  echo "== render hashes: $key $plugin $output $state"
-  if [ ! -s "$render/reference" ]; then
-    echo "::warning title=No render reference::tests/render/references.txt has no line for $key $plugin. This run gave: $key $plugin $output $state"
   fi
 fi
 

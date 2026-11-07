@@ -458,12 +458,16 @@ ctest --preset adl-debug
 ```
 
 - The unit tests (`tests/unit`) check ADLplug-Next's own shared code and the
-  banks in the plugins. `bankgen.greyzone` generates the banks with the grey
-  zone as well, which checks what only those banks use, such as the
-  conversion of GYB and GEMS banks.
-- The render tests load the VST3 plugin into `tools/render`, have it play a
-  fixed MIDI sequence, and compare the output with
-  `tests/render/references.txt`. They also check that:
+  banks in the plugins. Among them, `unit.output_path_accuracy` follows the
+  sound from the chip's samples to what the host receives, and holds each
+  sample to the exact result, worked out at twice the precision: it has to be
+  within the error that double-precision arithmetic (64-bit floating point)
+  allows, in whatever order the compiler did the arithmetic.
+  `bankgen.greyzone` generates the banks with the grey zone as well, which
+  checks what only those banks use, such as the conversion of GYB and GEMS
+  banks.
+- The render tests load the VST3 plugin into `tools/render` and have it play
+  a fixed MIDI sequence, which has to sound. They also check that:
   - opening the editor or restoring the saved state does not change the output
   - the plugin keeps its parameters and state when it is prepared again
   - the VST3 plugin keeps the parameter IDs of upstream ADLplug

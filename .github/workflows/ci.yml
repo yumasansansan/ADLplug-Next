@@ -143,9 +143,7 @@ jobs:
   # tested and fuzzed in one job and never shipped, so it is compiled for the
   # processor of the runner -- native, AVX-512 at its whole width where the
   # runner has it -- which is the fastest code that runner can run. Nothing is
-  # carried from one runner to another but inputs. What a native build does not
-  # have is a render reference of its own (tests/render/references.txt), and the
-  # builds above compare the render with those.
+  # carried from one runner to another but inputs.
   sanitize:
     name: ${{ matrix.preset }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
