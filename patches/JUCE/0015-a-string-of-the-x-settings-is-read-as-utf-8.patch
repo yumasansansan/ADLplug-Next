@@ -1,0 +1,31 @@
+SPDX-FileCopyrightText: Raw Material Software Limited
+SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-only
+
+A string of the X settings is read as UTF-8
+
+XWindowSystemUtilities::XSettings::update() reads the names and the string values of the _XSETTINGS_SETTINGS property, which the desktop's settings daemon keeps, with String (const char*, size_t), which takes the bytes for ASCII: a value with a byte above 127 trips the assertion of that constructor (juce_String.cpp, "trying to create a string from 8-bit data that contains values greater than 127") in a Debug build, and in any build it comes out with a character for each byte, as though it were Latin-1.
+
+The XSETTINGS specification (0.5) confines a name to ASCII and says nothing of how a STRING8 value is encoded. What publishes the settings takes them from configuration kept in UTF-8 -- gnome-settings-daemon from GSettings, whose strings are UTF-8 -- and GTK, which they are made for, keeps each string value in a G_TYPE_STRING (gdk/x11/xsettings-client.c), which GLib holds in UTF-8. A desktop set up in Japanese gives such a value at once: the font it names here is ヒラギノ角ゴシック HN. JUCE reads every setting when it makes its XWindowSystem, so a Debug build of a plugin asserts as soon as its message thread starts, before it does anything of its own.
+
+Names and values are read with String::fromUTF8() instead. ASCII reads as it did, so the names, which are ASCII, come out the same; a value that is not UTF-8, which none of these write, trips fromUTF8()'s own assertion in a Debug build, as malformed UTF-8 does wherever JUCE is handed it. Of the string values, JUCE looks at Net/ThemeName, for dark mode, and a theme's name in UTF-8 is now matched as the text it is.
+
+This is ADLplug-Next's own patch, applied to the submodule by cmake/Patches.cmake when CMake configures, and it goes away once the change is upstream.
+
+diff --git a/modules/juce_gui_basics/native/juce_XWindowSystem_linux.cpp b/modules/juce_gui_basics/native/juce_XWindowSystem_linux.cpp
+index 88b7511140..901c289bf5 100644
+--- a/modules/juce_gui_basics/native/juce_XWindowSystem_linux.cpp
++++ b/modules/juce_gui_basics/native/juce_XWindowSystem_linux.cpp
+@@ -289,8 +289,11 @@ void XWindowSystemUtilities::XSettings::update()
+             if (byteNum + padded > bytes)
+                 return {};
+ 
++            // A name is ASCII. The specification leaves the encoding of a string value
++            // unsaid, but the settings come from configuration kept in UTF-8, and GTK,
++            // which they are made for, reads them as UTF-8.
+             auto* ptr = reinterpret_cast<const char*> (data);
+-            const String result (ptr, nameLen);
++            const auto result = String::fromUTF8 (ptr, (int) nameLen);
+             increment (padded);
+             return result;
+         };

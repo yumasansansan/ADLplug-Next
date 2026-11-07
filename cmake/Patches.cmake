@@ -95,6 +95,8 @@ adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0013-alsa-hands-doubles-to-a-callback-that-wants-them.patch")
 adlplug_patch("thirdparty/JUCE"
   "patches/JUCE/0014-a-negative-float-written-into-24-bits-of-32-goes-through-a-signed-integer.patch")
+adlplug_patch("thirdparty/JUCE"
+  "patches/JUCE/0015-a-string-of-the-x-settings-is-read-as-utf-8.patch")
 adlplug_patch("thirdparty/libADLMIDI"
   "patches/libADLMIDI/0001-models-the-frequency-models-stay-inside-their-tables.patch")
 adlplug_patch("thirdparty/libADLMIDI"
