@@ -824,13 +824,19 @@ target_include_directories(ADLplug PUBLIC "sources")
 # ADLplug reads no audio files, so it needs none of JUCE's audio codecs. JUCE 9
 # builds the MP3 decoder by default, and its tables are computed when the
 # plug-in loads; JUCE 9.0.5 builds Opus as well, whose C expects <stdlib.h> to
-# declare alloca(), which ISO C does not have.
+# declare alloca(), which ISO C does not have. Nor does it read any images but
+# the PNGs it carries, and it leaves out the WebP format that JUCE 9.0.5 builds
+# in as well: libwebp declares its functions and variables for export whatever
+# visibility the build asks for (WEBP_EXTERN in src/webp/types.h), so on Linux
+# and macOS each binary of the plug-in showed its host some ninety of them
+# beside its own entry points, and lv2lint fails an LV2 binary that shows more.
 target_compile_definitions(ADLplug PUBLIC
   JUCE_STRICT_REFCOUNTEDPOINTER=1
   JUCE_VST3_CAN_REPLACE_VST2=0
   JUCE_USE_FLAC=0
   JUCE_USE_OGGVORBIS=0
   JUCE_USE_OPUS=0
+  JUCE_USE_WEBP=0
   JUCE_USE_MP3AUDIOFORMAT=0
   JUCE_USE_WINDOWS_MEDIA_FORMAT=0
   JUCE_WEB_BROWSER=0

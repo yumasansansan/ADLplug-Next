@@ -127,12 +127,14 @@ target_sources(ADLplug_unit_tests PRIVATE ${ADLplug_UNIT_TEST_SOURCES} ${ADLplug
 # The tests read no audio files, so, as the plugin, they are built without
 # JUCE's audio codecs, which the audio modules of the device tests bring along
 # otherwise: FLAC's C, for one, calls fileno(), and Opus's alloca(), neither of
-# which ISO C declares.
+# which ISO C declares. Nor do they read WebP images, which the plugin is built
+# without as well.
 target_compile_definitions(ADLplug_unit_tests PRIVATE
   "ADLPLUG_${ADLplug_CHIP}"
   JUCE_USE_FLAC=0
   JUCE_USE_OGGVORBIS=0
   JUCE_USE_OPUS=0
+  JUCE_USE_WEBP=0
   JUCE_USE_MP3AUDIOFORMAT=0
   JUCE_USE_WINDOWS_MEDIA_FORMAT=0
   JUCE_USE_CURL=0
