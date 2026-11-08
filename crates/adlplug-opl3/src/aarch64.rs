@@ -168,6 +168,34 @@ unsafe extern "C" {
     #[cfg(feature = "experiment")]
     /// The form for SVE's shifts with all of those and SVE2's instructions, an experiment.
     fn adlplug_opl3_pass_sve_shifts_all_logic_sve2(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The form for NEON with all of those, the masks put together and the loads into lanes, an experiment.
+    fn adlplug_opl3_pass_neon_all_logic_insert(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The form for NEON with all of those, the masks put together and the operators in pairs, an experiment.
+    fn adlplug_opl3_pass_neon_all_logic_pairs(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The form for NEON with all of those, the masks, the loads into lanes and the operators in pairs, an experiment.
+    fn adlplug_opl3_pass_neon_all_logic_insert_pairs(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The form for NEON with all of those, the masks, the loads into lanes and SHA3's BCAX, an experiment.
+    fn adlplug_opl3_pass_neon_all_logic_insert_sha3(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The form for NEON with all of those, the masks, the loads into lanes, the operators in pairs and SHA3's BCAX, an experiment.
+    fn adlplug_opl3_pass_neon_all_logic_insert_pairs_sha3(
+        lanes: *mut Lanes,
+        inputs: *const PassInputs,
+        frame: *mut i32,
+    );
+    #[cfg(feature = "experiment")]
+    /// The form for SVE's shifts with all of those and the masks put together, an experiment.
+    fn adlplug_opl3_pass_sve_shifts_all_logic(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The form for SVE's shifts with all of those, the masks and the operators in pairs, an experiment.
+    fn adlplug_opl3_pass_sve_shifts_all_logic_pairs(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The form for SVE's shifts with all of those, the masks, SVE2's instructions and the operators in pairs, an experiment.
+    fn adlplug_opl3_pass_sve_shifts_all_logic_sve2_pairs(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
 }
 
 /// The forms of the passes for NEON and SVE without one of their parts each,
@@ -199,7 +227,7 @@ const SVE_ABLATIONS: [(&str, Function); 6] = [
 /// does): each makes the samples of its whole form, which the experiments check
 /// before they measure it, and needs what that form needs.
 #[cfg(feature = "experiment")]
-const NEON_VARIANTS: [(&str, Function); 13] = [
+const NEON_VARIANTS: [(&str, Function); 16] = [
     ("tidy", adlplug_opl3_pass_neon_tidy),
     ("consts", adlplug_opl3_pass_neon_consts),
     ("rates", adlplug_opl3_pass_neon_rates),
@@ -213,19 +241,30 @@ const NEON_VARIANTS: [(&str, Function); 13] = [
     ("all, insert", adlplug_opl3_pass_neon_all_insert),
     ("all, logic", adlplug_opl3_pass_neon_all_logic),
     ("all, logic, extract", adlplug_opl3_pass_neon_all_logic_extract),
+    ("all, logic, insert", adlplug_opl3_pass_neon_all_logic_insert),
+    ("all, logic, pairs", adlplug_opl3_pass_neon_all_logic_pairs),
+    (
+        "all, logic, insert, pairs",
+        adlplug_opl3_pass_neon_all_logic_insert_pairs,
+    ),
 ];
 /// The same with SHA3's BCAX, for the processors with SHA3.
 #[cfg(feature = "experiment")]
-const NEON_SHA3_VARIANTS: [(&str, Function); 2] = [
+const NEON_SHA3_VARIANTS: [(&str, Function); 4] = [
     ("tidy, sha3", adlplug_opl3_pass_neon_tidy_sha3),
     (
         "all, logic, extract, sha3",
         adlplug_opl3_pass_neon_all_logic_extract_sha3,
     ),
+    ("all, logic, insert, sha3", adlplug_opl3_pass_neon_all_logic_insert_sha3),
+    (
+        "all, logic, insert, pairs, sha3",
+        adlplug_opl3_pass_neon_all_logic_insert_pairs_sha3,
+    ),
 ];
 /// The same for SVE's form.
 #[cfg(feature = "experiment")]
-const SVE_VARIANTS: [(&str, Function); 7] = [
+const SVE_VARIANTS: [(&str, Function); 9] = [
     ("tidy", adlplug_opl3_pass_sve_tidy),
     ("consts", adlplug_opl3_pass_sve_consts),
     ("rates", adlplug_opl3_pass_sve_rates),
@@ -233,18 +272,31 @@ const SVE_VARIANTS: [(&str, Function); 7] = [
     ("logic", adlplug_opl3_pass_sve_logic),
     ("all", adlplug_opl3_pass_sve_all),
     ("all, logic", adlplug_opl3_pass_sve_all_logic),
+    ("shifts, all, logic", adlplug_opl3_pass_sve_shifts_all_logic),
+    (
+        "shifts, all, logic, pairs",
+        adlplug_opl3_pass_sve_shifts_all_logic_pairs,
+    ),
 ];
 /// The same with SVE2's instructions, for the levels of SVE2.
 #[cfg(feature = "experiment")]
-const SVE2_VARIANTS: [(&str, Function); 2] = [
+const SVE2_VARIANTS: [(&str, Function); 3] = [
     ("tidy, sve2", adlplug_opl3_pass_sve_tidy_sve2),
     ("all, logic, sve2", adlplug_opl3_pass_sve_all_logic_sve2),
+    (
+        "shifts, all, logic, sve2, pairs",
+        adlplug_opl3_pass_sve_shifts_all_logic_sve2_pairs,
+    ),
 ];
 /// The same for the form with SVE's shifts, at its level of SVE2.
 #[cfg(feature = "experiment")]
-const SVE_SHIFTS_VARIANTS: [(&str, Function); 2] = [
+const SVE_SHIFTS_VARIANTS: [(&str, Function); 3] = [
     ("all", adlplug_opl3_pass_sve_shifts_all),
     ("all, logic, sve2", adlplug_opl3_pass_sve_shifts_all_logic_sve2),
+    (
+        "all, logic, sve2, pairs",
+        adlplug_opl3_pass_sve_shifts_all_logic_sve2_pairs,
+    ),
 ];
 
 /// The pass written by hand for a level that the processor has, and the tier of

@@ -82,6 +82,24 @@ unsafe extern "C" {
     fn adlplug_opl3_pass_avx512_vbmi(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
     /// The pass for AVX-512 with VBMI and VNNI (`pass_avx512.S`).
     fn adlplug_opl3_pass_avx512_vbmi_vnni(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The pass for AVX2 with its phases moved on by the lanes' increments, an experiment.
+    fn adlplug_opl3_pass_avx2_increments(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The pass for AVX2 with AVX-VNNI with its phases moved on by the lanes' increments, an experiment.
+    fn adlplug_opl3_pass_avx2_vnni_increments(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The pass for AVX-512 with its phases moved on by the lanes' increments, an experiment.
+    fn adlplug_opl3_pass_avx512_increments(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The pass for AVX-512 with VNNI with its phases moved on by the lanes' increments, an experiment.
+    fn adlplug_opl3_pass_avx512_vnni_increments(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The pass for AVX-512 with VBMI with its phases moved on by the lanes' increments, an experiment.
+    fn adlplug_opl3_pass_avx512_vbmi_increments(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    #[cfg(feature = "experiment")]
+    /// The pass for AVX-512 with VBMI and VNNI with its phases moved on by the lanes' increments, an experiment.
+    fn adlplug_opl3_pass_avx512_vbmi_vnni_increments(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
 }
 
 /// The pass written by hand for a level that the processor has, and the tier of
@@ -93,6 +111,9 @@ pub(crate) struct Hand {
     function: Function,
     /// The tier of the code around it.
     tier: Tier,
+    /// The level, by which the experiments find the other forms of its pass.
+    #[cfg(feature = "experiment")]
+    level: Level,
 }
 
 impl Hand {
@@ -115,6 +136,8 @@ impl Hand {
         features.has(level).then(|| Self {
             function,
             tier: features.tier(level),
+            #[cfg(feature = "experiment")]
+            level,
         })
     }
 
@@ -157,15 +180,21 @@ impl Hand {
         Vec::new()
     }
 
-    /// The other ways of writing the pass that the experiments try: none on
-    /// x86-64 yet.
+    /// The other ways of writing the pass that the experiments try, with the
+    /// same tier: each level's pass with its phases moved on by the lanes'
+    /// increments.
     #[cfg(feature = "experiment")]
-    #[expect(
-        clippy::unused_self,
-        reason = "the experiments ask every architecture's Hand alike, and AArch64's has them"
-    )]
     pub(crate) fn variants(self) -> Vec<(&'static str, Self)> {
-        Vec::new()
+        let function: Function = match self.level {
+            Level::Avx2 => adlplug_opl3_pass_avx2_increments,
+            Level::Avx2Vnni => adlplug_opl3_pass_avx2_vnni_increments,
+            Level::Avx512 => adlplug_opl3_pass_avx512_increments,
+            Level::Avx512Vnni => adlplug_opl3_pass_avx512_vnni_increments,
+            Level::Avx512Vbmi => adlplug_opl3_pass_avx512_vbmi_increments,
+            Level::Avx512VbmiVnni => adlplug_opl3_pass_avx512_vbmi_vnni_increments,
+            _ => return Vec::new(),
+        };
+        vec![("increments", Self { function, ..self })]
     }
 
     /// What the slots read, the routing and what the passes go by worked out
@@ -198,7 +227,9 @@ impl Hand {
         // of its level, as adlplug-cpu reports them, with the system saving the
         // registers they use, and they are those its function executes: AVX2,
         // with AVX-VNNI for the form that adds up with it; AVX-512 F, DQ, BW
-        // and VL with AVX2, and VNNI and VBMI for the forms named with them.
+        // and VL with AVX2, and VNNI and VBMI for the forms named with them,
+        // whose forms with the lanes' increments `variants` gives a Hand of
+        // the same level.
         // The function follows the target's C convention, as declared (the
         // module's documentation says how), returns with the stack as it found
         // it and the upper halves of the vector registers zeroed, and keeps no

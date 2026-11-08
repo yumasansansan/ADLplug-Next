@@ -31,12 +31,35 @@ use crate::pass::PassInputs;
 #[cfg(target_arch = "x86_64")]
 use crate::x86_64::{Hand, chain};
 
+/// The other ways of writing the core's own code that a core takes in place of
+/// its own: none taken, the default.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct Experiment {
+    /// The portable pass's phases moved on by the lanes' increments, which the
+    /// core works out when what they come of changes, as for the passes
+    /// written by hand that take them (`Core::refresh_increments`).
+    pub(super) increments: bool,
+    /// `Core::derive_flat` in place of `Core::derive`.
+    pub(super) derive_flat: bool,
+    /// `Core::derive_split` in place of `Core::derive`.
+    pub(super) derive_split: bool,
+}
+
+/// The variants of the writes' handling, which every core has.
+const DERIVE_FLAT: &str = "derive flat";
+/// See [`DERIVE_FLAT`].
+const DERIVE_SPLIT: &str = "derive split";
+/// The variant of the portable pass.
+const INCREMENTS: &str = "increments";
+
 impl Core {
     /// What each part of a sample takes, in nanoseconds, the best of `rounds`
     /// rounds of `iterations` each: `pass`, the pass alone; `writes`, the
     /// writes' handling alone; for the passes for NEON and SVE, `pass, no
-    /// <part>`, the pass without that part; and `pass, <variant>`, each other
-    /// way of writing the pass ([`Core::experiment_variants`]).
+    /// <part>`, the pass without that part; `pass, <variant>`, each other way
+    /// of writing the pass ([`Core::experiment_variants`]); and `writes, derive
+    /// flat` and `writes, derive split`, the writes' handling with
+    /// `Core::derive_flat` and with `Core::derive_split`.
     #[must_use]
     pub fn experiment_parts(&mut self, iterations: u32, rounds: u32) -> Vec<(String, f64)> {
         let mut parts = vec![
@@ -48,20 +71,55 @@ impl Core {
             let ns = best(rounds, || self.time_pass(Some(hand), iterations));
             parts.push((format!("pass, {name}"), ns));
         }
+        let own = self.experiment;
+        if matches!(self.pass, Pass::Portable) {
+            self.experiment.increments = true;
+            let ns = best(rounds, || self.time_pass(None, iterations));
+            parts.push((format!("pass, {INCREMENTS}"), ns));
+            self.experiment = own;
+        }
+        self.experiment.derive_flat = true;
+        let ns = best(rounds, || self.time_writes(iterations));
+        parts.push((format!("writes, {DERIVE_FLAT}"), ns));
+        self.experiment = own;
+        self.experiment.derive_split = true;
+        let ns = best(rounds, || self.time_writes(iterations));
+        parts.push((format!("writes, {DERIVE_SPLIT}"), ns));
+        self.experiment = own;
         parts
     }
 
-    /// The names of the other ways of writing the core's pass that the
-    /// experiments try: for the passes for NEON and SVE, and none for the
-    /// others.
+    /// The names of the other ways of writing the core's pass and its own code
+    /// that the experiments try: for the passes for NEON and SVE, those of the
+    /// pass, for the portable pass its phases by the increments, and for every
+    /// core the flat and the split derive.
     #[must_use]
     pub fn experiment_variants(&self) -> Vec<&'static str> {
-        self.variants().into_iter().map(|(name, _)| name).collect()
+        let mut names: Vec<&'static str> = self.variants().into_iter().map(|(name, _)| name).collect();
+        if matches!(self.pass, Pass::Portable) {
+            names.push(INCREMENTS);
+        }
+        names.push(DERIVE_FLAT);
+        names.push(DERIVE_SPLIT);
+        names
     }
 
-    /// The core takes the variant of its pass of that name in place of its
-    /// pass, with the same tier, and says whether it has one of that name.
+    /// The core takes the variant of that name in place of its own, a pass of
+    /// the same tier or its own code written otherwise, and says whether it has
+    /// one of that name.
     pub fn experiment_take(&mut self, variant: &str) -> bool {
+        if variant == DERIVE_FLAT {
+            self.experiment.derive_flat = true;
+            return true;
+        }
+        if variant == DERIVE_SPLIT {
+            self.experiment.derive_split = true;
+            return true;
+        }
+        if variant == INCREMENTS && matches!(self.pass, Pass::Portable) {
+            self.experiment.increments = true;
+            return true;
+        }
         let Some((_, hand)) = self.variants().into_iter().find(|&(name, _)| name == variant) else {
             return false;
         };

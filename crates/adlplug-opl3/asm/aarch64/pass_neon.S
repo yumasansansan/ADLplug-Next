@@ -173,7 +173,9 @@
 // values put in by loads into a lane; F_LOGIC, the envelopes' masks put
 // together by bit and bif where two of them are never both; F_SHA3 and F_SVE2,
 // with F_TIDY, the operators' last two steps one BCAX of SHA3's or of SVE2's,
-// and with F_SVE2 an envelope's mask of its linear steps by SVE2's BSL1N. And,
+// and with F_SVE2 an envelope's mask of its linear steps by SVE2's BSL1N;
+// F_PAIRS, with F_TIDY and F_CONSTS, the operators of a stage two at a time,
+// their parts between the lookups interleaved (OPERATOR_PAIR). And,
 // for the experiments' measurements alone, not for samples, the forms that
 // leave one part out, whose time the difference from the whole pass's tells.
         .set F_GATHER, 1
@@ -193,6 +195,7 @@
         .set F_LOGIC, 16384
         .set F_SHA3, 32768
         .set F_SVE2, 65536
+        .set F_PAIRS, 131072
 
         .text
 
@@ -682,6 +685,155 @@
 .endif
 .endm
 
+// For F_PAIRS: two operators of a stage, their parts between the lookups
+// interleaved, so that while one waits for a lookup the other has work to give
+// the processor. An operator is what OPERATOR works out with F_TIDY and
+// F_CONSTS, which F_PAIRS takes, in three parts, OPS1 to OPS3, around its two
+// lookups, LOOKUP_P: in v\r0 to v\r7 and v\t, as OPERATOR has them in v0 to v7
+// and v16, and for its lookups one by one in w\g0 to w\g3. The first operator
+// of a pair takes those registers, and the second v18 to v26 and w13 to w16,
+// which the envelopes alone take besides.
+
+// The first part of the operator of the four lanes from lane \l, modulated by
+// the lanes from lane \source: to the log-sine's index, in v\r5, masked for
+// the gathers.
+.macro OPS1 l, source, f, r0, r1, r2, r3, r4, r5, r6, r7, t
+        ldr       q\r0, [x0, #(MODULATED_BY + 4 * (\l))]
+        cmeq      v\r1\().4s, v\r0\().4s, v27.4s
+        and       v\r1\().16b, v\r1\().16b, v29.16b                 // what is taken of the stage before
+        cmeq      v\r0\().4s, v\r0\().4s, v28.4s
+        ldr       q\r2, [x0, #(OUT_1 + 4 * (\l))]
+        ldr       q\t, [x0, #(OUT_2 + 4 * (\l))]
+        add       v\r2\().4s, v\r2\().4s, v\t\().4s
+        ldr       q\t, [x0, #(FEEDBACK_SHIFT + 4 * (\l))]
+.if \f & F_SHIFTS
+        asr       z\r2\().s, p0/m, z\r2\().s, z\t\().s
+.else
+        neg       v\t\().4s, v\t\().4s
+        sshl      v\r2\().4s, v\r2\().4s, v\t\().4s
+.endif
+        and       v\r2\().16b, v\r2\().16b, v\r0\().16b
+        and       v\r2\().16b, v\r2\().16b, v29.16b                 // the feedback
+        ldr       q\t, [x0, #(PHASE_OUT + 4 * (\l))]
+        add       v\r2\().4s, v\r2\().4s, v\t\().4s
+        ldr       q\r5, [x0, #(TURN_BIT + 4 * (\l))]
+        ldr       q\r3, [x0, #(SQUARE + 4 * (\l))]
+        neg       v\r3\().4s, v\r3\().4s                            // square: all ones
+        ldr       q\t, [x0, #(OUT + 4 * (\source))]
+        and       v\r1\().16b, v\r1\().16b, v\t\().16b
+        add       v\r1\().4s, v\r1\().4s, v\r2\().4s                // the phase
+        ldr       q\t, [x0, #(PHASE_SHIFT + 4 * (\l))]
+        ushl      v\r2\().4s, v\r1\().4s, v\t\().4s                 // shifted
+        and       v\r4\().16b, v\r2\().16b, v\r5\().16b
+        cmeq      v\r4\().4s, v\r4\().4s, v\r5\().4s                // turned back
+        eor       v\r4\().16b, v\r4\().16b, v\r2\().16b             // phase2
+        orr       v\r5\().16b, v\r4\().16b, v\r3\().16b
+.if \f & F_GATHER
+        and       v\r5\().16b, v\r5\().16b, v31.16b                 // the log-sine's index
+.endif
+.endm
+
+// The second part: from the sine, in v\r7, to att, in v\r7, and the
+// exponent's index, in v\r3, masked for the gathers.
+.macro OPS2 l, f, r0, r1, r2, r3, r4, r5, r6, r7, t
+        ldr       q\r6, [x0, #(SAWTOOTH + 4 * (\l))]
+        neg       v\r6\().4s, v\r6\().4s                            // sawtooth: all ones
+        and       v\r4\().16b, v\r4\().16b, v30.16b                 // 511
+        shl       v\r4\().4s, v\r4\().4s, #3                        // the ramp
+        ldr       q\t, [x0, #(SIGN_BIT + 4 * (\l))]
+        cmtst     v\r2\().4s, v\r2\().4s, v\t\().4s                 // negative
+        ldr       q\t, [x0, #(MUTE_BIT + 4 * (\l))]
+        cmtst     v\r1\().4s, v\r1\().4s, v\t\().4s                 // muted
+        bic       v\r2\().16b, v\r2\().16b, v\r1\().16b             // heard and negative
+        ldr       q\r0, [x0, #(EG_OUT + 4 * (\l))]
+        shl       v\r0\().4s, v\r0\().4s, #3
+        bit       v\r7\().16b, v\r4\().16b, v\r6\().16b             // shape
+        add       v\r7\().4s, v\r7\().4s, v\r0\().4s                // att
+.if \f & F_GATHER
+        and       v\r3\().16b, v\r7\().16b, v31.16b
+.endif
+.endm
+
+// The third part: from the exponent's value, in v\r5, to the operator's value,
+// stored.
+.macro OPS3 l, f, r0, r1, r2, r3, r4, r5, r6, r7, t
+        ushr      v\r7\().4s, v\r7\().4s, #8
+.if \f & F_SHIFTS
+        lsr       z\r5\().s, p0/m, z\r5\().s, z\r7\().s             // magnitude, below 4096
+.else
+        neg       v\r7\().4s, v\r7\().4s
+        ushl      v\r5\().4s, v\r5\().4s, v\r7\().4s                // magnitude, below 4096
+.endif
+.if \f & F_SVE2
+        bcax      z\r2\().d, z\r2\().d, z\r5\().d, z\r1\().d
+        str       q\r2, [x0, #(OUT + 4 * (\l))]
+.elseif \f & F_SHA3
+        bcax      v\r5\().16b, v\r2\().16b, v\r5\().16b, v\r1\().16b
+        str       q\r5, [x0, #(OUT + 4 * (\l))]
+.else
+        bic       v\r5\().16b, v\r5\().16b, v\r1\().16b
+        eor       v\r5\().16b, v\r5\().16b, v\r2\().16b
+        str       q\r5, [x0, #(OUT + 4 * (\l))]
+.endif
+.endm
+
+// The four lanes of v\idx looked up in the table at \table, into v\dst: by a
+// gather in the forms with SVE's, and else one by one by the low byte of each
+// lane, with w\g0 to w\g3, each index's register taking its value or its
+// address.
+.macro LOOKUP_P dst, idx, table, f, g0, g1, g2, g3
+.if \f & F_GATHER
+        ld1w      {z\dst\().s}, p0/z, [\table, z\idx\().s, uxtw #2]
+.else
+        umov      w\g0, v\idx\().b[0]
+        umov      w\g1, v\idx\().b[4]
+        umov      w\g2, v\idx\().b[8]
+        umov      w\g3, v\idx\().b[12]
+        ldr       s\dst, [\table, w\g0, uxtw #2]
+  .if \f & F_INSERT
+        add       x\g1, \table, x\g1, lsl #2
+        add       x\g2, \table, x\g2, lsl #2
+        add       x\g3, \table, x\g3, lsl #2
+        ld1       {v\dst\().s}[1], [x\g1]
+        ld1       {v\dst\().s}[2], [x\g2]
+        ld1       {v\dst\().s}[3], [x\g3]
+  .else
+        ldr       w\g1, [\table, w\g1, uxtw #2]
+        ldr       w\g2, [\table, w\g2, uxtw #2]
+        ldr       w\g3, [\table, w\g3, uxtw #2]
+        mov       v\dst\().s[1], w\g1
+        mov       v\dst\().s[2], w\g2
+        mov       v\dst\().s[3], w\g3
+  .endif
+.endif
+.endm
+
+// The operators of the four lanes from lane \la, modulated by those from
+// \sa, and of the four from \lb, modulated by those from \sb, interleaved.
+.macro OPERATOR_PAIR la, sa, lb, sb, f
+.if (\f & (F_TIDY | F_CONSTS)) != (F_TIDY | F_CONSTS)
+        .error "F_PAIRS takes the operators of F_TIDY and F_CONSTS"
+.endif
+.if \f & F_NO_OPERATORS
+        .exitm
+.endif
+        OPS1      \la, \sa, \f, 0, 1, 2, 3, 4, 5, 6, 7, 16
+        OPS1      \lb, \sb, \f, 18, 19, 20, 21, 22, 23, 24, 25, 26
+        LOOKUP_P  7, 5, x3, \f, 9, 10, 11, 12                       // sines
+        LOOKUP_P  25, 23, x3, \f, 13, 14, 15, 16
+        OPS2      \la, \f, 0, 1, 2, 3, 4, 5, 6, 7, 16
+        OPS2      \lb, \f, 18, 19, 20, 21, 22, 23, 24, 25, 26
+.if \f & F_GATHER
+        LOOKUP_P  5, 3, x4, \f, 9, 10, 11, 12                       // exponents
+        LOOKUP_P  23, 21, x4, \f, 13, 14, 15, 16
+.else
+        LOOKUP_P  5, 7, x4, \f, 9, 10, 11, 12                       // exponents, by att's low bytes
+        LOOKUP_P  23, 25, x4, \f, 13, 14, 15, 16
+.endif
+        OPS3      \la, \f, 0, 1, 2, 3, 4, 5, 6, 7, 16
+        OPS3      \lb, \f, 18, 19, 20, 21, 22, 23, 24, 25, 26
+.endm
+
 // The ring of the hi-hat's and the top cymbal's bits, into w9, with w10 and
 // w11.
 .macro RING
@@ -863,23 +1015,38 @@
         ENVELOPES_AND_PHASES \second, 0, \f
         ENVELOPES_AND_PHASES \second, 8, \f
         HI_HAT
+.if \f & F_PAIRS
+        OPERATOR_PAIR 0, 0, 4, 4, \f
+        OPERATOR_PAIR 8, 8, 12, 12, \f
+.else
         OPERATOR  0, 0, \f
         OPERATOR  4, 4, \f
         OPERATOR  8, 8, \f
         OPERATOR  12, 12, \f
+.endif
         ENVELOPES_AND_PHASES \second, 16, \f
         ENVELOPES_AND_PHASES \second, 24, \f
         SNARE_AND_TOP_CYMBAL
+.if \f & F_PAIRS
+        OPERATOR_PAIR 16, 0, 20, 4, \f
+        OPERATOR_PAIR 24, 8, 28, 12, \f
+.else
         OPERATOR  16, 0, \f
         OPERATOR  20, 4, \f
         OPERATOR  24, 8, \f
         OPERATOR  28, 12, \f
+.endif
         ENVELOPES_AND_PHASES \second, 32, \f
         ENVELOPES_AND_PHASES \second, 40, \f
+.if \f & F_PAIRS
+        OPERATOR_PAIR 32, 16, 36, 20, \f
+        OPERATOR_PAIR 40, 32, 44, 36, \f
+.else
         OPERATOR  32, 16, \f
         OPERATOR  36, 20, \f
         OPERATOR  40, 32, \f
         OPERATOR  44, 36, \f
+.endif
 .endm
 
 // The pass \name, in the form \f. Its labels are 7 to 9, which none of the
@@ -1063,6 +1230,11 @@ _\name:
         PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_extract, F_ALL|F_LOGIC|F_EXTRACT
         PASS_FUNCTION adlplug_opl3_pass_neon_tidy_sha3, F_TIDY|F_SHA3
         PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_extract_sha3, F_ALL|F_LOGIC|F_EXTRACT|F_SHA3
+        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_insert, F_ALL|F_LOGIC|F_INSERT
+        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_pairs, F_ALL|F_LOGIC|F_PAIRS
+        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_insert_pairs, F_ALL|F_LOGIC|F_INSERT|F_PAIRS
+        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_insert_sha3, F_ALL|F_LOGIC|F_INSERT|F_SHA3
+        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_insert_pairs_sha3, F_ALL|F_LOGIC|F_INSERT|F_PAIRS|F_SHA3
         PASS_FUNCTION adlplug_opl3_pass_sve_tidy, F_GATHER|F_TIDY
         PASS_FUNCTION adlplug_opl3_pass_sve_consts, F_GATHER|F_CONSTS
         PASS_FUNCTION adlplug_opl3_pass_sve_rates, F_GATHER|F_RATES
@@ -1072,6 +1244,9 @@ _\name:
         PASS_FUNCTION adlplug_opl3_pass_sve_all_logic, F_GATHER|F_ALL|F_LOGIC
         PASS_FUNCTION adlplug_opl3_pass_sve_tidy_sve2, F_GATHER|F_TIDY|F_SVE2
         PASS_FUNCTION adlplug_opl3_pass_sve_all_logic_sve2, F_GATHER|F_ALL|F_LOGIC|F_SVE2
+        PASS_FUNCTION adlplug_opl3_pass_sve_shifts_all_logic, F_GATHER|F_SHIFTS|F_ALL|F_LOGIC
+        PASS_FUNCTION adlplug_opl3_pass_sve_shifts_all_logic_pairs, F_GATHER|F_SHIFTS|F_ALL|F_LOGIC|F_PAIRS
+        PASS_FUNCTION adlplug_opl3_pass_sve_shifts_all_logic_sve2_pairs, F_GATHER|F_SHIFTS|F_ALL|F_LOGIC|F_SVE2|F_PAIRS
         PASS_FUNCTION adlplug_opl3_pass_sve_shifts_all, F_GATHER|F_SHIFTS|F_ALL
         PASS_FUNCTION adlplug_opl3_pass_sve_shifts_all_logic_sve2, F_GATHER|F_SHIFTS|F_ALL|F_LOGIC|F_SVE2
 

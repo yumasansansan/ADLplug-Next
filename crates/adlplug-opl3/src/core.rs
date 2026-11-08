@@ -479,6 +479,10 @@ pub struct Core {
     level: Option<Level>,
     /// That pass.
     pass: Pass,
+    /// For rust-speed's experiments: the other ways of writing the core's own
+    /// code that it takes in place of its own (`Core::experiment_take`).
+    #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
+    experiment: experiment::Experiment,
 
     // By lane: the channels' registers as they stand, for the slots that read
     // them (spread()), so that no loop over the lanes reads another lane's:
@@ -663,6 +667,8 @@ impl Core {
             soft_pan: false,
             level,
             pass,
+            #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
+            experiment: experiment::Experiment::default(),
             ch_fnum: [0; LANES],
             ch_block: [0; LANES],
             ch_key: [0; LANES],
@@ -1198,6 +1204,16 @@ impl Core {
         reason = "its loop over the lanes belongs in each tier's form of a sample, where it is vector code of the tier's width"
     )]
     fn derive(&mut self) {
+        #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
+        if self.experiment.derive_split {
+            self.derive_split();
+            return;
+        }
+        #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
+        if self.experiment.derive_flat {
+            self.derive_flat();
+            return;
+        }
         let lanes = &mut *self.lanes;
         for (lane, &drum_key_bit) in DRUM_KEY_BIT.iter().enumerate() {
             let s = lanes.lane_slot[lane];
@@ -1264,6 +1280,177 @@ impl Core {
         }
     }
 
+    /// For rust-speed's experiments: [`Core::derive`] with its conditions
+    /// without short-circuits, `&` and `|` in place of `&&` and `||`, which
+    /// say the same of booleans. Of the values the loop stores, those that
+    /// `&&` picked made LLVM branch around the stores, and a loop with stores
+    /// under branches vectorizes only where the tier has stores under masks,
+    /// as SVE and AVX-512 have them and NEON and SSE do not.
+    #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "its loop over the lanes belongs in each tier's form of a sample, where it is vector code of the tier's width"
+    )]
+    #[expect(
+        clippy::needless_bitwise_bool,
+        reason = "conditions without short-circuits are what this form is for: with them the loop stores without branches"
+    )]
+    fn derive_flat(&mut self) {
+        let lanes = &mut *self.lanes;
+        for (lane, &drum_key_bit) in DRUM_KEY_BIT.iter().enumerate() {
+            let s = lanes.lane_slot[lane];
+            let r20 = u32::from(self.l20[lane]);
+            let r40 = u32::from(self.l40[lane]);
+            let r60 = u32::from(self.l60[lane]);
+            let r80 = u32::from(self.l80[lane]);
+            let fnum = u32::from(self.lfnum[lane]);
+            let block = u32::from(self.lblock[lane]);
+            let key = self.lkey[lane] != 0;
+            let rhythm_keys = self.lrhythm_keys[lane] != 0;
+            let dam = self.ldam[lane] != 0;
+            let drum_keys = drum_key_bit & self.ldrum_keys[lane];
+            let ksr = ymf262::key_scale(fnum, block, self.lnts[lane] != 0, ((r20 >> 4) & 1) != 0);
+            let ar = r60 >> 4;
+            let dr = r60 & 15;
+            let rr = r80 & 15;
+            let egt = (r20 >> 5) & 1;
+            let by_state = [ar, dr, if egt != 0 { 0 } else { rr }, rr];
+            let mut rates = 0;
+            for (st, &rate) in by_state.iter().enumerate() {
+                rates |= (ymf262::scaled_rate(rate, ksr) | if rate != 0 { 16 } else { 0 }) << (8 * st);
+            }
+            lanes.rates[lane] = rates;
+            lanes.key_scale[lane] = ksr.cast_signed();
+            lanes.key_scale_low[lane] = (ksr & 3).cast_signed();
+            let sl = r80 >> 4;
+            let sustain = sl.cast_signed();
+            lanes.sustain[lane] = if sl == 15 { 31 } else { sustain };
+            lanes.key_on[lane] = i32::from(key | (rhythm_keys & (drum_keys != 0)));
+            lanes.level_offset[lane] = ymf262::level_offset(fnum, block, r40 >> 6, r40 & 63).cast_signed();
+            let depth = if dam { 2 } else { 1 };
+            lanes.tremolo_depth[lane] = if (r20 & 0x80) != 0 { depth } else { 0 };
+            lanes.fnum_v[lane] = fnum;
+            lanes.block_v[lane] = block;
+            lanes.multiple_v[lane] = ymf262::MULTIPLE[usize::from(self.l20[lane] & 15)];
+            lanes.vibrato[lane] = (r20 >> 6) & 1;
+            lanes.vibrato_depth[lane] = u32::from(self.ldvb[lane]);
+            let wave = ymf262::wave(u32::from(self.le0[lane]));
+            lanes.phase_shift[lane] = wave.phase_shift;
+            lanes.turn_bit[lane] = wave.turn_bit;
+            lanes.mute_bit[lane] = wave.mute_bit;
+            lanes.sign_bit[lane] = wave.sign_bit;
+            lanes.square[lane] = wave.square;
+            lanes.sawtooth[lane] = wave.sawtooth;
+            let fb = i32::from(self.lfb[lane]);
+            let by = i32::from(self.modulation[lane]);
+            lanes.modulated_by[lane] = if (by == 2) & (fb == 0) { 0 } else { by };
+            let shift = 9 - fb;
+            lanes.feedback_shift[lane] = if fb != 0 { shift } else { 0 };
+            let w = i32::from(self.weight[lane]);
+            let pan = self.lpan[lane];
+            let on_a = (pan & 1) != 0;
+            let on_b = (pan & 2) != 0;
+            lanes.a_now[lane] = if on_a & (s < FIRST_LATE_ON_A) { w } else { 0 };
+            lanes.a_late[lane] = if on_a & (s >= FIRST_LATE_ON_A) { w } else { 0 };
+            lanes.b_now[lane] = if on_b & (s < FIRST_LATE_ON_B) { w } else { 0 };
+            lanes.b_late[lane] = if on_b & (s >= FIRST_LATE_ON_B) { w } else { 0 };
+        }
+        self.derive_soft_pan();
+        #[cfg(feature = "experiment")]
+        {
+            self.lanes.increments_for = u8::MAX;
+        }
+    }
+
+    /// For rust-speed's experiments: [`Core::derive_flat`] with the one table
+    /// that no expression takes the place of, the key scale level's ROM,
+    /// looked up lane by lane first, and the rest worked out in a loop of its
+    /// own, with the multiples and the shifts of the key scale level by
+    /// expressions (`ymf262::multiple_of`, `ymf262::ksl_shift_of`): a loop
+    /// without lookups, which takes no gathers where the tier has none.
+    #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "its loops over the lanes belong in each tier's form of a sample, where they are vector code of the tier's width"
+    )]
+    #[expect(
+        clippy::needless_bitwise_bool,
+        reason = "conditions without short-circuits are what this form is for: with them the loop stores without branches"
+    )]
+    fn derive_split(&mut self) {
+        let mut ksl_rom = [0_u32; LANES];
+        for (rom, &fnum) in ksl_rom.iter_mut().zip(&self.lfnum) {
+            *rom = ymf262::ksl_rom_of(u32::from(fnum));
+        }
+        let lanes = &mut *self.lanes;
+        for (lane, &drum_key_bit) in DRUM_KEY_BIT.iter().enumerate() {
+            let s = lanes.lane_slot[lane];
+            let r20 = u32::from(self.l20[lane]);
+            let r40 = u32::from(self.l40[lane]);
+            let r60 = u32::from(self.l60[lane]);
+            let r80 = u32::from(self.l80[lane]);
+            let fnum = u32::from(self.lfnum[lane]);
+            let block = u32::from(self.lblock[lane]);
+            let key = self.lkey[lane] != 0;
+            let rhythm_keys = self.lrhythm_keys[lane] != 0;
+            let dam = self.ldam[lane] != 0;
+            let drum_keys = drum_key_bit & self.ldrum_keys[lane];
+            let ksr = ymf262::key_scale(fnum, block, self.lnts[lane] != 0, ((r20 >> 4) & 1) != 0);
+            let ar = r60 >> 4;
+            let dr = r60 & 15;
+            let rr = r80 & 15;
+            let egt = (r20 >> 5) & 1;
+            let by_state = [ar, dr, if egt != 0 { 0 } else { rr }, rr];
+            let mut rates = 0;
+            for (st, &rate) in by_state.iter().enumerate() {
+                rates |= (ymf262::scaled_rate(rate, ksr) | if rate != 0 { 16 } else { 0 }) << (8 * st);
+            }
+            lanes.rates[lane] = rates;
+            lanes.key_scale[lane] = ksr.cast_signed();
+            lanes.key_scale_low[lane] = (ksr & 3).cast_signed();
+            let sl = r80 >> 4;
+            let sustain = sl.cast_signed();
+            lanes.sustain[lane] = if sl == 15 { 31 } else { sustain };
+            lanes.key_on[lane] = i32::from(key | (rhythm_keys & (drum_keys != 0)));
+            lanes.level_offset[lane] =
+                ymf262::level_offset_from(ksl_rom[lane], block, r40 >> 6, r40 & 63).cast_signed();
+            let depth = if dam { 2 } else { 1 };
+            lanes.tremolo_depth[lane] = if (r20 & 0x80) != 0 { depth } else { 0 };
+            lanes.fnum_v[lane] = fnum;
+            lanes.block_v[lane] = block;
+            lanes.multiple_v[lane] = ymf262::multiple_of(r20 & 15);
+            lanes.vibrato[lane] = (r20 >> 6) & 1;
+            lanes.vibrato_depth[lane] = u32::from(self.ldvb[lane]);
+            let wave = ymf262::wave(u32::from(self.le0[lane]));
+            lanes.phase_shift[lane] = wave.phase_shift;
+            lanes.turn_bit[lane] = wave.turn_bit;
+            lanes.mute_bit[lane] = wave.mute_bit;
+            lanes.sign_bit[lane] = wave.sign_bit;
+            lanes.square[lane] = wave.square;
+            lanes.sawtooth[lane] = wave.sawtooth;
+            let fb = i32::from(self.lfb[lane]);
+            let by = i32::from(self.modulation[lane]);
+            lanes.modulated_by[lane] = if (by == 2) & (fb == 0) { 0 } else { by };
+            let shift = 9 - fb;
+            lanes.feedback_shift[lane] = if fb != 0 { shift } else { 0 };
+            let w = i32::from(self.weight[lane]);
+            let pan = self.lpan[lane];
+            let on_a = (pan & 1) != 0;
+            let on_b = (pan & 2) != 0;
+            lanes.a_now[lane] = if on_a & (s < FIRST_LATE_ON_A) { w } else { 0 };
+            lanes.a_late[lane] = if on_a & (s >= FIRST_LATE_ON_A) { w } else { 0 };
+            lanes.b_now[lane] = if on_b & (s < FIRST_LATE_ON_B) { w } else { 0 };
+            lanes.b_late[lane] = if on_b & (s >= FIRST_LATE_ON_B) { w } else { 0 };
+        }
+        self.derive_soft_pan();
+        #[cfg(feature = "experiment")]
+        {
+            self.lanes.increments_for = u8::MAX;
+        }
+    }
+
     /// How loud each slot is on each output with soft panning.
     #[inline(always)]
     #[expect(
@@ -1308,6 +1495,17 @@ impl Core {
             lanes.state[i] = e.state;
             lanes.restart[i] = i32::from(e.restart);
         }
+        #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
+        if self.experiment.increments {
+            self.refresh_increments();
+            let lanes = &mut *self.lanes;
+            for i in 0..LANES {
+                lanes.phase_out[i] = ymf262::phase_out(lanes.phase[i]);
+                lanes.phase[i] = ymf262::next_phase(lanes.phase[i], lanes.increment.0[i], lanes.restart[i] != 0);
+            }
+            return;
+        }
+        let lanes = &mut *self.lanes;
         let vibrato = ymf262::vibrato(lanes.counters.vibrato_position);
         for i in 0..LANES {
             let increment = ymf262::phase_increment(

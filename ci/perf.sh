@@ -13,18 +13,21 @@
 # it): where the parts of a sample spend their time, by perf from Ubuntu's
 # archive and the profile program (<profile>, a build of
 # crates/adlplug-opl3/examples/profile.rs with the line tables, which
-# ci/speed.sh makes for it), pinned to processor 0. GitHub's runners give their
-# virtual machines no counters of the processor (perf stat finds cycles not
-# supported, and the events of the top-down method missing, on AMD's, Intel's
-# and Arm's alike), so perf samples by the system's clock: perf record over the
-# pass and over the writes' handling at every level the processor has, and over
-# the pass of the variant all where the level has one. The report (<report>,
-# the summary of the run) takes the functions that took the most of the
-# samples, the forty instructions of the first of them that took the most, and
-# for the writes' handling the lines of the source that took the most; the log
-# takes the whole of each annotation. Whether the counters are there is asked
-# once, so that a runner that gets them shows it. What the runner does not
-# allow is said and left out: nothing here fails the job.
+# ci/speed.sh makes for it), pinned to processor 0. Of the counters of the
+# processor, GitHub's virtual machines give perf on the Neoverse-N2 the cycles
+# and the instructions, and on AMD's and Intel's processors none (perf stat
+# finds cycles not supported, and the events of the top-down method missing on
+# all three). So perf stat counts the cycles and the instructions of every form
+# of each part where it can, and perf record samples by the system's clock:
+# over the pass and over the writes' handling at every level the processor has,
+# and over the pass of the variant all where the level has one. The report
+# (<report>, the summary of the run) takes the counts, the functions that took
+# the most of the samples, the forty instructions of the first of them that
+# took the most, and for the writes' handling the lines of the source that took
+# the most; the log takes the whole of each annotation. Whether the counters
+# are there is asked once and printed, so that a runner that gets them shows
+# it. What the runner does not allow is said and left out: nothing here fails
+# the job.
 set -uo pipefail
 
 profile=$1
@@ -120,6 +123,51 @@ record() {
     echo '```'
   } >> "$report"
 }
+
+# Where the virtual machine lets perf read the processor's cycles and
+# instructions (on GitHub's runners the Neoverse-N2's), each part's per pass:
+# the counts of a run of the part less those of a run of none, which is the
+# program's setting up and the writes before the part, over the part's
+# iterations. Every form of the pass that the level has, and the writes'
+# handling with each variant of its own.
+count_iterations=1000000
+counts() {  # level part variant: the two counts of the run, cycles first
+  sudo perf stat -x, -e cycles,instructions -- \
+    "${pin[@]}" "$profile" run "$1" "$2" "$3" ${4:+"$4"} 2>&1 > /dev/null |
+    awk -F, '$3 == "cycles" { c = $1 } $3 == "instructions" { i = $1 } END { print c + 0, i + 0 }'
+}
+count() {  # level part variant
+  local full none
+  full=$(counts "$1" "$2" "$count_iterations" "${3:-}")
+  none=$(counts "$1" "$2" 0 "${3:-}")
+  # The ratio in parentheses, as a > among printf's arguments would send its
+  # output to a file.
+  awk -v full="$full" -v none="$none" -v n="$count_iterations" -v name="$1, $2${3:+, $3}" 'BEGIN {
+    split(full, f, " "); split(none, z, " ")
+    cycles = (f[1] - z[1]) / n; instructions = (f[2] - z[2]) / n
+    printf "%-44s %9.0f %9.0f %6.2f\n", name, cycles, instructions, (cycles > 0 ? instructions / cycles : 0)
+  }'
+}
+if sudo perf stat -x, -e cycles -- true 2>&1 | grep -q '^[0-9]'; then
+  {
+    echo
+    echo '##### perf stat: cycles and instructions of a pass'
+    echo
+    echo '```'
+    printf '%-44s %9s %9s %6s\n' 'level, part, variant' cycles insns IPC
+    for level in "${levels[@]}"; do
+      count "$level" pass
+      while IFS= read -r variant; do
+        case "$variant" in
+          derive*) count "$level" writes "$variant" ;;
+          *) count "$level" pass "$variant" ;;
+        esac
+      done < <("$profile" variants "$level")
+      count "$level" writes
+    done
+    echo '```'
+  } >> "$report"
+fi
 
 for level in "${levels[@]}"; do
   record "$level" pass

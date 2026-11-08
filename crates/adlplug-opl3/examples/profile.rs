@@ -10,17 +10,17 @@
 //! processor has, for rust-speed's experiments (the feature `experiment`).
 //!
 //! First the processor's clock, as a chain of additions takes it, by which the
-//! nanoseconds are cycles as well. Then the other ways of writing each level's
-//! pass that the experiments try, each checked to make the samples of a core of
-//! its level, as the tests check the levels against the portable pass
-//! (`tests/levels.rs`): the random writes of the tests (`tests/common/mod.rs`)
-//! for 20000 samples of each of eight seeds, with their soft panning; the run
-//! fails at its end if one does not. Then the parts: each core given the writes
-//! of seed 1 for 20000 samples, without soft panning and with the soft panning
-//! of those tests (the levels marked `soft`), and then measured as it stands,
-//! the pass alone, the writes' handling alone, the passes for NEON and SVE
-//! without one part each, and the other ways of writing them, the best of five
-//! rounds of 20000.
+//! nanoseconds are cycles as well. Then the other ways of writing the portable
+//! core's and each level's pass and the core's own code that the experiments
+//! try, each checked to make the samples of a core without it, as the tests
+//! check the levels against the portable pass (`tests/levels.rs`): the random
+//! writes of the tests (`tests/common/mod.rs`) for 20000 samples of each of
+//! eight seeds, with their soft panning; the run fails at its end if one does
+//! not. Then the parts: each core given the writes of seed 1 for 20000 samples,
+//! without soft panning and with the soft panning of those tests (the levels
+//! marked `soft`), and then measured as it stands, the pass alone, the writes'
+//! handling alone, the passes for NEON and SVE without one part each, and the
+//! other ways of writing them, the best of five rounds of 20000.
 //!
 //!     cargo run --release --locked -p adlplug-opl3 --features experiment --example profile
 //!
@@ -79,14 +79,14 @@ fn warmed(level: &str, soft: bool) -> Option<Core> {
     Some(core)
 }
 
-/// The samples of the eight seeds by a core of the level that differ from
-/// those of a core of the level that takes the variant.
-fn differ(level: Level, variant: &str) -> usize {
+/// The samples of the eight seeds by a core of the level (or portable) that
+/// differ from those of a core of the level that takes the variant.
+fn differ(level: &str, variant: &str) -> usize {
     (1..=8)
         .map(|seed| {
-            let mut own = Core::at(level).expect("a level the processor has");
-            let mut other = Core::at(level).expect("a level the processor has");
-            assert!(other.experiment_take(variant), "a variant of the level");
+            let mut own = core(level).expect("a level the processor has, or portable");
+            let mut other = core(level).expect("a level the processor has, or portable");
+            assert!(other.experiment_take(variant), "a variant of {level}: {variant}");
             let a = render(&mut own, seed, true);
             let b = render(&mut other, seed, true);
             a.iter().zip(&b).filter(|(a, b)| a != b).count()
@@ -94,19 +94,20 @@ fn differ(level: Level, variant: &str) -> usize {
         .sum()
 }
 
-/// Each variant of each level's pass checked against the level: a line for
-/// each, and those that make other samples.
+/// Each variant of the portable core's and of each level's checked against the
+/// core without it: a line for each, and those that make other samples.
 fn check_variants() -> Vec<String> {
     println!();
     println!("{:<14} {:<28} {:>14}", "level", "variant", "samples differ");
     let mut wrong = Vec::new();
-    for level in Features::detect().levels() {
-        let variants = Core::at(level)
-            .expect("a level the processor has")
+    let names = std::iter::once("portable").chain(Features::detect().levels().into_iter().map(Level::name));
+    for level in names {
+        let variants = core(level)
+            .expect("a level the processor has, or portable")
             .experiment_variants();
         for variant in variants {
             let n = differ(level, variant);
-            println!("{:<14} {variant:<28} {n:>14}", level.name());
+            println!("{level:<14} {variant:<28} {n:>14}");
             if n != 0 {
                 wrong.push(format!("{variant} of {level}"));
             }

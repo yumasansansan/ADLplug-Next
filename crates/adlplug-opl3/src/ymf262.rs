@@ -183,6 +183,81 @@ pub(crate) fn level_offset(fnum: u32, block: u32, ksl: u32, total_level: u32) ->
     ((k << 2) >> KSL_SHIFT[index(ksl & 3)]) + (total_level << 2)
 }
 
+/// For rust-speed's experiments: the key scale level's ROM by the frequency
+/// number, the one lookup of [`level_offset`] that no expression takes the
+/// place of.
+#[cfg(feature = "experiment")]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "it belongs in the loops of derive(), in each tier's form of a sample"
+)]
+pub(crate) fn ksl_rom_of(fnum: u32) -> u32 {
+    KSL_ROM[index((fnum >> 6) & 15)]
+}
+
+/// For rust-speed's experiments: [`level_offset`] from the ROM's value, which
+/// [`ksl_rom_of`] looks up, and with the shift of [`ksl_shift_of`].
+#[cfg(feature = "experiment")]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "it belongs in the loops of derive(), in each tier's form of a sample"
+)]
+pub(crate) fn level_offset_from(rom: u32, block: u32, ksl: u32, total_level: u32) -> u32 {
+    let sum = (rom & 63) + (block << 3);
+    let kept = sum & 63;
+    let k = if (rom & 64) != 0 || (sum & 64) != 0 { kept } else { 0 };
+    ((k << 2) >> ksl_shift_of(ksl & 3)) + (total_level << 2)
+}
+
+/// For rust-speed's experiments: [`KSL_SHIFT`] by an expression, for a vector
+/// loop without lookups.
+#[cfg(feature = "experiment")]
+pub(crate) const fn ksl_shift_of(k: u32) -> u32 {
+    let shift = if k == 0 { 31 } else { k };
+    if k == 3 { 0 } else { shift }
+}
+
+/// For rust-speed's experiments: [`MULTIPLE`] by an expression, twice the
+/// register's four bits, but a half for 0 and the three numbers the chip takes
+/// in place of 11, 13 and 15 (and 14).
+#[cfg(feature = "experiment")]
+pub(crate) const fn multiple_of(m: u32) -> u32 {
+    let twice = if m == 0 { 1 } else { 2 * m };
+    let twice = if m == 11 { 20 } else { twice };
+    let twice = if m == 13 { 24 } else { twice };
+    if m >= 14 { 30 } else { twice }
+}
+
+/// Whether the expressions say what the tables do, for every index.
+#[cfg(feature = "experiment")]
+const fn expressions_agree() -> bool {
+    // Each index as an index of the table and as the number the expression
+    // takes, counted together.
+    let mut i = 0;
+    let mut m = 0;
+    while i < MULTIPLE.len() {
+        if multiple_of(m) != MULTIPLE[i] {
+            return false;
+        }
+        i += 1;
+        m += 1;
+    }
+    let mut i = 0;
+    let mut k = 0;
+    while i < KSL_SHIFT.len() {
+        if ksl_shift_of(k) != KSL_SHIFT[i] {
+            return false;
+        }
+        i += 1;
+        k += 1;
+    }
+    true
+}
+#[cfg(feature = "experiment")]
+const _: () = assert!(expressions_agree());
+
 /// A number of 32 bits as an index of a table, which every architecture the
 /// core is built for holds whole.
 #[inline(always)]

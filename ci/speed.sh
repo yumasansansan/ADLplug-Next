@@ -18,8 +18,8 @@
 # take at every level, twice as well (crates/adlplug-opl3/examples/profile.rs,
 # built with the feature experiment): the pass alone, the writes' handling
 # alone, the pass without one of its parts each, and the other ways of writing
-# the pass that this branch tries, each checked to make the samples of its
-# level. On Linux the runs are pinned to one processor (taskset), elsewhere they
+# the pass and the core's own code that this branch tries, each checked to make
+# the samples of the core without it. On Linux the runs are pinned to one processor (taskset), elsewhere they
 # are not, and under GitHub Actions perf samples where they spend their time
 # (ci/perf.sh). Under GitHub Actions all of it goes into the summary of the run
 # as well.

@@ -101,6 +101,9 @@
         .set OUT_2, ADLPLUG_OPL3_OUT_2
         .set EG_OUT, ADLPLUG_OPL3_EG_OUT
         .set PHASE_OUT, ADLPLUG_OPL3_PHASE_OUT
+        // For rust-speed's experiments alone: the lanes' phase increments,
+        // which the core works out when what they come of changes.
+        .set INCREMENT, ADLPLUG_OPL3_INCREMENT
         .set LEVEL16, ADLPLUG_OPL3_LEVEL16
         .set STATE16, ADLPLUG_OPL3_STATE16
         .set CARRY_SOFT, ADLPLUG_OPL3_CARRY_SOFT             // a, then b, 64 bits each
@@ -363,8 +366,19 @@
 
 // The phases of the sixteen lanes at byte \v (ymf262::phase_increment(),
 // phase_out() and next_phase()): what the operator reads of this pass's phase,
-// and the phase for the next pass, from nought on dokon (\restart).
-.macro PHASE v, restart
+// and the phase for the next pass, from nought on dokon (\restart). With \inc
+// 1, the experiments' form, by the increments in the lanes.
+.macro PHASE v, restart, inc
+.if \inc
+        vmovdqu32 zmm6, zmmword ptr [r8 + PHASE + \v]
+        vpsrld    zmm7, zmm6, 9
+        vmovdqu32 zmmword ptr [r8 + PHASE_OUT + \v], zmm7
+        vpandnd   zmm6, \restart, zmm6
+        vpaddd    zmm6, zmm6, zmmword ptr [r8 + INCREMENT + \v]
+        vpandd    zmm6, zmm6, dword ptr [rip + .Lc_0x7ffff] {1to16}
+        vmovdqu32 zmmword ptr [r8 + PHASE + \v], zmm6
+        .exitm
+.endif
         vmovdqu32 zmm4, zmmword ptr [r8 + VIBRATO_DEPTH + \v]
         vmovdqu32 zmm5, zmmword ptr [r8 + FNUM + \v]
         vpsllvd   zmm6, zmm5, zmm4
@@ -740,15 +754,15 @@
 // Stages 2 (lanes 32 to 39) and 3 (lanes 40 to 47), modulated by stages 1 and
 // 2, have theirs between stages 0 and 1. The hi-hat's phase comes before stage
 // 0, and the snare's and the top cymbal's before stage 1.
-.macro PASS second, vbmi
+.macro PASS second, vbmi, inc
         ENVELOPE  z, \second, 0, 64
-        PHASE     0, zmm9
-        PHASE     64, zmm10
+        PHASE     0, zmm9, \inc
+        PHASE     64, zmm10, \inc
         HI_HAT
         OPERATOR  z, 0, 0, \vbmi
         ENVELOPE  y, \second, 128, 32
         vinserti64x4 zmm9, zmm9, ymm10, 1
-        PHASE     128, zmm9
+        PHASE     128, zmm9, \inc
         SNARE_AND_TOP_CYMBAL
         OPERATOR  z, 64, 0, \vbmi
         OPERATOR  y, 128, 64, \vbmi
@@ -756,8 +770,9 @@
 .endm
 
 // The pass \name, adding up with AVX-512 VNNI with \vnni 1 and looking the
-// tables up by VBMI with \vbmi 1. Its labels end in \vnni\vbmi.
-.macro PASS_FUNCTION name, vnni, vbmi
+// tables up by VBMI with \vbmi 1, and moving its phases on by the lanes'
+// increments with \inc 1. Its labels end in \vnni\vbmi\inc.
+.macro PASS_FUNCTION name, vnni, vbmi, inc
         .globl    \name
 #if defined(_WIN32)
         .def      \name
@@ -838,12 +853,12 @@
         SHARED_READ 0, 7, 10, IN_HOLD_13
         SHARED_READ 1, 8, 11, IN_HOLD_14
         cmp       dword ptr [r9 + IN_EG_SECOND], 0
-        jne       .Lsecond\vnni\vbmi
-        PASS      0, \vbmi
-        jmp       .Lsums\vnni\vbmi
-.Lsecond\vnni\vbmi:
-        PASS      1, \vbmi
-.Lsums\vnni\vbmi:
+        jne       .Lsecond\vnni\vbmi\inc
+        PASS      0, \vbmi, \inc
+        jmp       .Lsums\vnni\vbmi\inc
+.Lsecond\vnni\vbmi\inc:
+        PASS      1, \vbmi, \inc
+.Lsums\vnni\vbmi\inc:
         HISTORY   0
         HISTORY   64
         HISTORY   128
@@ -854,7 +869,7 @@
         vpxord    xmm10, xmm10, xmm10
         vpxord    xmm11, xmm11, xmm11
         cmp       dword ptr [r9 + IN_SOFT_PAN], 0
-        jne       .Lsoft\vnni\vbmi
+        jne       .Lsoft\vnni\vbmi\inc
         // Core::accumulate() without soft panning.
         HEARD     0, \vnni
         HEARD     64, \vnni
@@ -881,8 +896,8 @@
         vpmovsxdq xmm4, xmm3
         vpsllq    xmm4, xmm4, 16
         vmovdqu   xmmword ptr [r8 + CARRY_SOFT], xmm4
-        jmp       .Ldone\vnni\vbmi
-.Lsoft\vnni\vbmi:
+        jmp       .Ldone\vnni\vbmi\inc
+.Lsoft\vnni\vbmi\inc:
         // With soft panning: the sums exact in 64 bits, and one rounding at
         // the end.
         vpxord    xmm12, xmm12, xmm12
@@ -938,7 +953,7 @@
         mov       dword ptr [r10 + 4], eax
         ROUND16   r11, rcx
         mov       dword ptr [r8 + CARRY + 4], r11d
-.Ldone\vnni\vbmi:
+.Ldone\vnni\vbmi\inc:
         vzeroupper
 #if defined(_WIN32)
         vmovaps   xmm6, xmmword ptr [rsp]
@@ -960,10 +975,17 @@
 #endif
 .endm
 
-        PASS_FUNCTION adlplug_opl3_pass_avx512, 0, 0
-        PASS_FUNCTION adlplug_opl3_pass_avx512_vnni, 1, 0
-        PASS_FUNCTION adlplug_opl3_pass_avx512_vbmi, 0, 1
-        PASS_FUNCTION adlplug_opl3_pass_avx512_vbmi_vnni, 1, 1
+        PASS_FUNCTION adlplug_opl3_pass_avx512, 0, 0, 0
+        PASS_FUNCTION adlplug_opl3_pass_avx512_vnni, 1, 0, 0
+        PASS_FUNCTION adlplug_opl3_pass_avx512_vbmi, 0, 1, 0
+        PASS_FUNCTION adlplug_opl3_pass_avx512_vbmi_vnni, 1, 1, 0
+
+// For rust-speed's experiments: the four forms with their phases moved on by
+// the lanes' increments.
+        PASS_FUNCTION adlplug_opl3_pass_avx512_increments, 0, 0, 1
+        PASS_FUNCTION adlplug_opl3_pass_avx512_vnni_increments, 1, 0, 1
+        PASS_FUNCTION adlplug_opl3_pass_avx512_vbmi_increments, 0, 1, 1
+        PASS_FUNCTION adlplug_opl3_pass_avx512_vbmi_vnni_increments, 1, 1, 1
 
 #if !defined(_WIN32)
         .section  .note.GNU-stack, "", @progbits
