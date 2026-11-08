@@ -7,12 +7,14 @@
 # (LICENSES/GPL-3.0-or-later.txt).
 #
 # The rust job checks and tests the workspace on each of the three systems
-# ADLplug-Next runs on (ci/rust.sh), with the latest stable toolchain
+# ADLplug-Next runs on (ci/rust.sh), Windows and Linux on x86-64 and on AArch64,
+# and macOS on Apple's processors, with the latest stable toolchain
 # (rust-toolchain.toml): its layout, clippy with every warning an error, and the
 # tests in the dev and the release profile, which run each pass at every level
 # the runner has. The x86-64 builds are for x86-64-v2, the macOS ones for Apple
 # M1 and later, macOS 26.0 and later. ci/setup.sh names the runner's processor,
-# so that a log says which levels it could test.
+# so that a log says which levels it could test. The Windows runners are those
+# with Visual Studio 2026 by their labels, for x86-64 and for ARM64 alike.
 #
 # The targets job builds the workspace on x86-64 for x86-64-v3, and for
 # x86-64-v4 with vectors of 512 bits, as distributions that raise the baseline
@@ -52,7 +54,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2025-vs2026, ubuntu-26.04, macos-26]
+        os: [windows-2025-vs2026, ubuntu-26.04, windows-11-vs2026-arm, ubuntu-26.04-arm, macos-26]
 
     steps:
       - name: Check out

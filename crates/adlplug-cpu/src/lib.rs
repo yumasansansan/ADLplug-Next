@@ -15,10 +15,10 @@
 //! On x86-64 they are `v2`, the baseline the build is compiled for, which has
 //! the portable form alone; `avx2`; `avx2-vnni`, AVX2 with the VEX form of VNNI;
 //! and four of AVX-512: its foundation (F, DQ, BW and VL), with VNNI, with VBMI,
-//! and with both. On AArch64 there is `neon`, its baseline, which has the
-//! portable form alone until the passes in assembly for AArch64 come: they are
-//! to be written for Apple's processors first and run on Windows and Linux on
-//! AArch64 as well, and the levels of the extensions they take come with them.
+//! and with both. On AArch64 there is `neon`, its baseline, NEON (Advanced
+//! SIMD), which every AArch64 processor has, Apple's and those that Windows and
+//! Linux run on alike, and whose pass is written by hand; the levels of further
+//! extensions come with passes written for them.
 //!
 //! A processor has some of the levels, and not always every less preferred
 //! one: Intel has made processors with AVX-512 VNNI and no VBMI (Cascade Lake,
@@ -68,7 +68,8 @@ pub enum Level {
     Avx512Vbmi,
     /// `avx512-vbmi-vnni`: AVX-512, VBMI and VNNI, on Intel's processors.
     Avx512VbmiVnni,
-    /// `neon`: AArch64's baseline. The portable form alone.
+    /// `neon`: AArch64's baseline, NEON (Advanced SIMD), which every AArch64
+    /// processor has.
     Neon,
 }
 

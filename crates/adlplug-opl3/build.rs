@@ -11,9 +11,9 @@
 //! Clang, through its preprocessor and `asm/pass.h`, for the target's triple,
 //! then the objects archived by `llvm-ar`. The LLVM the project builds with has
 //! them: `clang`, `llvm-ar` and `llvm-nm` on `PATH`, or the programs
-//! `ADLPLUG_CLANG`, `ADLPLUG_AR` and `ADLPLUG_NM` name. Only x86-64 has passes
-//! in assembly, for ELF (Linux) and COFF (Windows); an architecture with none
-//! gets no library.
+//! `ADLPLUG_CLANG`, `ADLPLUG_AR` and `ADLPLUG_NM` name. x86-64 has passes in
+//! assembly for ELF (Linux) and COFF (Windows), and AArch64 for Mach-O (macOS),
+//! ELF and COFF; an architecture with none gets no library.
 //!
 //! The passes are leaf functions that refer to nothing outside their own
 //! file, so that an object with a symbol it does not define is a pass the

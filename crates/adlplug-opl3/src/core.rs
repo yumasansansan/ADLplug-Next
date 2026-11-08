@@ -54,9 +54,11 @@ use std::cmp::Ordering;
 use std::f64::consts::PI;
 use std::fmt;
 
-use adlplug_cpu::{Choice, Features, LEVELS, Level, Tier};
+use adlplug_cpu::{Choice, Features, Level, Tier};
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(target_arch = "aarch64")]
+use crate::aarch64::Hand;
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use crate::pass::PassInputs;
 use crate::pass::{LANES, Lanes};
 #[cfg(target_arch = "x86_64")]
@@ -77,6 +79,15 @@ const STAGE_WIDTH: [usize; 4] = [16, 16, 8, 8];
 
 /// The writes the queue holds at the most.
 const QUEUE_SIZE: usize = 2048;
+
+/// The level whose pass is the portable one: x86-64's baseline, `v2`; none on
+/// AArch64, whose baseline has a pass written by hand, and on an architecture
+/// without levels.
+const PORTABLE_LEVEL: Option<Level> = if cfg!(target_arch = "x86_64") {
+    Some(Level::V2)
+} else {
+    None
+};
 
 /// The slot of a lane that has none.
 const PAD: i32 = -1;
@@ -370,13 +381,14 @@ struct Pending {
 }
 
 /// How a pass is worked out: by the portable pass, the loops in Rust, which
-/// every build has, or by a pass written by hand in assembly (x86-64).
+/// every build has, or by a pass written by hand in assembly (x86-64 and
+/// AArch64).
 #[derive(Clone, Copy)]
 enum Pass {
     /// The portable pass.
     Portable,
     /// A pass written by hand.
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     Hand(Hand),
 }
 
@@ -386,11 +398,11 @@ enum Pass {
 ///
 /// A core works its passes over the slots out, one a sample, at a level of the
 /// processor ([`Level`]): by a pass written by hand in assembly at the levels of
-/// x86-64 from `avx2` on, and by the portable pass, loops in Rust, at `v2` and
-/// `neon`, the baselines, and on an architecture without levels; the code around
-/// a pass written by hand is taken at the tier of x86-64 of its level, where
-/// the processor has it ([`Core::tier`]). All make the same samples. A core
-/// keeps to the pass it is made with ([`Core::level`]).
+/// x86-64 from `avx2` on and at AArch64's `neon`, and by the portable pass,
+/// loops in Rust, at `v2`, x86-64's baseline, and on an architecture without
+/// levels; on x86-64 the code around a pass written by hand is taken at the
+/// tier of its level, where the processor has it ([`Core::tier`]). All make the
+/// same samples. A core keeps to the pass it is made with ([`Core::level`]).
 ///
 /// What a core works with, its lanes and its queue of writes, is on the heap,
 /// so that moving one moves a few kilobytes.
@@ -570,35 +582,34 @@ impl Core {
     }
 
     /// A core at a level, where the processor has it: by the pass written by
-    /// hand for the level, or by the portable pass at `v2` and `neon`, the
-    /// levels whose pass it is. None for a level the processor has not, and
-    /// for one of another architecture.
+    /// hand for the level, or by the portable pass at `v2`, the level whose
+    /// pass it is. None for a level the processor has not, and for one of
+    /// another architecture.
     #[must_use]
     pub fn at(level: Level) -> Option<Self> {
         if !level.is_native() || !Features::detect().has(level) {
             return None;
         }
         let pass = match level {
-            Level::V2 | Level::Neon => Pass::Portable,
-            #[cfg(target_arch = "x86_64")]
+            Level::V2 => Pass::Portable,
+            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
             _ => Pass::Hand(Hand::new(level)?),
-            #[cfg(not(target_arch = "x86_64"))]
+            #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
             _ => return None,
         };
         Some(Self::with(Some(level), pass))
     }
 
-    /// A core by the portable pass: at the architecture's baseline, `v2` on
-    /// x86-64 and `neon` on AArch64, and at no level on an architecture without
-    /// levels.
+    /// A core by the portable pass: at `v2` on x86-64, the level whose pass it
+    /// is, and at no level elsewhere: AArch64's baseline, `neon`, has a pass
+    /// written by hand.
     #[must_use]
     pub fn portable() -> Self {
-        Self::with(LEVELS.first().copied(), Pass::Portable)
+        Self::with(PORTABLE_LEVEL, Pass::Portable)
     }
 
-    /// The level whose pass the core takes: for the portable pass the
-    /// architecture's baseline, `v2` or `neon`, and none on an architecture
-    /// without levels.
+    /// The level whose pass the core takes: for the portable pass `v2` on
+    /// x86-64, and none elsewhere.
     #[must_use]
     pub const fn level(&self) -> Option<Level> {
         self.level
@@ -611,7 +622,7 @@ impl Core {
     pub const fn tier(&self) -> Tier {
         match self.pass {
             Pass::Portable => Tier::Baseline,
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
             Pass::Hand(hand) => hand.tier(),
         }
     }
@@ -829,15 +840,15 @@ impl Core {
                 self.advance();
                 frame
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
             Pass::Hand(hand) => hand.generate(self),
         }
     }
 
     /// One sample by a pass written by hand, as [`Core::generate`] makes it:
     /// `x86_64.rs` compiles it for the tier of the pass, as well as for the
-    /// baseline.
-    #[cfg(target_arch = "x86_64")]
+    /// baseline; `aarch64.rs` for the baseline alone.
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     #[inline(always)]
     #[expect(
         clippy::inline_always,
@@ -1440,10 +1451,11 @@ impl Core {
     }
 
     /// The pass written by hand, for AVX2 (`pass_avx2.S`) without AVX-VNNI or
-    /// with it, or for AVX-512 (`pass_avx512.S`), given what it goes by besides
-    /// the lanes: what the counters and the noise give for this pass, and what
-    /// the routing says of the drums and of the shared feedback history.
-    #[cfg(target_arch = "x86_64")]
+    /// with it, for AVX-512 (`pass_avx512.S`), or for NEON (`pass_neon.S`),
+    /// given what it goes by besides the lanes: what the counters and the noise
+    /// give for this pass, and what the routing says of the drums and of the
+    /// shared feedback history.
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     #[inline(always)]
     #[expect(
         clippy::inline_always,

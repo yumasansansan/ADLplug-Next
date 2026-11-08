@@ -8,7 +8,7 @@
 
 //! Where the passes find what they read and write: the lanes of the core
 //! ([`Lanes`]), which every pass works on, and what a pass written by hand goes
-//! by besides ([`PassInputs`], x86-64). Both are laid out as the C++ version
+//! by besides ([`PassInputs`], x86-64 and AArch64). Both are laid out as the C++ version
 //! laid them out, the lanes as the members of its core from its rates to its
 //! shared feedback history, in their order and of their types. The passes in assembly
 //! take the offsets from `asm/pass.h`, and the assertions here check each of
@@ -18,9 +18,9 @@
 
 use std::mem::offset_of;
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use crate::roms::{EXP_ROM, LOGSIN_ROM};
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use crate::ymf262;
 use crate::ymf262::{Counters, RhythmBits};
 
@@ -128,7 +128,7 @@ pub(crate) struct Lanes {
     pub(crate) restart: [i32; LANES],
     /// The levels of the envelopes as the passes written by hand keep them: in
     /// 16 bits, in the order the core's pass says (`pass_avx2.S`,
-    /// `pass_avx512.S`), a core keeping to one pass.
+    /// `pass_avx512.S`, `pass_neon.S`), a core keeping to one pass.
     pub(crate) level16: [i16; LANES],
     /// The states of the envelopes, likewise.
     pub(crate) state16: [i16; LANES],
@@ -219,7 +219,7 @@ impl Lanes {
 /// 16 bits for the envelope, then single values, worked out of the core's
 /// counters, its noise and its routing for the pass ([`PassInputs::new`]), and
 /// the tables the pass looks up.
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 #[repr(C, align(32))]
 pub(crate) struct PassInputs {
     /// The key scaling from which the timer's high step falls, less 1.
@@ -269,7 +269,7 @@ pub(crate) struct PassInputs {
     exp8: *const u8,
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 impl PassInputs {
     /// What a pass written by hand goes by for the pass that the counters and
     /// the noise stand at: what they give for it, what the routing says of the
@@ -330,7 +330,7 @@ impl PassInputs {
 }
 
 /// A table of the passes written by hand, aligned to a line of the cache.
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 #[repr(C, align(64))]
 struct Table<T>(T);
 
@@ -340,12 +340,12 @@ struct Table<T>(T);
 /// that the lanes do not hold it, and the operators' loops, which look it up
 /// and write the lanes, were vectorized for no level of x86-64 ("cannot
 /// identify array bounds", as LLVM says).
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 static LOGSIN: Table<[i32; 256]> = Table(LOGSIN_ROM);
 
 /// The exponent's ROM as the passes written by hand look it up: with the 0x400
 /// that the operator puts above it, shifted up one.
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 static EXP_MAGNITUDE: Table<[i32; 256]> = Table({
     let mut t = [0; 256];
     let mut i = 0;
@@ -358,23 +358,23 @@ static EXP_MAGNITUDE: Table<[i32; 256]> = Table({
 
 /// The log-sine's ROM in 16 bits, which every entry fits, for the pass for
 /// AVX-512 to hold in its registers.
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 static LOGSIN_ROM16: Table<[u16; 256]> = Table(words(&LOGSIN_ROM));
 /// The exponent's ROM as the passes written by hand look it up, likewise.
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 static EXP_MAGNITUDE16: Table<[u16; 256]> = Table(words(&EXP_MAGNITUDE.0));
 /// The log-sine's ROM as its low bytes, then its high bytes, for the forms of
 /// the pass for AVX-512 that look it up by VBMI.
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 static LOGSIN_ROM8: Table<[u8; 512]> = Table(bytes_of(&LOGSIN_ROM16.0));
 /// The exponent's ROM likewise.
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 static EXP_MAGNITUDE8: Table<[u8; 512]> = Table(bytes_of(&EXP_MAGNITUDE16.0));
 
 /// The entries of a table, each of which fits 16 bits, in 16 bits: their low
 /// two bytes, the two above them being nought, as is checked (a constant
 /// function cannot yet call std's conversions).
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 const fn words(values: &[i32; 256]) -> [u16; 256] {
     let mut t = [0; 256];
     let mut i = 0;
@@ -388,7 +388,7 @@ const fn words(values: &[i32; 256]) -> [u16; 256] {
 }
 
 /// A table of 16 bits as its low bytes, then its high bytes.
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 const fn bytes_of(words: &[u16; 256]) -> [u8; 512] {
     let mut t = [0; 512];
     let mut i = 0;
@@ -519,7 +519,7 @@ const _: () = {
 
 // What a pass goes by besides, likewise: aligned for the aligned loads of 32
 // bytes the pass for AVX2 makes of it.
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 const _: () = {
     assert!(align_of::<PassInputs>() == 32);
     assert!(offset_of!(PassInputs, high_from_less_1) == defined("ADLPLUG_OPL3_IN_HIGH_FROM_LESS_1"));

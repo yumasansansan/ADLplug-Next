@@ -114,7 +114,14 @@ fn a_core_takes_the_level_it_is_made_at() {
         core.tier()
     );
     assert_eq!(core.level(), Choice::new(Features::detect()).level);
-    assert_eq!(Core::portable().level(), LEVELS.first().copied());
+    // The portable pass is x86-64's baseline's, and no level's elsewhere:
+    // AArch64's baseline has a pass written by hand.
+    let portable_level = if cfg!(target_arch = "x86_64") {
+        Some(Level::V2)
+    } else {
+        None
+    };
+    assert_eq!(Core::portable().level(), portable_level);
     assert_eq!(Core::portable().tier(), Tier::Baseline);
     let features = Features::detect();
     let levels = features.levels();

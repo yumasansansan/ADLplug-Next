@@ -13,19 +13,21 @@
 //! Rust, which makes the same samples for every write.
 //!
 //! A core works its passes over the slots out at a level of the processor
-//! (`adlplug-cpu`): on x86-64 from `avx2` on by a pass written by hand in
-//! assembly (`asm/x86_64/`, which `build.rs` assembles), and else by the
-//! portable pass, plain loops over the slots in Rust. All make the same samples,
-//! which the tests check at every level the processor has.
+//! (`adlplug-cpu`): on x86-64 from `avx2` on and on AArch64 by a pass written by
+//! hand in assembly (`asm/x86_64/`, `asm/aarch64/`, which `build.rs` assembles),
+//! and else by the portable pass, plain loops over the slots in Rust. All make
+//! the same samples, which the tests check at every level the processor has.
 //!
 //! `core.rs` holds the core: its queue of writes, its registers and when each
 //! slot reads them, and the portable pass; `ymf262.rs` what a slot works out,
 //! following YMF262-LLE and Nuked OPL3; `roms.rs` the chip's two ROMs; `pass.rs`
 //! the lanes and what a pass goes by, laid out for the assembly at the offsets
-//! of `asm/pass.h`; and `x86_64.rs` the calls into the assembly, the one module
-//! with unsafe code, which the others forbid.
+//! of `asm/pass.h`; and `x86_64.rs` and `aarch64.rs` the calls into the
+//! assembly, the modules with unsafe code, which the others forbid.
 #![deny(unsafe_code)]
 
+#[cfg(target_arch = "aarch64")]
+mod aarch64;
 mod core;
 mod pass;
 mod roms;
