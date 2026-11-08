@@ -35,6 +35,11 @@ report=$(mktemp)
   case "$(uname -s)" in
     Linux)
       LC_ALL=C lscpu
+      # The length of SVE's vectors that a process starts with, in bytes, where
+      # the processor has SVE.
+      if [ -r /proc/sys/abi/sve_default_vector_length ]; then
+        echo "SVE's vectors: $(cat /proc/sys/abi/sve_default_vector_length) bytes"
+      fi
       ;;
     Darwin)
       sysctl -n machdep.cpu.brand_string

@@ -18,7 +18,7 @@ fn the_level_chosen_is_the_most_preferred_the_processor_has() {
     let features = Features::detect();
     let levels = features.levels();
     let choice = Choice::new(features);
-    let tiers = [Tier::Baseline, Tier::V3, Tier::V4]
+    let tiers = [Tier::Baseline, Tier::V3, Tier::V4, Tier::Sve]
         .into_iter()
         .filter(|&tier| features.has_tier(tier));
     println!(

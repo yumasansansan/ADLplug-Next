@@ -17,6 +17,8 @@
 //
 //     void adlplug_opl3_pass_neon(Lanes *lanes, const PassInputs *inputs,
 //                                 int32_t *frame);
+//     void adlplug_opl3_pass_sve(Lanes *lanes, const PassInputs *inputs,
+//                                int32_t *frame);
 //         AAPCS64
 //
 // What Core::generate() does between taking its writes in and moving its
@@ -38,6 +40,14 @@
 // log-sine and the exponent are looked up one lane at a time, as the pass for
 // AVX2 without AVX-VNNI looks them up: NEON has no gather.
 //
+// The second function, this branch's experiment, is the first with those two
+// tables looked up by SVE's gathers (ld1w), four lanes at a time under a
+// predicate of four elements (ptrue vl4), so that it works the same on SVE's
+// vectors of any length: the rest of the pass is NEON's, and a NEON instruction
+// that writes a vector zeroes the bits of its SVE register above it, which
+// nothing reads. Both are assembled from the same macros, the second's lookups
+// alone different.
+//
 // The stages of operators wait for each other, through two table lookups each,
 // so each stage starts with what does not wait for the stage before, and the
 // envelopes and phases of the next stage come between stages, for the
@@ -47,13 +57,18 @@
 // the tables of the log-sine and of the exponent; x5 the lanes' values from
 // OUT on, for the loads and stores in pairs; x9 to x15 for the scalars and the
 // lookups. The vectors are v0 to v7 and v16 to v31, all of them the caller's
-// to save; v8 to v15, whose low halves the convention has the callee keep, are
-// not touched, nor x18, nor the stack. So the function needs no frame and no
+// to save, and in the form for SVE z3, z5 and z7 and the predicate p0, the
+// caller's as well; v8 to v15, whose low halves the convention has the callee
+// keep, are not touched, nor x18, nor the stack. So the function needs no frame and no
 // unwinding information on any of the systems.
 //
 // Assembled by Clang, for Mach-O (macOS), ELF (Linux) and COFF (Windows).
 
 #include "pass.h"
+
+// The form for SVE takes its instructions, which the assembler is told it may
+// for the whole file; the form for NEON takes none of them.
+        .arch_extension sve
 
 // What the object formats want differently: the function's name, with the
 // leading underscore of Mach-O there, and the names of labels local to the
@@ -332,9 +347,13 @@
         PHASE     \l + 4, 26
 .endm
 
-// The four lanes of v\idx looked up in the table at \table, into v\dst: one by
+// The four lanes of v\idx looked up in the table at \table, into v\dst: in the
+// form for SVE (\sve 1) by a gather under p0, four elements; in the other one by
 // one, with w9 to w15.
-.macro LOOKUP dst, idx, table
+.macro LOOKUP dst, idx, table, sve
+.if \sve
+        ld1w      {z\dst\().s}, p0/z, [\table, z\idx\().s, uxtw #2]
+.else
         umov      w9, v\idx\().s[0]
         umov      w10, v\idx\().s[1]
         umov      w11, v\idx\().s[2]
@@ -346,12 +365,13 @@
         mov       v\dst\().s[1], w13
         mov       v\dst\().s[2], w14
         mov       v\dst\().s[3], w15
+.endif
 .endm
 
 // The operators of the four lanes from lane \l (ymf262::modulation() and
 // operator_output()), modulated, when they are by the stage before, by the
 // lanes from lane \source.
-.macro OPERATOR l, source
+.macro OPERATOR l, source, sve
         // First what does not wait for the stage before: the feedback, added to
         // the phase as the modulation, to which the stage before's modulation is
         // added later (no slot has both).
@@ -387,7 +407,7 @@
         orr       v5.16b, v4.16b, v3.16b
         movi      v16.4s, #255
         and       v5.16b, v5.16b, v16.16b                           // the log-sine's index
-        LOOKUP    7, 5, x3                                          // sine
+        LOOKUP    7, 5, x3, \sve                                    // sine
         // While it loads: the ramp, the sign (bit 9 of shifted, which turning
         // back leaves alone) and the mute.
         ldr       q6, [x0, #(SAWTOOTH + 4 * (\l))]
@@ -412,7 +432,7 @@
         add       v7.4s, v7.4s, v0.4s                               // att
         movi      v16.4s, #255
         and       v3.16b, v7.16b, v16.16b
-        LOOKUP    5, 3, x4
+        LOOKUP    5, 3, x4, \sve
         ushr      v7.4s, v7.4s, #8
         neg       v7.4s, v7.4s
         ushl      v5.4s, v5.4s, v7.4s                               // magnitude, below 4096
@@ -598,59 +618,66 @@
 // phases come before it, and the next stage's after it: stage 0 is lanes 0 to
 // 15, stage 1 lanes 16 to 31, modulated by stage 0, stage 2 lanes 32 to 39 and
 // stage 3 lanes 40 to 47, modulated by stages 1 and 2. The hi-hat's phase comes
-// before stage 0, and the snare's and the top cymbal's before stage 1.
-.macro PASS second
+// before stage 0, and the snare's and the top cymbal's before stage 1. \sve is
+// the form (LOOKUP).
+.macro PASS second, sve
         ENVELOPES_AND_PHASES \second, 0
         ENVELOPES_AND_PHASES \second, 8
         HI_HAT
-        OPERATOR  0, 0
-        OPERATOR  4, 4
-        OPERATOR  8, 8
-        OPERATOR  12, 12
+        OPERATOR  0, 0, \sve
+        OPERATOR  4, 4, \sve
+        OPERATOR  8, 8, \sve
+        OPERATOR  12, 12, \sve
         ENVELOPES_AND_PHASES \second, 16
         ENVELOPES_AND_PHASES \second, 24
         SNARE_AND_TOP_CYMBAL
-        OPERATOR  16, 0
-        OPERATOR  20, 4
-        OPERATOR  24, 8
-        OPERATOR  28, 12
+        OPERATOR  16, 0, \sve
+        OPERATOR  20, 4, \sve
+        OPERATOR  24, 8, \sve
+        OPERATOR  28, 12, \sve
         ENVELOPES_AND_PHASES \second, 32
         ENVELOPES_AND_PHASES \second, 40
-        OPERATOR  32, 16
-        OPERATOR  36, 20
-        OPERATOR  40, 32
-        OPERATOR  44, 36
+        OPERATOR  32, 16, \sve
+        OPERATOR  36, 20, \sve
+        OPERATOR  40, 32, \sve
+        OPERATOR  44, 36, \sve
 .endm
 
+// The pass \name, in the form for SVE (\sve 1) or for NEON. Its labels are 7 to
+// 9, which none of the macros it takes uses.
+.macro PASS_FUNCTION name, sve
         .p2align  5
 #if defined(__APPLE__)
-        .globl    _adlplug_opl3_pass_neon
-        .private_extern _adlplug_opl3_pass_neon
-_adlplug_opl3_pass_neon:
+        .globl    _\name
+        .private_extern _\name
+_\name:
 #elif defined(_WIN32)
-        .globl    adlplug_opl3_pass_neon
-        .def      adlplug_opl3_pass_neon
+        .globl    \name
+        .def      \name
         .scl      2
         .type     32
         .endef
-adlplug_opl3_pass_neon:
+\name:
 #else
-        .globl    adlplug_opl3_pass_neon
-        .hidden   adlplug_opl3_pass_neon
-        .type     adlplug_opl3_pass_neon, %function
-adlplug_opl3_pass_neon:
+        .globl    \name
+        .hidden   \name
+        .type     \name, %function
+\name:
 #endif
+.if \sve
+        ptrue     p0.s, vl4
+.endif
         SHARED_READ 0, 7, 10, IN_HOLD_13
         SHARED_READ 1, 8, 11, IN_HOLD_14
         ldr       x3, [x1, #IN_LOGSIN]
         ldr       x4, [x1, #IN_EXP]
         ldr       w9, [x1, #IN_EG_SECOND]
-        cbnz      w9, LOCAL(second)
-        PASS      0
-        b         LOCAL(sums)
-LOCAL(second):
-        PASS      1
-LOCAL(sums):
+        cbnz      w9, 7f
+        PASS      0, \sve
+        b         8f
+7:
+        PASS      1, \sve
+8:
         add       x5, x0, #(OUT & 0xfff)
         add       x5, x5, #(OUT >> 12), lsl #12
         HISTORY   0
@@ -666,7 +693,7 @@ LOCAL(sums):
         movi      v18.2d, #0
         movi      v19.2d, #0
         ldr       w9, [x1, #IN_SOFT_PAN]
-        cbnz      w9, LOCAL(soft)
+        cbnz      w9, 9f
         // Core::accumulate() without soft panning.
         HEARD     0
         HEARD     4
@@ -703,7 +730,7 @@ LOCAL(sums):
         str       x10, [x0, #CARRY_SOFT]
         str       x12, [x0, #(CARRY_SOFT + 8)]
         ret
-LOCAL(soft):
+9:
         // With soft panning: the sums exact in 64 bits, and one rounding at
         // the end.
         movi      v20.2d, #0
@@ -752,8 +779,12 @@ LOCAL(soft):
         str       w12, [x0, #(CARRY + 4)]
         ret
 #if defined(__ELF__)
-        .size     adlplug_opl3_pass_neon, . - adlplug_opl3_pass_neon
+        .size     \name, . - \name
 #endif
+.endm
+
+        PASS_FUNCTION adlplug_opl3_pass_neon, 0
+        PASS_FUNCTION adlplug_opl3_pass_sve, 1
 
 // The tables of tbl, sixteen bytes each, beside the code, which loads them by
 // their addresses from its own (ldr of a literal): no relocation, in any of

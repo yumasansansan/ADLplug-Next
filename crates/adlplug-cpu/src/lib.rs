@@ -17,8 +17,10 @@
 //! and four of AVX-512: its foundation (F, DQ, BW and VL), with VNNI, with VBMI,
 //! and with both. On AArch64 there is `neon`, its baseline, NEON (Advanced
 //! SIMD), which every AArch64 processor has, Apple's and those that Windows and
-//! Linux run on alike, and whose pass is written by hand; the levels of further
-//! extensions come with passes written for them.
+//! Linux run on alike, and whose pass is written by hand; and, as this branch's
+//! experiment has it, `sve`, NEON's pass with its two tables looked up by SVE's
+//! gathers, for the processors with SVE, with the code around it compiled for
+//! SVE as well.
 //!
 //! A processor has some of the levels, and not always every less preferred
 //! one: Intel has made processors with AVX-512 VNNI and no VBMI (Cascade Lake,
@@ -71,6 +73,8 @@ pub enum Level {
     /// `neon`: AArch64's baseline, NEON (Advanced SIMD), which every AArch64
     /// processor has.
     Neon,
+    /// `sve`: NEON with SVE, whose gathers look the tables up.
+    Sve,
 }
 
 /// The levels of the architecture ADLplug-Next is built for, the least
@@ -88,14 +92,14 @@ pub const LEVELS: &[Level] = &[
 /// The levels of the architecture ADLplug-Next is built for, the least
 /// preferred first.
 #[cfg(target_arch = "aarch64")]
-pub const LEVELS: &[Level] = &[Level::Neon];
+pub const LEVELS: &[Level] = &[Level::Neon, Level::Sve];
 /// The levels of the architecture ADLplug-Next is built for: none, on an
 /// architecture whose passes are the portable form alone.
 #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
 pub const LEVELS: &[Level] = &[];
 
 /// Every level, of every architecture.
-const ALL: [Level; 8] = [
+const ALL: [Level; 9] = [
     Level::V2,
     Level::Avx2,
     Level::Avx2Vnni,
@@ -104,6 +108,7 @@ const ALL: [Level; 8] = [
     Level::Avx512Vbmi,
     Level::Avx512VbmiVnni,
     Level::Neon,
+    Level::Sve,
 ];
 
 impl Level {
@@ -119,6 +124,7 @@ impl Level {
             Self::Avx512Vbmi => "avx512-vbmi",
             Self::Avx512VbmiVnni => "avx512-vbmi-vnni",
             Self::Neon => "neon",
+            Self::Sve => "sve",
         }
     }
 
@@ -136,7 +142,7 @@ impl Level {
 
     /// The tier of the processors that the level's pass is written for, as they
     /// are made: the baseline for `v2` and `neon`, x86-64-v3 for the levels of
-    /// AVX2, and x86-64-v4 for those of AVX-512. A processor may still lack
+    /// AVX2, x86-64-v4 for those of AVX-512, and SVE for `sve`. A processor may still lack
     /// some of the tier's extensions, as a virtual machine may report them;
     /// [`Features::tier`] then takes the most it has.
     #[must_use]
@@ -145,6 +151,7 @@ impl Level {
             Self::V2 | Self::Neon => Tier::Baseline,
             Self::Avx2 | Self::Avx2Vnni => Tier::V3,
             Self::Avx512 | Self::Avx512Vnni | Self::Avx512Vbmi | Self::Avx512VbmiVnni => Tier::V4,
+            Self::Sve => Tier::Sve,
         }
     }
 }
@@ -167,10 +174,12 @@ pub enum Tier {
     V3,
     /// x86-64-v4: x86-64-v3, and AVX-512 F, BW, CD, DQ and VL.
     V4,
+    /// AArch64 with SVE, as this branch's experiment has it.
+    Sve,
 }
 
 /// The tiers, the least preferred first.
-const TIERS: [Tier; 3] = [Tier::Baseline, Tier::V3, Tier::V4];
+const TIERS: [Tier; 4] = [Tier::Baseline, Tier::V3, Tier::V4, Tier::Sve];
 
 impl Tier {
     /// The tier's name.
@@ -180,6 +189,7 @@ impl Tier {
             Self::Baseline => "baseline",
             Self::V3 => "x86-64-v3",
             Self::V4 => "x86-64-v4",
+            Self::Sve => "sve",
         }
     }
 }
@@ -239,6 +249,10 @@ pub struct Features {
     pub intel: bool,
     /// NEON (Advanced SIMD).
     pub neon: bool,
+    /// SVE, with the system saving its registers.
+    pub sve: bool,
+    /// SVE2.
+    pub sve2: bool,
 }
 
 impl Features {
@@ -275,6 +289,8 @@ impl Features {
         {
             Self {
                 neon: std::arch::is_aarch64_feature_detected!("neon"),
+                sve: std::arch::is_aarch64_feature_detected!("sve"),
+                sve2: std::arch::is_aarch64_feature_detected!("sve2"),
                 ..Self::default()
             }
         }
@@ -298,6 +314,7 @@ impl Features {
             Level::Avx512Vbmi => avx512 && vbmi,
             Level::Avx512VbmiVnni => avx512 && vbmi && self.avx512_vnni,
             Level::Neon => self.neon,
+            Level::Sve => self.neon && self.sve,
         }
     }
 
@@ -318,6 +335,7 @@ impl Features {
             Tier::Baseline => true,
             Tier::V3 => v3,
             Tier::V4 => v4,
+            Tier::Sve => self.sve,
         }
     }
 
@@ -416,6 +434,8 @@ mod tests {
             avx512_vbmi: true,
             intel: true,
             neon: false,
+            sve: false,
+            sve2: false,
         }
     }
 
@@ -467,7 +487,8 @@ mod tests {
                 Tier::V4,
                 Tier::V4,
                 Tier::V4,
-                Tier::Baseline
+                Tier::Baseline,
+                Tier::Sve
             ]
         );
         let mut sorted = TIERS.to_vec();
