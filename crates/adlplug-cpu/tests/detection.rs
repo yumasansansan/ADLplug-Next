@@ -11,13 +11,13 @@
 //! levels it has are printed, for the log of a run on a machine one does not
 //! have at hand.
 
-use adlplug_cpu::{Choice, Features, LEVELS, Request};
+use adlplug_cpu::{Choice, Features, LEVELS};
 
 #[test]
 fn the_level_chosen_is_the_most_preferred_the_processor_has() {
     let features = Features::detect();
     let levels = features.levels();
-    let choice = Choice::new(features, Request::default());
+    let choice = Choice::new(features);
     println!(
         "levels of this processor: {}; chosen: {choice}",
         levels.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ")

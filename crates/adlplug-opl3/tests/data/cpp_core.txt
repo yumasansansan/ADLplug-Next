@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# What the C++ version's OPL3 core made of the random writes of its tests, which
+# tests/common/mod.rs reproduces, for the Rust core to make as well (cpp_core.rs).
+# cpp_core.cc wrote it, built against the C++ version's core as commit b4c4d0c
+# has it (sources/opl3/core, its pass in C++) and against the low-level core
+# drawn from a die shot of the chip, YMF262-LLE, as libADLMIDI carries it there.
+#
+# For each seed from 1 to 8, three lines:
+#   writes <seed> <count> <hash>  the writes for 20000 samples, and an FNV-1a
+#                                 hash of each one's sample (32 bits), address
+#                                 (16) and value (8), little-endian
+#   plain <seed> <hash>...        FNV-1a hashes of the core's samples, a hash of
+#                                 every 1000, each sample as output A then B in
+#                                 32 bits, little-endian
+#   panned <seed> <hash>...       the same with the soft panning of a channel every
+#                                 500 samples (tests/common/mod.rs, soft_pan)
+# The low-level core made the plain samples too, every one of the 160000: the C++
+# core's equalled them all. It has no soft panning, which is libADLMIDI's.
+writes 1 1830 307a3e69ebcafc76
+plain 1 f3d2869efbed673a d64382d0f673d749 725671099589d0ec 385dc6a33dec2d68 3740b5b50cbcb137 4be712dcd236c367 ff0af157b504b748 65f206e411578c8a c69fa62e2bd2a4ec 7422ef21ee132cd3 06c790ef5de00bee c4ad9be8500fbc83 68a3476686528bbf bf45440704d65d50 121a4311c2a3e0cd ee98576d08803dba 09d87cedf4b31f15 6f221b0595d7f5a8 e1c3a685d27a3fbb 10b2a4d0ddaa0658
+panned 1 f3d2869efbed673a 1a2efe38435286fa 8312f8893a88e699 f78145d68c172314 ca9571f1b3ad02ff 23141f1aebc70862 94b7796943b1315e 852e09acf6975eb3 15bc441ca68ad743 6523664c70e12f1e 48f6f0abac36f140 f1eba9562f89c119 fabb1c2d3820df0a bd9c390eb2ca59ee 9af38a0c59792619 36d9f10fb21fc727 9d8515182af0bc79 e935af397d953cd9 361cfb27549efa0b ad2ae0f3d00dc9a5
+writes 2 1638 363141c0e346e1db
+plain 2 fd92629d743f7015 ec93397a1cd2e6a9 ad4aab944514518b 71e6d9b95173caf8 095e8e346a24bf5f 05b9403ae0a0eb36 c67763040d67cf7b ce20f10b25c76bee 26d32f6543caa879 860903d01ef181e5 c17a5bacc199bc29 68944b0155bbf660 e48b05d764f8589f 8c2e21d6bed38147 d0e9b982202e9af2 1616e7c64d99947a 571fec9b8e033c31 67d74cb885bdbf07 b2e1e3a8d83454fc b4fc18ae955584d4
+panned 2 fd92629d743f7015 2b6e17fabab325bb eb0d2bd453091b64 537aa075202de015 6d0dbaaccd3a67dd 5dd69a34768206bb d6dbadd5b2dda7bc 6d7e0525c7e299c9 18891b8706f8e399 170cf1db5328426d 19a931a8533b22bb 31e90883605c991f 2bc4642070f020fe cdafdcb4e9ef1449 a633970b41a99342 e23669ae889f015a 8f2fde3182f76171 ecec2065db5d9b2b 9de7dccf9d3d0f82 9600b07ff0ef640d
+writes 3 1268 ad169516dfbe7bab
+plain 3 1875acd2f91947e5 e1718e93e5270572 fc924fbd812bf77c fc406c8ac85fc7d5 05ccf57fc3aca9f0 8747dc3bd7d5ea48 f59063e5a1d98a51 4555f39b9cc7534c 18acd5ab18e35435 2da4e02697417b65 eba1af225a1b3a2c 149f148c9a0dafa8 25ca19bff2d794e5 3718856c984db757 4a77a90ddfaa3eea 71d5155ecb6039df 415cbeb0705b032d edee7e312c8a1ef7 cb2149e902ab37a6 396f3f26307ea721
+panned 3 1875acd2f91947e5 6bb09e7e37eabfb0 9a1e36e304f12b1b 2b0f6f39404d1616 267daceb0c6a8f3f d34cede2d1c7da4f ff63a9110e91ba33 c16f9d79cdbede28 c2674cf73d5672b7 9682848e1f695de1 c27cf074f4a40efc ae2b08d7fb2198da db561795857b8b88 61df3b46d3add627 13ea55f95a76834c cb3fe893fe7e592f d0a78b495b95b0d5 ff452f3766d44bf7 8e3661f23e0491d0 8759a8c8e4ff002f
+writes 4 1483 33a2b85f2bf9d0b5
+plain 4 1e7ee00ad693286f 07843ab74874d3fe fd4dc5cc4fcc036a 857f0d06bd76fdac 5d35b2dbdeee1a11 61a227c07fc34c71 2ede61e05bca1e1e 801eefc495d0ac9c f4ff7b5b0afe1beb 4e15fc3e17c759c0 8d39847c8b17bca6 e929128991a14e03 58021e6ef63799ba 5bcaff306d5ef5ea a62e49978d53fd2c fc96dd377b030549 45ec82917893d47b f6ab2a151a54722f 4f5cc972def25ced 62f88534d2cbd89a
+panned 4 1e7ee00ad693286f 07843ab74874d3fe fd4dc5cc4fcc036a 857f0d06bd76fdac e0d76b2b92a0fdb8 494b1a134fe89ca8 1e1b9854fac8dd29 b2687de192158b3f 6bcd8e846884390b 58897981ca41c6e4 c2bdaa779ec46534 1be531dacfaea54b 5865ab7dca30eb3d 02444d903f2a1ab5 91fa74ac94913505 1975a908ef5f2c5d b2c36c35157a1fc1 1b8cadaa9d7bd246 1e3544ecf19662a4 9ba1f059e6a9453f
+writes 5 1540 2c7f2013e9899f66
+plain 5 9aeffe684a312845 2e838d8b8d88c9e7 20eff8c52ea697dc 11a669b5b0887ed8 f9ae64e2f9597c2e ef98cd8551616b0d d3b8a20b69d1223c 5ace88ab4525c31b 096664098940d584 d6f6877e29585748 8bf768de5e7a3390 b4693eaa8849c957 89f13ee4292c1516 82735132ec3c1199 20dd276e9d36f16f 61516b04badad252 1bf9ddd0cdb9b190 a8b60b825628e67c 099174ec3c927ed9 01eb448ec1c7c293
+panned 5 9aeffe684a312845 1d5aa45a1a4f2575 0e8988fbe60e0850 67ea431bcbb0ef89 71d39326a2dc9d69 ac9f21c09ae2a742 d405d928afe18dab 7ff691a7f9dab138 fc337ee898bec0e2 85700bc1e2302699 57a8a152d1b2bffd 082002520b9d0e3a 30724f0ebcfe4c35 4fd179b859edc363 11d2e57ba5f005e9 703873e1482c880e c09aa8da5951cba0 1b65673853515e4f 964e187ed280b30a f0598a34337c6bad
+writes 6 1698 772531f95518f5e7
+plain 6 ec31ecab6c60e0fb fc9675443eef6b3d 924399559b1d19d0 6fed1455f16da59a 39f2e6202f745f45 b30aed4198028ffa 3666135243638014 1388e1da6668091a 77de54974d2fb216 a65c7f9dad23881b f54293a0cb798a01 bcd01c380eedb33c 0d0be9652ec90dd9 daae548e416b73d5 857fd6abdca4f4d3 52606b16d900f444 be90624c78bd4827 f8cd5229ffe0ddb3 fe342a957132ca2c 15589fc45988a11f
+panned 6 ec31ecab6c60e0fb 0ba5a0f29261b3e2 98681b5a92ede948 21b2af9c8c46f326 56861b5f7c80552d 2f3d43766526a4c6 7c120a716c01ea44 7ea085ab8fd047fe 5dfe85b57f5c4e6b 6bf25d32b6d47caf 74b794babd824540 925e3754f15b6e6c a7f53ebd255de4a1 29c79e4c32e25a2c d0a8e539d596d365 d7bfd30a264ad3e0 9f1a70a838d67e78 d43dd62d1e1f55c4 ac184d3263805f6f ec112e0ea030ff8d
+writes 7 1277 705d5535310544b3
+plain 7 e7dbc5057c188c98 35430fbc4d580d91 709455255da770df 1e73a2a6062a5d81 2a3b065eb8be160d d0f6160b154dcdb2 65716956f16bfb7b d9995e46c26d8840 304bb3effa9745f4 4607276b73f961cd 506f966af96ccf48 16230886c2e14738 f8d3ad1142126319 1b649701c9e80774 132ae0201052c090 8a34f1c146ceddc6 1d165f1ba9eb328a 1811fda1cca3d977 df25b3a076adbb9e 0b002929ace65dbc
+panned 7 e7dbc5057c188c98 35430fbc4d580d91 ce58ae3954b4e61c 7397ceb4d46f92f1 9bfd3badef5bada4 ae2e90ea8c70af20 3a2b1de7bc76a59c f6faa424fd8cae83 d5a85395a2d728cf fd251aaa7f38b94c deadeb64a2115c35 1a92c113db197d06 87d9fff35961a490 27c0c3f50b92e76f b1788d60b9ab2461 df1baca21262adcc b25cf4e376bd6d15 256ea1b92f6f26ea ca332bb9302fe5be d84f6730dc5bbd9b
+writes 8 2066 0fceeef295020f19
+plain 8 2dfc5dbeafe2c6cd a3ebf9d1198a931e 64bd950f39276a19 0a3dd36fa538d6fb 8b2ed838baa6eedc c77c7b1ee48944d6 65292c6b3843be68 50dc541c25a1517d 13128a4cc3ae68d9 a0cc76feb78a3afa 139161b976733322 b0d5aaac3616cd4f 1caf859e66a29709 d369a23174f3b8f4 0a4148bf8d970ff6 f98362d02277d2b7 21e695e4fcd08f7a fb87e0d224dd5b73 19e99751f9e7476d 9d5c1b82dd7dd6ab
+panned 8 2dfc5dbeafe2c6cd d2624731a6cf539d 4cc110ef942e62f4 528b7e300e9284c7 cf21ba1a66ff2ef0 8fd38dba2f76b4d2 7595c2ce4241de5b b4bd53ce88eb446a 3ac79edd52462155 8e7b6ee650b0443e d794158fedb4bf04 0cd5dcd191b55bb4 2899ab36b9710e01 1aae155446c56f7f b53bb3c77148411d 119953d178bf84ee 10ecf8c265e1f32a 2faabdbdc1ca83cc 612e49b9d148c8ce 792b57542088e9dc

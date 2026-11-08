@@ -1,0 +1,122 @@
+// SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+// and its license, in the machine-readable form of the REUSE specification: the
+// GNU General Public License, version 3 or any later version
+// (LICENSES/GPL-3.0-or-later.txt).
+
+//! The passes written by hand in assembly for x86-64 (`asm/x86_64/`), declared,
+//! and the safe function that calls them. Each does what [`Core::generate`]
+//! does between taking its writes in and moving its counters on: the envelopes
+//! and the phases, the rhythm phases, the operators stage by stage, the
+//! feedback history and the sums of the two outputs. `pass_avx2.S` holds the
+//! pass for AVX2 in its form for the processors without AVX-VNNI, which look
+//! tables up one lane at a time, and in its form for those with it, which
+//! gather them and add up the outputs with AVX-VNNI's instructions;
+//! `pass_avx512.S` holds the pass for AVX-512, with its foundation alone,
+//! adding up with AVX-512 VNNI, looking the tables up by VBMI, and with both.
+//!
+//! The functions follow the C calling convention of the target, and are
+//! declared `extern "C"`, which is that convention in Rust. The files are
+//! assembled from the same source for ELF (Linux) and for COFF (Windows), and
+//! each function's entry and return are written for the convention of its
+//! object format: for ELF it takes the lanes, the inputs and the frame in rdi,
+//! rsi and rdx, as System V's convention passes them; for COFF in rcx, rdx and
+//! r8, as the Windows x64 convention passes them, and it keeps the low halves of
+//! xmm6 to xmm15, which that convention has a function keep, on the stack, with
+//! what the unwinder needs to know of it (`.seh_*`). Besides those it uses only
+//! registers that both conventions let a function overwrite: rax, rcx, rdx, r8
+//! to r11, the vector registers and the mask registers; and it returns with the
+//! upper halves of the vector registers zeroed (`vzeroupper`). So the one
+//! declaration is right on both, where `extern "sysv64"`, System V's convention
+//! on every target, would be wrong on Windows.
+//!
+//! Whether the processor has a level's extensions is asked once, as a core
+//! takes its pass ([`Hand::new`]), through adlplug-cpu's [`Features`], and a
+//! [`Hand`] exists only for a level the processor has: its existence is what
+//! makes the call sound, and the call is then the one unsafe operation of its
+//! block. Asking at each call would run CPUID for the processor's maker at every
+//! sample, an instruction of a hundred cycles and more, and of thousands under a
+//! hypervisor, which traps it, against a pass of some hundred nanoseconds.
+//!
+//! [`Core::generate`]: crate::Core::generate
+#![allow(
+    unsafe_code,
+    reason = "the calls into assembly, each the one operation of a block whose comment says why it is sound"
+)]
+
+use adlplug_cpu::{Features, Level};
+
+use crate::pass::{Lanes, PassInputs};
+
+/// A pass written by hand: the lanes, what the pass goes by besides, and the
+/// frame of two samples, output A then output B, that it writes.
+type Function = unsafe extern "C" fn(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+
+unsafe extern "C" {
+    /// The pass for AVX2, looking tables up one lane at a time
+    /// (`pass_avx2.S`).
+    fn adlplug_opl3_pass_avx2(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    /// The pass for AVX2 that gathers and adds up with AVX-VNNI
+    /// (`pass_avx2.S`).
+    fn adlplug_opl3_pass_avx2_vnni(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    /// The pass for AVX-512 F, DQ, BW and VL (`pass_avx512.S`).
+    fn adlplug_opl3_pass_avx512(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    /// The pass for AVX-512, adding up with AVX-512 VNNI (`pass_avx512.S`).
+    fn adlplug_opl3_pass_avx512_vnni(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    /// The pass for AVX-512, looking the tables up by VBMI (`pass_avx512.S`).
+    fn adlplug_opl3_pass_avx512_vbmi(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    /// The pass for AVX-512 with VBMI and VNNI (`pass_avx512.S`).
+    fn adlplug_opl3_pass_avx512_vbmi_vnni(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+}
+
+/// The pass written by hand for a level that the processor has: made by
+/// [`Hand::new`] alone, which asks the processor, so that one that exists runs.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Hand {
+    /// The level's pass.
+    function: Function,
+}
+
+impl Hand {
+    /// The pass of a level, where it has one in assembly and the processor has
+    /// its extensions, as adlplug-cpu reports them: none for the portable
+    /// form's level, `v2`, and for the levels of another architecture.
+    pub(crate) fn new(level: Level) -> Option<Self> {
+        let function: Function = match level {
+            Level::Avx2 => adlplug_opl3_pass_avx2,
+            Level::Avx2Vnni => adlplug_opl3_pass_avx2_vnni,
+            Level::Avx512 => adlplug_opl3_pass_avx512,
+            Level::Avx512Vnni => adlplug_opl3_pass_avx512_vnni,
+            Level::Avx512Vbmi => adlplug_opl3_pass_avx512_vbmi,
+            Level::Avx512VbmiVnni => adlplug_opl3_pass_avx512_vbmi_vnni,
+            Level::V2 | Level::Neon => return None,
+        };
+        Features::detect().has(level).then_some(Self { function })
+    }
+
+    /// One pass over the lanes: the two samples, output A then output B.
+    pub(crate) fn run(self, lanes: &mut Lanes, inputs: &PassInputs) -> [i32; 2] {
+        let mut frame = [0; 2];
+        // SAFETY: a `Hand` is made only where the processor has the extensions
+        // of its level, as adlplug-cpu reports them, with the system saving the
+        // registers they use, and they are those its function executes: AVX2,
+        // with AVX-VNNI for the form that adds up with it; AVX-512 F, DQ, BW
+        // and VL with AVX2, and VNNI and VBMI for the forms named with them.
+        // The function follows the target's C convention, as declared (the
+        // module's documentation says how), returns with the stack as it found
+        // it and the upper halves of the vector registers zeroed, and keeps no
+        // pointer it is given. It reads and writes the lanes within `Lanes`, at
+        // the offsets of asm/pass.h, which pass.rs checks against the
+        // structure, with aligned loads and stores of 32 bytes, which its
+        // alignment of 64 allows; it reads `inputs` within `PassInputs`, whose
+        // alignment of 32 its aligned loads need, and through the pointers that
+        // `PassInputs::new`, the one maker of one, sets to the core's tables, as
+        // many entries of each as they hold (256 of 32 or 16 bits, or 512
+        // bytes), at indices of eight bits; and it writes the two values of
+        // `frame`.
+        unsafe { (self.function)(lanes, inputs, frame.as_mut_ptr()) };
+        frame
+    }
+}

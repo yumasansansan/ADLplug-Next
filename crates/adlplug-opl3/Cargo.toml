@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+
+[package]
+name = "adlplug-opl3"
+description = "ADLplug-Next OPL3, the project's own emulator core of the YMF262, which makes what the low-level core drawn from the chip's die makes, sample for sample: its pass over the slots in plain Rust, and written by hand in assembly for the levels of the processor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# Its own code is the workspace's, under the GPL version 3 or later; what follows
+# YMF262-LLE is under the GPL version 2 or later, and Nuked OPL3's counters under
+# the LGPL version 2.1 or later (src/ymf262.rs and the passes in assembly say
+# which parts). The crate as a whole is under all three.
+license = "GPL-3.0-or-later AND GPL-2.0-or-later AND LGPL-2.1-or-later"
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+adlplug-cpu = { path = "../adlplug-cpu" }
+
+[lints]
+workspace = true

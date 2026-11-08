@@ -5,3 +5,10 @@ version = 4
 [[package]]
 name = "adlplug-cpu"
 version = "0.1.0"
+
+[[package]]
+name = "adlplug-opl3"
+version = "0.1.0"
+dependencies = [
+ "adlplug-cpu",
+]

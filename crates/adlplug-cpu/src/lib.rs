@@ -25,9 +25,7 @@
 //! a set, and the level in effect is the most preferred of them. VBMI counts on
 //! Intel's processors alone: the forms with it look their tables up by bytes,
 //! which waits longer than a lookup by words on AMD's (Zen 4 and 5) and less on
-//! Intel's, as the pass for AVX-512 measured it. `ADLPLUG_ISA=<level>` holds the
-//! level to that one or a less preferred one, and `ADLPLUG_ISA=v2` to the
-//! portable form ([`Request`]).
+//! Intel's, as the pass for AVX-512 measured it.
 //!
 //! The extensions are those std's `is_x86_feature_detected!` reports, which
 //! asks the processor and the system: AVX-512 counts only where the system saves
@@ -37,7 +35,7 @@
 use std::fmt;
 
 /// A set of extensions of the instruction set that a form of a pass is written
-/// for, named as `ADLPLUG_ISA` names it.
+/// for.
 ///
 /// The levels of an architecture are declared from the least preferred to the
 /// most, so that the order of the type is the order of preference.
@@ -98,7 +96,7 @@ const ALL: [Level; 8] = [
 ];
 
 impl Level {
-    /// The level's name, as `ADLPLUG_ISA` takes it.
+    /// The level's name.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
@@ -239,75 +237,9 @@ fn is_intel() -> bool {
     &maker == b"GenuineIntel"
 }
 
-/// What the environment asks of the passes: a limit to their level
-/// (`ADLPLUG_ISA`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Request {
-    /// The most preferred level that may be taken; any, where there is none.
-    pub limit: Option<Level>,
-}
-
-/// A request that the environment makes and that cannot be met as it is.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Error {
-    /// `ADLPLUG_ISA` names no level.
-    UnknownLevel(String),
-    /// `ADLPLUG_ISA` names a level of another architecture.
-    OtherArchitecture(Level),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let names = LEVELS.iter().map(|level| level.name()).collect::<Vec<_>>().join(", ");
-        match self {
-            Self::UnknownLevel(name) => {
-                write!(formatter, "ADLPLUG_ISA={name} names no level; the levels are {names}")
-            }
-            Self::OtherArchitecture(level) => write!(
-                formatter,
-                "ADLPLUG_ISA={level} is a level of another architecture; the levels of this one are {names}"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl Request {
-    /// The request of `ADLPLUG_ISA`, of which an empty value is the same as
-    /// none.
-    ///
-    /// # Errors
-    ///
-    /// Where `ADLPLUG_ISA` names no level of this architecture.
-    pub fn from_environment() -> Result<Self, Error> {
-        let isa = std::env::var("ADLPLUG_ISA").ok();
-        Self::parse(isa.as_deref())
-    }
-
-    /// The request of a value of `ADLPLUG_ISA`.
-    ///
-    /// # Errors
-    ///
-    /// As [`Request::from_environment`].
-    pub fn parse(isa: Option<&str>) -> Result<Self, Error> {
-        let limit = match isa.map(str::trim).filter(|name| !name.is_empty()) {
-            None => None,
-            Some(name) => {
-                let level = Level::from_name(name).ok_or_else(|| Error::UnknownLevel(name.to_owned()))?;
-                if !level.is_native() {
-                    return Err(Error::OtherArchitecture(level));
-                }
-                Some(level)
-            }
-        };
-        Ok(Self { limit })
-    }
-}
-
 /// The level of the passes in effect: the most preferred level that the
-/// processor has and the request allows; none on an architecture without
-/// levels, where the passes are the portable form alone.
+/// processor has; none on an architecture without levels, where the passes are
+/// the portable form alone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Choice {
     /// The level the passes are taken at.
@@ -315,13 +247,10 @@ pub struct Choice {
 }
 
 impl Choice {
-    /// The choice for a processor's extensions and a request.
+    /// The choice for a processor's extensions.
     #[must_use]
-    pub fn new(features: Features, request: Request) -> Self {
-        let level = LEVELS
-            .iter()
-            .copied()
-            .rfind(|&level| features.has(level) && request.limit.is_none_or(|limit| level <= limit));
+    pub fn new(features: Features) -> Self {
+        let level = LEVELS.iter().copied().rfind(|&level| features.has(level));
         Self { level }
     }
 }
@@ -355,22 +284,6 @@ mod tests {
         assert_eq!(sorted, LEVELS);
     }
 
-    #[test]
-    fn a_request_names_a_level_of_this_architecture_or_fails() {
-        assert_eq!(Request::parse(None), Ok(Request::default()));
-        assert_eq!(Request::parse(Some(" ")), Ok(Request::default()));
-        assert_eq!(
-            Request::parse(Some("sse9")),
-            Err(Error::UnknownLevel("sse9".to_owned()))
-        );
-        for &level in LEVELS {
-            assert_eq!(Request::parse(Some(level.name())), Ok(Request { limit: Some(level) }));
-        }
-        for level in ALL.into_iter().filter(|level| !level.is_native()) {
-            assert_eq!(Request::parse(Some(level.name())), Err(Error::OtherArchitecture(level)));
-        }
-    }
-
     /// The extensions of a processor with every one of x86-64's, Intel's.
     #[cfg(target_arch = "x86_64")]
     fn everything() -> Features {
@@ -392,16 +305,13 @@ mod tests {
 
     #[test]
     #[cfg(target_arch = "x86_64")]
-    fn the_most_preferred_level_the_processor_has_and_the_request_allows() {
+    fn the_most_preferred_level_the_processor_has() {
         let all = everything();
-        assert_eq!(Choice::new(all, Request::default()).level, Some(Level::Avx512VbmiVnni));
-        for &limit in LEVELS {
-            assert_eq!(Choice::new(all, Request { limit: Some(limit) }).level, Some(limit));
-        }
+        assert_eq!(Choice::new(all).level, Some(Level::Avx512VbmiVnni));
 
         // VBMI on AMD's processors does not count, and VNNI without VBMI does.
         let amd = Features { intel: false, ..all };
-        assert_eq!(Choice::new(amd, Request::default()).level, Some(Level::Avx512Vnni));
+        assert_eq!(Choice::new(amd).level, Some(Level::Avx512Vnni));
         assert!(!amd.has(Level::Avx512Vbmi));
 
         // VBMI without VNNI, as Cannon Lake has it.
@@ -410,14 +320,11 @@ mod tests {
             avx_vnni: false,
             ..all
         };
-        assert_eq!(
-            Choice::new(cannon_lake, Request::default()).level,
-            Some(Level::Avx512Vbmi)
-        );
+        assert_eq!(Choice::new(cannon_lake).level, Some(Level::Avx512Vbmi));
 
         // AVX-VNNI without AVX-512, as Alder Lake has it.
         let alder_lake = Features { avx512f: false, ..all };
-        assert_eq!(Choice::new(alder_lake, Request::default()).level, Some(Level::Avx2Vnni));
+        assert_eq!(Choice::new(alder_lake).level, Some(Level::Avx2Vnni));
         assert_eq!(alder_lake.levels(), [Level::V2, Level::Avx2, Level::Avx2Vnni]);
 
         // Nothing but the baseline, and less than it.
@@ -426,11 +333,8 @@ mod tests {
             popcnt: true,
             ..Features::default()
         };
-        assert_eq!(Choice::new(baseline, Request::default()).level, Some(Level::V2));
-        assert_eq!(Choice::new(Features::default(), Request::default()).level, None);
-        assert_eq!(
-            Choice::new(Features::default(), Request::default()).to_string(),
-            "portable"
-        );
+        assert_eq!(Choice::new(baseline).level, Some(Level::V2));
+        assert_eq!(Choice::new(Features::default()).level, None);
+        assert_eq!(Choice::new(Features::default()).to_string(), "portable");
     }
 }
