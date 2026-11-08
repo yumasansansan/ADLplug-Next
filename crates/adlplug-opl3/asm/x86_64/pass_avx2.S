@@ -61,11 +61,6 @@
         .set KEY_ON, ADLPLUG_OPL3_KEY_ON
         .set LEVEL_OFFSET, ADLPLUG_OPL3_LEVEL_OFFSET
         .set TREMOLO_DEPTH, ADLPLUG_OPL3_TREMOLO_DEPTH
-        .set FNUM, ADLPLUG_OPL3_FNUM
-        .set BLOCK, ADLPLUG_OPL3_BLOCK
-        .set MULTIPLE, ADLPLUG_OPL3_MULTIPLE
-        .set VIBRATO, ADLPLUG_OPL3_VIBRATO
-        .set VIBRATO_DEPTH, ADLPLUG_OPL3_VIBRATO_DEPTH
         .set PHASE_SHIFT, ADLPLUG_OPL3_PHASE_SHIFT
         .set TURN_BIT, ADLPLUG_OPL3_TURN_BIT
         .set MUTE_BIT, ADLPLUG_OPL3_MUTE_BIT
@@ -88,6 +83,7 @@
         .set OUT_2, ADLPLUG_OPL3_OUT_2
         .set EG_OUT, ADLPLUG_OPL3_EG_OUT
         .set PHASE_OUT, ADLPLUG_OPL3_PHASE_OUT
+        .set INCREMENT, ADLPLUG_OPL3_INCREMENT
         .set LEVEL16, ADLPLUG_OPL3_LEVEL16
         .set STATE16, ADLPLUG_OPL3_STATE16
         .set CARRY_SOFT, ADLPLUG_OPL3_CARRY_SOFT             // a, then b, 64 bits each
@@ -103,10 +99,6 @@
         .set IN_HIGH_FROM_LESS_1, ADLPLUG_OPL3_IN_HIGH_FROM_LESS_1
         .set IN_ADD, ADLPLUG_OPL3_IN_ADD
         .set IN_TREMOLO, ADLPLUG_OPL3_IN_TREMOLO
-        .set IN_VIBRATO_SHIFT, ADLPLUG_OPL3_IN_VIBRATO_SHIFT
-        .set IN_VIBRATO_MASK, ADLPLUG_OPL3_IN_VIBRATO_MASK
-        .set IN_VIBRATO_SIGN, ADLPLUG_OPL3_IN_VIBRATO_SIGN
-        .set IN_VIBRATO_WRAP, ADLPLUG_OPL3_IN_VIBRATO_WRAP
         .set IN_EG_SECOND, ADLPLUG_OPL3_IN_EG_SECOND
         .set IN_RHYTHM_13, ADLPLUG_OPL3_IN_RHYTHM_13
         .set IN_RHYTHM_16, ADLPLUG_OPL3_IN_RHYTHM_16
@@ -351,32 +343,16 @@
         vpunpcklwd ymm3, ymm3, ymm3
 .endm
 
-// The phases of the eight lanes at byte \v (ymf262::phase_increment(),
-// phase_out() and next_phase()): what the operator reads of this pass's phase,
-// and the phase for the next pass, from nought on dokon (\restart).
+// The phases of the eight lanes at byte \v (ymf262::phase_out() and
+// next_phase()): what the operator reads of this pass's phase, and the phase for
+// the next pass, from nought on dokon (\restart), moved on by the lanes'
+// increments, which the core works out when what they come of changes.
 .macro PHASE v, restart
-        vmovdqa   ymm4, ymmword ptr [r8 + VIBRATO_DEPTH + \v]
-        vmovdqa   ymm5, ymmword ptr [r8 + FNUM + \v]
-        vpsllvd   ymm6, ymm5, ymm4
-        vpsrlvd   ymm6, ymm6, ymmword ptr [r9 + IN_VIBRATO_SHIFT]   // fnum shifted down as the depth asks
-        vpxor     ymm4, ymm4, ymmword ptr [rip + .Lc_1]
-        vmovdqa   ymm7, ymmword ptr [r9 + IN_VIBRATO_MASK]
-        vpsrlvd   ymm4, ymm7, ymm4                                    // the depth's bits
-        vpand     ymm6, ymm6, ymm4
-        vpsubd    ymm4, ymm15, ymmword ptr [r8 + VIBRATO + \v]
-        vpand     ymm6, ymm6, ymm4                                    // the vibrato's swing
-        vpsignd   ymm6, ymm6, ymmword ptr [r9 + IN_VIBRATO_SIGN]
-        vpaddd    ymm5, ymm5, ymm6
-        vpand     ymm5, ymm5, ymmword ptr [r9 + IN_VIBRATO_WRAP]    // the frequency number
-        vpsllvd   ymm5, ymm5, ymmword ptr [r8 + BLOCK + \v]
-        vpsrld    ymm5, ymm5, 1
-        vpmulld   ymm5, ymm5, ymmword ptr [r8 + MULTIPLE + \v]
-        vpsrld    ymm5, ymm5, 1                                       // the increment
         vmovdqa   ymm6, ymmword ptr [r8 + PHASE + \v]
         vpsrld    ymm7, ymm6, 9
         vmovdqa   ymmword ptr [r8 + PHASE_OUT + \v], ymm7
         vpandn    ymm6, \restart, ymm6
-        vpaddd    ymm6, ymm6, ymm5
+        vpaddd    ymm6, ymm6, ymmword ptr [r8 + INCREMENT + \v]
         vpand     ymm6, ymm6, ymmword ptr [rip + .Lc_0x7ffff]
         vmovdqa   ymmword ptr [r8 + PHASE + \v], ymm6
 .endm

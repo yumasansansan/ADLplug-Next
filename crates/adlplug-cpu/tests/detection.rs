@@ -9,7 +9,8 @@
 //! The processor the tests run on: it has what the build is compiled for, the
 //! baseline and, for a build for x86-64-v3 or v4, that tier, and the level
 //! chosen for it is the most preferred one it has. The levels and the tiers it
-//! has are printed, for the log of a run on a machine one does not have at hand.
+//! has, and its maker on x86-64, are printed, for the log of a run on a machine
+//! one does not have at hand.
 
 use adlplug_cpu::{Choice, Features, LEVELS, Tier};
 
@@ -18,11 +19,18 @@ fn the_level_chosen_is_the_most_preferred_the_processor_has() {
     let features = Features::detect();
     let levels = features.levels();
     let choice = Choice::new(features);
-    let tiers = [Tier::Baseline, Tier::V3, Tier::V4]
+    let tiers = [Tier::Baseline, Tier::V3, Tier::V4, Tier::Sve, Tier::Sve2]
         .into_iter()
         .filter(|&tier| features.has_tier(tier));
+    let maker = if features.intel {
+        "Intel"
+    } else if features.amd {
+        "AMD"
+    } else {
+        "another, or none asked"
+    };
     println!(
-        "levels of this processor: {}; chosen: {choice}; tiers: {}",
+        "levels of this processor: {}; chosen: {choice}; tiers: {}; maker: {maker}",
         levels.iter().map(ToString::to_string).collect::<Vec<_>>().join(", "),
         tiers.map(|tier| tier.to_string()).collect::<Vec<_>>().join(", ")
     );

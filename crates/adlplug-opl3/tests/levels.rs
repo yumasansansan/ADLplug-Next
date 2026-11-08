@@ -134,6 +134,9 @@ fn a_core_takes_the_level_it_is_made_at() {
         Level::Avx512Vbmi,
         Level::Avx512VbmiVnni,
         Level::Neon,
+        Level::NeonSha3,
+        Level::Sve,
+        Level::Sve2,
     ];
     for level in all {
         let core = Core::at(level);

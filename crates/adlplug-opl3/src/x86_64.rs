@@ -109,7 +109,7 @@ impl Hand {
             Level::Avx512Vnni => adlplug_opl3_pass_avx512_vnni,
             Level::Avx512Vbmi => adlplug_opl3_pass_avx512_vbmi,
             Level::Avx512VbmiVnni => adlplug_opl3_pass_avx512_vbmi_vnni,
-            Level::V2 | Level::Neon => return None,
+            Level::V2 | Level::Neon | Level::NeonSha3 | Level::Sve | Level::Sve2 => return None,
         };
         let features = Features::detect();
         features.has(level).then(|| Self {
@@ -142,7 +142,7 @@ impl Hand {
                 // they are those that `generate_v3` is compiled for.
                 unsafe { generate_v3(core, self) }
             }
-            Tier::Baseline => core.generate_by_hand(self),
+            Tier::Baseline | Tier::Sve | Tier::Sve2 => core.generate_by_hand(self),
         }
     }
 

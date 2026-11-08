@@ -15,10 +15,12 @@
 //! On x86-64 they are `v2`, the baseline the build is compiled for, which has
 //! the portable form alone; `avx2`; `avx2-vnni`, AVX2 with the VEX form of VNNI;
 //! and four of AVX-512: its foundation (F, DQ, BW and VL), with VNNI, with VBMI,
-//! and with both. On AArch64 there is `neon`, its baseline, NEON (Advanced
+//! and with both. On AArch64 they are `neon`, its baseline, NEON (Advanced
 //! SIMD), which every AArch64 processor has, Apple's and those that Windows and
-//! Linux run on alike, and whose pass is written by hand; the levels of further
-//! extensions come with passes written for them.
+//! Linux run on alike; `neon-sha3`, NEON and SHA3 (`FEAT_SHA3`, with
+//! `FEAT_SHA512`, which std reports together), whose BCAX the pass takes; `sve`,
+//! NEON and SVE, whose gathers and shifts the pass takes; and `sve2`, SVE and
+//! SVE2, whose BCAX and BSL1N it takes besides.
 //!
 //! A processor has some of the levels, and not always every less preferred
 //! one: Intel has made processors with AVX-512 VNNI and no VBMI (Cascade Lake,
@@ -28,18 +30,23 @@
 //! which waits longer than a lookup by words on AMD's (Zen 4 and 5) and less on
 //! Intel's, as the pass for AVX-512 measured it.
 //!
-//! A [`Tier`] is one of the levels of x86-64 that its psABI defines, x86-64-v2,
-//! v3 and v4, called tiers here to keep them apart from the levels of the
-//! passes. The builds are for the baseline, x86-64-v2 on x86-64, and the code in
-//! Rust around a pass written by hand -- the writes the core takes in, what its
-//! passes go by, its counters -- is compiled twice more, for x86-64-v3 and for
-//! x86-64-v4, so that it takes the wider vectors too; a core takes the form for
-//! the tier of its level's processors ([`Level::tier`]), or for the most below
-//! it that the processor has ([`Features::tier`]).
+//! A [`Tier`] is what the code in Rust around a pass written by hand -- the
+//! writes the core takes in, what its passes go by, its counters -- is compiled
+//! for: on x86-64 one of the levels that its psABI defines, x86-64-v2, v3 and
+//! v4, called tiers here to keep them apart from the levels of the passes; on
+//! AArch64 its baseline, SVE or SVE2. The builds are for the baseline,
+//! x86-64-v2 on x86-64, and that code is compiled once more for each of the
+//! other tiers of the architecture, so that it takes the wider vectors and the
+//! further instructions too; a core takes the form for the tier of its level's
+//! processors ([`Level::tier`]), or for the most below it that the processor
+//! has ([`Features::tier`]).
 //!
-//! The extensions are those std's `is_x86_feature_detected!` reports, which
-//! asks the processor and the system: AVX and AVX-512 count only where the
-//! system saves their registers.
+//! The extensions are those std's `is_x86_feature_detected!` and
+//! `is_aarch64_feature_detected!` report, which ask the processor and the
+//! system: AVX, AVX-512 and SVE count only where the system saves their
+//! registers. On x86-64 the processor's maker is asked as well, by CPUID's
+//! first leaf, for what the passes do otherwise on Intel's processors and on
+//! AMD's.
 #![forbid(unsafe_code)]
 
 use std::fmt;
@@ -71,6 +78,14 @@ pub enum Level {
     /// `neon`: AArch64's baseline, NEON (Advanced SIMD), which every AArch64
     /// processor has.
     Neon,
+    /// `neon-sha3`: NEON and SHA3, whose BCAX the pass takes: Apple's
+    /// processors from the M1 on, Neoverse N2, V1 and after, and others.
+    NeonSha3,
+    /// `sve`: NEON and SVE, with the system saving its registers, whose gathers
+    /// look the tables up.
+    Sve,
+    /// `sve2`: SVE and SVE2.
+    Sve2,
 }
 
 /// The levels of the architecture ADLplug-Next is built for, the least
@@ -88,14 +103,14 @@ pub const LEVELS: &[Level] = &[
 /// The levels of the architecture ADLplug-Next is built for, the least
 /// preferred first.
 #[cfg(target_arch = "aarch64")]
-pub const LEVELS: &[Level] = &[Level::Neon];
+pub const LEVELS: &[Level] = &[Level::Neon, Level::NeonSha3, Level::Sve, Level::Sve2];
 /// The levels of the architecture ADLplug-Next is built for: none, on an
 /// architecture whose passes are the portable form alone.
 #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
 pub const LEVELS: &[Level] = &[];
 
 /// Every level, of every architecture.
-const ALL: [Level; 8] = [
+const ALL: [Level; 11] = [
     Level::V2,
     Level::Avx2,
     Level::Avx2Vnni,
@@ -104,6 +119,9 @@ const ALL: [Level; 8] = [
     Level::Avx512Vbmi,
     Level::Avx512VbmiVnni,
     Level::Neon,
+    Level::NeonSha3,
+    Level::Sve,
+    Level::Sve2,
 ];
 
 impl Level {
@@ -119,6 +137,9 @@ impl Level {
             Self::Avx512Vbmi => "avx512-vbmi",
             Self::Avx512VbmiVnni => "avx512-vbmi-vnni",
             Self::Neon => "neon",
+            Self::NeonSha3 => "neon-sha3",
+            Self::Sve => "sve",
+            Self::Sve2 => "sve2",
         }
     }
 
@@ -135,16 +156,19 @@ impl Level {
     }
 
     /// The tier of the processors that the level's pass is written for, as they
-    /// are made: the baseline for `v2` and `neon`, x86-64-v3 for the levels of
-    /// AVX2, and x86-64-v4 for those of AVX-512. A processor may still lack
-    /// some of the tier's extensions, as a virtual machine may report them;
-    /// [`Features::tier`] then takes the most it has.
+    /// are made: the baseline for `v2`, `neon` and `neon-sha3`, x86-64-v3 for
+    /// the levels of AVX2, x86-64-v4 for those of AVX-512, SVE for `sve` and
+    /// SVE2 for `sve2`. A processor may still lack some of the tier's
+    /// extensions, as a virtual machine may report them; [`Features::tier`]
+    /// then takes the most it has.
     #[must_use]
     pub const fn tier(self) -> Tier {
         match self {
-            Self::V2 | Self::Neon => Tier::Baseline,
+            Self::V2 | Self::Neon | Self::NeonSha3 => Tier::Baseline,
             Self::Avx2 | Self::Avx2Vnni => Tier::V3,
             Self::Avx512 | Self::Avx512Vnni | Self::Avx512Vbmi | Self::Avx512VbmiVnni => Tier::V4,
+            Self::Sve => Tier::Sve,
+            Self::Sve2 => Tier::Sve2,
         }
     }
 }
@@ -155,8 +179,10 @@ impl fmt::Display for Level {
     }
 }
 
-/// A tier of x86-64, one of the levels its psABI defines: what the code around a
-/// pass is compiled for. The order of the type is the order of preference.
+/// What the code around a pass is compiled for: on x86-64 one of the levels its
+/// psABI defines, on AArch64 its baseline, SVE or SVE2. The tiers of an
+/// architecture are declared from the least preferred to the most, so that the
+/// order of the type is the order of preference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tier {
     /// The baseline the build is compiled for: x86-64-v2 on x86-64 as the
@@ -167,10 +193,14 @@ pub enum Tier {
     V3,
     /// x86-64-v4: x86-64-v3, and AVX-512 F, BW, CD, DQ and VL.
     V4,
+    /// AArch64 with SVE.
+    Sve,
+    /// AArch64 with SVE and SVE2.
+    Sve2,
 }
 
 /// The tiers, the least preferred first.
-const TIERS: [Tier; 3] = [Tier::Baseline, Tier::V3, Tier::V4];
+const TIERS: [Tier; 5] = [Tier::Baseline, Tier::V3, Tier::V4, Tier::Sve, Tier::Sve2];
 
 impl Tier {
     /// The tier's name.
@@ -180,6 +210,8 @@ impl Tier {
             Self::Baseline => "baseline",
             Self::V3 => "x86-64-v3",
             Self::V4 => "x86-64-v4",
+            Self::Sve => "sve",
+            Self::Sve2 => "sve2",
         }
     }
 }
@@ -237,8 +269,18 @@ pub struct Features {
     /// Whether the processor is one of Intel's: what CPUID's first leaf names
     /// as its maker is `GenuineIntel`.
     pub intel: bool,
+    /// Whether the processor is one of AMD's: what CPUID's first leaf names as
+    /// its maker is `AuthenticAMD`.
+    pub amd: bool,
     /// NEON (Advanced SIMD).
     pub neon: bool,
+    /// SHA3 and SHA512 (`FEAT_SHA3`, `FEAT_SHA512`), which std reports
+    /// together.
+    pub sha3: bool,
+    /// SVE, with the system saving its registers.
+    pub sve: bool,
+    /// SVE2.
+    pub sve2: bool,
 }
 
 impl Features {
@@ -267,7 +309,8 @@ impl Features {
                 avx512vl: is_x86_feature_detected!("avx512vl"),
                 avx512_vnni: is_x86_feature_detected!("avx512vnni"),
                 avx512_vbmi: is_x86_feature_detected!("avx512vbmi"),
-                intel: is_intel(),
+                intel: maker() == *b"GenuineIntel",
+                amd: maker() == *b"AuthenticAMD",
                 ..Self::default()
             }
         }
@@ -275,6 +318,9 @@ impl Features {
         {
             Self {
                 neon: std::arch::is_aarch64_feature_detected!("neon"),
+                sha3: std::arch::is_aarch64_feature_detected!("sha3"),
+                sve: std::arch::is_aarch64_feature_detected!("sve"),
+                sve2: std::arch::is_aarch64_feature_detected!("sve2"),
                 ..Self::default()
             }
         }
@@ -298,6 +344,9 @@ impl Features {
             Level::Avx512Vbmi => avx512 && vbmi,
             Level::Avx512VbmiVnni => avx512 && vbmi && self.avx512_vnni,
             Level::Neon => self.neon,
+            Level::NeonSha3 => self.neon && self.sha3,
+            Level::Sve => self.neon && self.sve,
+            Level::Sve2 => self.neon && self.sve && self.sve2,
         }
     }
 
@@ -318,6 +367,8 @@ impl Features {
             Tier::Baseline => true,
             Tier::V3 => v3,
             Tier::V4 => v4,
+            Tier::Sve => self.sve,
+            Tier::Sve2 => self.sve && self.sve2,
         }
     }
 
@@ -333,16 +384,16 @@ impl Features {
     }
 }
 
-/// Whether CPUID's first leaf names Intel as the processor's maker: the twelve
-/// bytes of EBX, EDX and ECX, in that order, read `GenuineIntel`.
+/// The processor's maker, as CPUID's first leaf names it: the twelve bytes of
+/// EBX, EDX and ECX, in that order, such as `GenuineIntel` and `AuthenticAMD`.
 #[cfg(target_arch = "x86_64")]
-fn is_intel() -> bool {
+fn maker() -> [u8; 12] {
     let leaf = std::arch::x86_64::__cpuid(0);
     let mut maker = [0_u8; 12];
     maker[..4].copy_from_slice(&leaf.ebx.to_le_bytes());
     maker[4..8].copy_from_slice(&leaf.edx.to_le_bytes());
     maker[8..].copy_from_slice(&leaf.ecx.to_le_bytes());
-    &maker == b"GenuineIntel"
+    maker
 }
 
 /// The level of the passes in effect: the most preferred level that the
@@ -415,7 +466,11 @@ mod tests {
             avx512_vnni: true,
             avx512_vbmi: true,
             intel: true,
+            amd: false,
             neon: false,
+            sha3: false,
+            sve: false,
+            sve2: false,
         }
     }
 
@@ -467,13 +522,52 @@ mod tests {
                 Tier::V4,
                 Tier::V4,
                 Tier::V4,
-                Tier::Baseline
+                Tier::Baseline,
+                Tier::Baseline,
+                Tier::Sve,
+                Tier::Sve2
             ]
         );
         let mut sorted = TIERS.to_vec();
         sorted.sort_unstable();
         assert_eq!(sorted, TIERS);
         assert_eq!(Tier::V4.to_string(), "x86-64-v4");
+        assert_eq!(Tier::Sve2.to_string(), "sve2");
+    }
+
+    #[test]
+    #[cfg(target_arch = "aarch64")]
+    fn the_levels_and_tiers_of_aarch64() {
+        let neon = Features {
+            neon: true,
+            ..Features::default()
+        };
+        assert_eq!(Choice::new(neon).level, Some(Level::Neon));
+        assert_eq!(neon.tier(Level::Neon), Tier::Baseline);
+
+        // Apple's processors: SHA3 and no SVE.
+        let apple = Features { sha3: true, ..neon };
+        assert_eq!(apple.levels(), [Level::Neon, Level::NeonSha3]);
+        assert_eq!(Choice::new(apple).level, Some(Level::NeonSha3));
+
+        // SVE without SHA3, and SVE2 with it, as the Neoverse N2 has it.
+        let sve = Features { sve: true, ..neon };
+        assert_eq!(sve.levels(), [Level::Neon, Level::Sve]);
+        assert_eq!(sve.tier(Level::Sve), Tier::Sve);
+        let n2 = Features {
+            sha3: true,
+            sve2: true,
+            ..sve
+        };
+        assert_eq!(n2.levels(), LEVELS);
+        assert_eq!(Choice::new(n2).level, Some(Level::Sve2));
+        assert_eq!(n2.tier(Level::Sve2), Tier::Sve2);
+
+        // SVE2 reported without SVE, which no processor is made with: neither
+        // counts, and the code around the pass of sve2 takes the baseline.
+        let odd = Features { sve2: true, ..neon };
+        assert!(!odd.has(Level::Sve2));
+        assert_eq!(odd.tier(Level::Sve2), Tier::Baseline);
     }
 
     #[test]
