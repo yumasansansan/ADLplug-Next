@@ -61,6 +61,8 @@
 use adlplug_cpu::{Features, Level, Tier};
 
 use crate::core::Core;
+#[cfg(feature = "experiment")]
+use crate::core::experiment::Part;
 use crate::pass::{Lanes, PassInputs};
 
 /// A pass written by hand: the lanes, what the pass goes by besides, and the
@@ -146,21 +148,20 @@ impl Hand {
         }
     }
 
-    /// What the slots read, the routing and what the passes go by worked out
-    /// once (`Core::rederive`), in the form compiled for the tier, for the
-    /// experiments' measurements alone.
+    /// A part of a sample (`Core::experiment_part`), in the form compiled for
+    /// the tier, for the experiments' measurements alone.
     #[cfg(feature = "experiment")]
-    pub(crate) fn rederive(self, core: &mut Core) {
+    pub(crate) fn part(self, core: &mut Core, part: Part) {
         match self.tier {
             Tier::V4 => {
-                // SAFETY: as in `generate`, for `rederive_v4`.
-                unsafe { rederive_v4(core) }
+                // SAFETY: as in `generate`, for `part_v4`.
+                unsafe { part_v4(core, part) }
             }
             Tier::V3 => {
-                // SAFETY: as in `generate`, for `rederive_v3`.
-                unsafe { rederive_v3(core) }
+                // SAFETY: as in `generate`, for `part_v3`.
+                unsafe { part_v3(core, part) }
             }
-            Tier::Baseline | Tier::Sve | Tier::Sve2 => core.rederive(),
+            Tier::Baseline | Tier::Sve | Tier::Sve2 => core.experiment_part(part),
         }
     }
 
@@ -211,18 +212,20 @@ fn generate_v4(core: &mut Core, hand: Hand) -> [i32; 2] {
     core.generate_by_hand(hand)
 }
 
-/// `Core::rederive` compiled for x86-64-v3, for the experiments' measurements.
+/// `Core::experiment_part` compiled for x86-64-v3, for the experiments'
+/// measurements.
 #[cfg(feature = "experiment")]
 #[target_feature(enable = "avx,avx2,bmi1,bmi2,f16c,fma,lzcnt,movbe")]
-fn rederive_v3(core: &mut Core) {
-    core.rederive();
+fn part_v3(core: &mut Core, part: Part) {
+    core.experiment_part(part);
 }
 
-/// `Core::rederive` compiled for x86-64-v4, for the experiments' measurements.
+/// `Core::experiment_part` compiled for x86-64-v4, for the experiments'
+/// measurements.
 #[cfg(feature = "experiment")]
 #[target_feature(enable = "avx,avx2,bmi1,bmi2,f16c,fma,lzcnt,movbe,avx512f,avx512bw,avx512cd,avx512dq,avx512vl")]
-fn rederive_v4(core: &mut Core) {
-    core.rederive();
+fn part_v4(core: &mut Core, part: Part) {
+    core.experiment_part(part);
 }
 
 /// Eight additions of `step`, each waiting for the one before, `rounds` times,

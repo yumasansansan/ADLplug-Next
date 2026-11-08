@@ -43,6 +43,8 @@
 use adlplug_cpu::{Features, Level, Tier};
 
 use crate::core::Core;
+#[cfg(feature = "experiment")]
+use crate::core::experiment::Part;
 use crate::pass::{Lanes, PassInputs};
 
 /// A pass written by hand: the lanes, what the pass goes by besides, and the
@@ -125,21 +127,20 @@ impl Hand {
         }
     }
 
-    /// What the slots read, the routing and what the passes go by worked out
-    /// once (`Core::rederive`), in the form compiled for the tier, for the
-    /// experiments' measurements alone.
+    /// A part of a sample (`Core::experiment_part`), in the form compiled for
+    /// the tier, for the experiments' measurements alone.
     #[cfg(feature = "experiment")]
-    pub(crate) fn rederive(self, core: &mut Core) {
+    pub(crate) fn part(self, core: &mut Core, part: Part) {
         match self.tier {
-            Tier::Sve => {
-                // SAFETY: as in `generate`, for `rederive_sve`.
-                unsafe { rederive_sve(core) }
-            }
             Tier::Sve2 => {
-                // SAFETY: as in `generate`, for `rederive_sve2`.
-                unsafe { rederive_sve2(core) }
+                // SAFETY: as in `generate`, for `part_sve2`.
+                unsafe { part_sve2(core, part) }
             }
-            Tier::Baseline | Tier::V3 | Tier::V4 => core.rederive(),
+            Tier::Sve => {
+                // SAFETY: as in `generate`, for `part_sve`.
+                unsafe { part_sve(core, part) }
+            }
+            Tier::Baseline | Tier::V3 | Tier::V4 => core.experiment_part(part),
         }
     }
 
@@ -184,18 +185,20 @@ fn generate_sve2(core: &mut Core, hand: Hand) -> [i32; 2] {
     core.generate_by_hand(hand)
 }
 
-/// `Core::rederive` compiled for SVE, for the experiments' measurements.
+/// `Core::experiment_part` compiled for SVE, for the experiments'
+/// measurements.
 #[cfg(feature = "experiment")]
 #[target_feature(enable = "sve")]
-fn rederive_sve(core: &mut Core) {
-    core.rederive();
+fn part_sve(core: &mut Core, part: Part) {
+    core.experiment_part(part);
 }
 
-/// `Core::rederive` compiled for SVE2, for the experiments' measurements.
+/// `Core::experiment_part` compiled for SVE2, for the experiments'
+/// measurements.
 #[cfg(feature = "experiment")]
 #[target_feature(enable = "sve2")]
-fn rederive_sve2(core: &mut Core) {
-    core.rederive();
+fn part_sve2(core: &mut Core, part: Part) {
+    core.experiment_part(part);
 }
 
 /// Eight additions of `step`, each waiting for the one before, `rounds` times,

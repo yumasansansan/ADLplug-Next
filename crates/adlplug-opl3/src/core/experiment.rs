@@ -10,140 +10,172 @@
 //! code, for rust-speed's experiments: built with the feature `experiment`
 //! alone, and no part of the core's interface beside it. A core is measured as
 //! it stands, after the writes its caller gave it: its pass over and over on
-//! its lanes, for a pass written by hand as for the portable pass; and what the
-//! slots read, the routing and what the passes go by worked out over and over
-//! (`Core::rederive`), in the form of the core's tier, with each way of writing
-//! derive that works the whole of it out each time. A measurement is the
-//! nanoseconds of one, the best of its rounds. The lanes go on from pass to
-//! pass as the measurements leave them, so that a core measured makes no
-//! samples worth hearing afterwards.
+//! its lanes, for a pass written by hand as for the portable pass; whole
+//! samples with no write to take, over and over, as [`Core::generate`] makes
+//! them; and the parts of the writes' handling over and over (what the slots
+//! read, the routing, derive), in the form of the core's tier
+//! ([`Core::experiment_part`]). A measurement is the nanoseconds of one, the
+//! best of its rounds. The lanes go on from pass to pass as the measurements
+//! leave them, so that a core measured makes no samples worth hearing
+//! afterwards.
 //!
 //! The other ways of writing the core's code, which a core takes in place of
 //! its own ([`Core::experiment_take`]), so that its samples can be checked
-//! against those of a core without them: on x86-64, `derive plain` and `derive
-//! split`, `Core::derive` and `Core::derive_split` whatever the CPU's vendor;
-//! and everywhere `derive lanes`, derive for the lanes alone whose inputs have
-//! changed since derive last read them ([`Core::derive_lanes`]). That one does
-//! nothing when derive is asked again without a change, so it is measured by
-//! whole samples with writes, as the profile program measures them, and not
-//! by the writes' handling over and over.
+//! against those of a core without them: on x86-64, `derive split` and
+//! `derive lanes`, `Core::derive_split` and derive for the changed lanes at
+//! every tier, which the core takes at x86-64-v4 and below it; and everywhere
+//! `latch groups`, what the slots read worked out again for the groups of
+//! registers alone that a write has changed ([`Core::relatch_groups`]), and
+//! the routing only when one of those it reads has; and `derive groups`, that
+//! with derive comparing what it reads of those groups alone
+//! ([`Core::changed_lanes_by_groups`]) and working the soft panning out only
+//! when a lane has changed, by the changed lanes at every tier. These do
+//! nothing when they are asked again with no write being read, so they are
+//! measured by whole samples with writes, as the profile program measures
+//! them.
 
 use std::hint::black_box;
 use std::time::Instant;
 
-use super::{Core, DRUM_KEY_BIT, FIRST_LATE_ON_A, FIRST_LATE_ON_B, LANE_13, LANE_14, LANE_16, LANE_17, LANES, Pass};
+use super::{
+    CHAIN_FIRST_TIME, CHAIN_READ_TIME, CHANNEL_FIRST_TIME, Core, LANE_13, LANE_14, LANE_16, LANE_17, LANES, Pass,
+    READS_CHIP, READS_FEEDBACK, READS_OWN, RHYTHM_AFTER, RHYTHM_BEFORE, RHYTHM_KEYS_TIME, SLOT_TIME, SLOT_TIMES, latch,
+};
 #[cfg(target_arch = "aarch64")]
 use crate::aarch64::chain;
 use crate::pass::PassInputs;
 #[cfg(target_arch = "x86_64")]
 use crate::x86_64::chain;
-use crate::ymf262;
 
-/// The other ways of writing the core's own code that a core takes in place of
-/// its own: none taken, the default.
-#[derive(Debug, Clone, Default)]
-pub(super) struct Experiment {
-    /// `Core::derive_lanes` in place of `Core::derive`.
-    pub(super) derive_lanes: bool,
-    /// The next derive works every lane out, as the first one does.
-    derive_all: bool,
-    /// What derive last read for each lane.
-    derived: Box<Inputs>,
-}
+/// The registers of the slots, from 0x20, 0x40, 0x60, 0x80 and 0xe0, as the
+/// slots read them (`l20` to `le0`).
+const SLOTS: u8 = 1;
+/// The channels' frequencies, blocks and keys, from 0xa0 and 0xb0 (`lfnum`,
+/// `lblock`, `lkey`).
+const FREQUENCIES: u8 = 2;
+/// The channels' outputs, connections and feedbacks, from 0xc0 (`lpan`, `lcon`,
+/// `lfirst_con`, `lsecond_con`, `lfb`).
+const CHANNELS: u8 = 4;
+/// The registers of the whole chip that the slots read, from 0x08 and 0xbd
+/// (`lnts`, `ldrum_keys`, `ldam`, `ldvb`, `lrhythm` and the readings of the
+/// rhythm before and after).
+const CHIP: u8 = 8;
+/// The register of the chains of four, 0x104 (`lfour_op`).
+const CHAINS: u8 = 16;
+/// Every group.
+const ALL: u8 = SLOTS | FREQUENCIES | CHANNELS | CHIP | CHAINS;
+/// The groups the routing reads: the connections, the chains and the rhythm.
+const ROUTING: u8 = CHANNELS | CHIP | CHAINS;
 
-/// What derive reads for each lane, besides the constants of the lanes: the
-/// fields of the core that it reads by the lane.
-#[derive(Debug, Clone)]
-struct Inputs {
-    /// `Core::l20` as derive last read it.
-    l20: [u8; LANES],
-    /// `Core::l40` as derive last read it.
-    l40: [u8; LANES],
-    /// `Core::l60` as derive last read it.
-    l60: [u8; LANES],
-    /// `Core::l80` as derive last read it.
-    l80: [u8; LANES],
-    /// `Core::le0` as derive last read it.
-    le0: [u8; LANES],
-    /// `Core::lfnum` as derive last read it.
-    lfnum: [u16; LANES],
-    /// `Core::lblock` as derive last read it.
-    lblock: [u8; LANES],
-    /// `Core::lkey` as derive last read it.
-    lkey: [u8; LANES],
-    /// `Core::lpan` as derive last read it.
-    lpan: [u8; LANES],
-    /// `Core::lfb` as derive last read it.
-    lfb: [u8; LANES],
-    /// `Core::lnts` as derive last read it.
-    lnts: [u8; LANES],
-    /// `Core::ldrum_keys` as derive last read it.
-    ldrum_keys: [u8; LANES],
-    /// `Core::ldam` as derive last read it.
-    ldam: [u8; LANES],
-    /// `Core::ldvb` as derive last read it.
-    ldvb: [u8; LANES],
-    /// `Core::lrhythm_keys` as derive last read it.
-    lrhythm_keys: [u8; LANES],
-    /// `Core::modulation` as derive last read it.
-    modulation: [u8; LANES],
-    /// `Core::weight` as derive last read it.
-    weight: [u8; LANES],
-}
-
-impl Default for Inputs {
-    fn default() -> Self {
-        Self {
-            l20: [0; LANES],
-            l40: [0; LANES],
-            l60: [0; LANES],
-            l80: [0; LANES],
-            le0: [0; LANES],
-            lfnum: [0; LANES],
-            lblock: [0; LANES],
-            lkey: [0; LANES],
-            lpan: [0; LANES],
-            lfb: [0; LANES],
-            lnts: [0; LANES],
-            ldrum_keys: [0; LANES],
-            ldam: [0; LANES],
-            ldvb: [0; LANES],
-            lrhythm_keys: [0; LANES],
-            modulation: [0; LANES],
-            weight: [0; LANES],
-        }
+/// The groups of registers that a write to an address may change, as
+/// `Core::apply` decodes it, more of them rather than fewer: the registers
+/// below 0x20, those of the whole chip, all of them, as the chip then writes
+/// the last data written from 0x20 on once more, and a write to the register
+/// of the chains spreads every channel.
+const fn groups_of(address: u16) -> u8 {
+    match address.to_le_bytes()[0] {
+        0x00..=0x1f => ALL,
+        0xbd => CHIP,
+        0xa0..=0xbf => FREQUENCIES,
+        0xc0..=0xcf => CHANNELS,
+        0xd0..=0xdf => 0,
+        _ => SLOTS,
     }
 }
 
-/// The variant of x86-64 that takes `Core::derive` whatever the vendor.
-#[cfg(target_arch = "x86_64")]
-const DERIVE_PLAIN: &str = "derive plain";
-/// The variant of x86-64 that takes `Core::derive_split` whatever the vendor.
+/// The other ways of writing the core's own code that a core takes in place of
+/// its own, none taken by default, and what they keep.
+#[derive(Debug, Clone, Default)]
+pub(super) struct Experiment {
+    /// `Core::relatch_groups` in place of `Core::relatch`, and the routing
+    /// worked out only when a group it reads has changed.
+    pub(super) latch_groups: bool,
+    /// derive for the changed lanes, comparing what it reads of the groups
+    /// written alone (`Core::changed_lanes_by_groups`), and the soft panning
+    /// worked out only when a lane has changed.
+    pub(super) derive_groups: bool,
+    /// The groups of the registers written since the slots last read every
+    /// write, whatever the variant, so that it holds them when it is taken.
+    written: u8,
+}
+
+impl Experiment {
+    /// Every group to be read afresh, as a reset has them.
+    pub(super) const fn latch_all(&mut self) {
+        self.written = ALL;
+    }
+
+    /// The slots have read every write.
+    pub(super) const fn all_read(&mut self) {
+        self.written = 0;
+    }
+
+    /// A write to an address reaches the chip's registers.
+    pub(super) const fn written(&mut self, address: u16) {
+        self.written |= groups_of(address);
+    }
+
+    /// Whether the variant `latch groups` leaves the routing as it is: no
+    /// group that it reads has been written since the slots last read every
+    /// write.
+    pub(super) const fn routing_unchanged(&self) -> bool {
+        self.latch_groups && (self.written & ROUTING) == 0
+    }
+}
+
+/// A part of a sample that [`Core::experiment_part`] works out.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Part {
+    /// What the slots read, the routing and derive, as the writes' handling
+    /// takes them: asked again and again, derive for the changed lanes finds
+    /// none changed, where the split derive works every lane out.
+    Writes,
+    /// What the slots read.
+    Relatch,
+    /// The routing.
+    Routing,
+    /// derive for every lane, as after a reset.
+    DeriveAll,
+}
+
+/// The variant of x86-64 that takes `Core::derive_split` at every tier.
 #[cfg(target_arch = "x86_64")]
 const DERIVE_SPLIT: &str = "derive split";
-/// The variant that takes `Core::derive_lanes`.
+/// The variant of x86-64 that takes derive for the changed lanes at every tier.
+#[cfg(target_arch = "x86_64")]
 const DERIVE_LANES: &str = "derive lanes";
+/// The variant that takes `Core::relatch_groups`.
+const LATCH_GROUPS: &str = "latch groups";
+/// The variant that takes `Core::relatch_groups` and
+/// `Core::changed_lanes_by_groups`, with derive for the changed lanes at every
+/// tier.
+const DERIVE_GROUPS: &str = "derive groups";
 
 impl Core {
     /// What each part of a sample takes, in nanoseconds, the best of `rounds`
-    /// rounds of `iterations` each: `pass`, the pass alone; `writes`, the
-    /// writes' handling alone; and on x86-64 `writes, derive plain` and
-    /// `writes, derive split`, the writes' handling with `Core::derive` and with
-    /// `Core::derive_split`.
+    /// rounds of `iterations` each, by the names that [`Core::experiment_run`]
+    /// takes: `pass`, the pass alone; `quiet`, a whole sample with no write to
+    /// take; `writes`, the writes' handling with no lane changed for derive;
+    /// `relatch`, `routing` and `derive-all`, its parts; and on x86-64
+    /// `derive-all-split` and `derive-all-lanes`, derive for every lane by
+    /// `Core::derive_split` and lane by lane.
     #[must_use]
     pub fn experiment_parts(&mut self, iterations: u32, rounds: u32) -> Vec<(String, f64)> {
-        #[cfg_attr(target_arch = "aarch64", expect(unused_mut, reason = "x86-64 adds its variants"))]
-        let mut parts = vec![
-            ("pass".to_owned(), best(rounds, || self.time_pass(iterations))),
-            ("writes".to_owned(), best(rounds, || self.time_writes(iterations))),
-        ];
+        #[cfg_attr(
+            target_arch = "aarch64",
+            expect(unused_mut, reason = "x86-64 adds its forms of derive")
+        )]
+        let mut parts: Vec<(String, f64)> = ["pass", "quiet", "writes", "relatch", "routing", "derive-all"]
+            .into_iter()
+            .map(|part| (part.to_owned(), best(rounds, || self.time(part, iterations))))
+            .collect();
         #[cfg(target_arch = "x86_64")]
         {
             let own = self.split_derive;
-            for (name, split) in [(DERIVE_PLAIN, false), (DERIVE_SPLIT, true)] {
+            for (name, split) in [("derive-all-split", true), ("derive-all-lanes", false)] {
                 self.split_derive = split;
-                let ns = best(rounds, || self.time_writes(iterations));
-                parts.push((format!("writes, {name}"), ns));
+                let ns = best(rounds, || self.time("derive-all", iterations));
+                parts.push((name.to_owned(), ns));
             }
             self.split_derive = own;
         }
@@ -151,14 +183,14 @@ impl Core {
     }
 
     /// The names of the other ways of writing the core's own code that the
-    /// experiments try: on x86-64 the plain and the split derive, and
-    /// everywhere derive for the lanes alone whose inputs changed.
+    /// experiments try: on x86-64 the split derive and derive for the changed
+    /// lanes at every tier, and everywhere `latch groups` and `derive groups`.
     #[must_use]
     pub fn experiment_variants(&self) -> Vec<&'static str> {
         #[cfg(target_arch = "x86_64")]
-        let names = vec![DERIVE_PLAIN, DERIVE_SPLIT, DERIVE_LANES];
+        let names = vec![DERIVE_SPLIT, DERIVE_LANES, LATCH_GROUPS, DERIVE_GROUPS];
         #[cfg(not(target_arch = "x86_64"))]
-        let names = vec![DERIVE_LANES];
+        let names = vec![LATCH_GROUPS, DERIVE_GROUPS];
         names
     }
 
@@ -167,12 +199,17 @@ impl Core {
     pub fn experiment_take(&mut self, variant: &str) -> bool {
         match variant {
             #[cfg(target_arch = "x86_64")]
-            DERIVE_PLAIN => self.split_derive = false,
-            #[cfg(target_arch = "x86_64")]
             DERIVE_SPLIT => self.split_derive = true,
-            DERIVE_LANES => {
-                self.experiment.derive_lanes = true;
-                self.experiment.derive_all = true;
+            #[cfg(target_arch = "x86_64")]
+            DERIVE_LANES => self.split_derive = false,
+            LATCH_GROUPS => self.experiment.latch_groups = true,
+            DERIVE_GROUPS => {
+                self.experiment.latch_groups = true;
+                self.experiment.derive_groups = true;
+                #[cfg(target_arch = "x86_64")]
+                {
+                    self.split_derive = false;
+                }
             }
             _ => return false,
         }
@@ -180,21 +217,13 @@ impl Core {
     }
 
     /// One part over and over, `iterations` times, for a profiler such as
-    /// perf: `pass` or `writes`, as [`Core::experiment_parts`] names them.
+    /// perf, by the names that [`Core::experiment_parts`] gives.
     ///
     /// # Panics
     ///
     /// For any other part.
     pub fn experiment_run(&mut self, part: &str, iterations: u32) {
-        match part {
-            "pass" => {
-                self.time_pass(iterations);
-            }
-            "writes" => {
-                self.time_writes(iterations);
-            }
-            _ => panic!("no part {part}: pass or writes"),
-        }
+        self.time(part, iterations);
     }
 
     /// The CPU's clock as it runs now, in gigahertz: the additions a nanosecond
@@ -213,112 +242,101 @@ impl Core {
         f64::from(ADDITIONS) / ns
     }
 
-    /// derive for the lanes alone whose inputs have changed since derive last
-    /// read them, or for every lane the first time: what the loop of
-    /// `Core::derive` works out for a lane, for those lanes, the soft panning
-    /// for all, and the increments marked when a lane changed. A write changes
-    /// what one lane reads, or a channel's lanes, or by the registers of the
-    /// whole chip every lane: over the writes of the tests' eight seeds, a
-    /// derive found 1.2 of the 48 lanes changed on average, and none in half
-    /// of the derives. What they read is checked in a loop of its own, without
-    /// short-circuits, which vectorizes.
+    /// A part of a sample, as [`Part`] names them, in the form the core's code
+    /// takes inline: each tier's form calls it (`Hand::part`).
     #[inline(always)]
     #[expect(
         clippy::inline_always,
-        reason = "it belongs in each tier's form of a sample, as derive does"
+        reason = "each tier's form of it is compiled whole for that tier, as a sample's is"
     )]
-    pub(super) fn derive_lanes(&mut self) {
-        let dirty = self.changed_lanes();
-        let mut any = false;
-        let lanes = &mut *self.lanes;
-        let was = &mut *self.experiment.derived;
-        for (lane, &drum_key_bit) in DRUM_KEY_BIT.iter().enumerate() {
-            if !dirty[lane] {
-                continue;
+    pub(crate) fn experiment_part(&mut self, part: Part) {
+        match part {
+            Part::Writes => {
+                self.relatch();
+                self.refresh_routing();
+                self.derive();
             }
-            any = true;
-            let s = lanes.lane_slot[lane];
-            let r20 = u32::from(self.l20[lane]);
-            let r40 = u32::from(self.l40[lane]);
-            let r60 = u32::from(self.l60[lane]);
-            let r80 = u32::from(self.l80[lane]);
-            let fnum = u32::from(self.lfnum[lane]);
-            let block = u32::from(self.lblock[lane]);
-            let key = self.lkey[lane] != 0;
-            let rhythm_keys = self.lrhythm_keys[lane] != 0;
-            let dam = self.ldam[lane] != 0;
-            let drum_keys = drum_key_bit & self.ldrum_keys[lane];
-            let ksr = ymf262::key_scale(fnum, block, self.lnts[lane] != 0, ((r20 >> 4) & 1) != 0);
-            let ar = r60 >> 4;
-            let dr = r60 & 15;
-            let rr = r80 & 15;
-            let egt = (r20 >> 5) & 1;
-            let by_state = [ar, dr, if egt != 0 { 0 } else { rr }, rr];
-            let mut rates = 0;
-            for (st, &rate) in by_state.iter().enumerate() {
-                rates |= (ymf262::scaled_rate(rate, ksr) | if rate != 0 { 16 } else { 0 }) << (8 * st);
+            Part::Relatch => self.relatch(),
+            Part::Routing => self.refresh_routing(),
+            Part::DeriveAll => {
+                self.derive_all = true;
+                self.derive();
             }
-            lanes.rates[lane] = rates;
-            lanes.key_scale[lane] = ksr.cast_signed();
-            lanes.key_scale_low[lane] = (ksr & 3).cast_signed();
-            let sl = r80 >> 4;
-            let sustain = sl.cast_signed();
-            lanes.sustain[lane] = if sl == 15 { 31 } else { sustain };
-            lanes.key_on[lane] = i32::from(key || (rhythm_keys && drum_keys != 0));
-            lanes.level_offset[lane] = ymf262::level_offset(fnum, block, r40 >> 6, r40 & 63).cast_signed();
-            let depth = if dam { 2 } else { 1 };
-            lanes.tremolo_depth[lane] = if (r20 & 0x80) != 0 { depth } else { 0 };
-            lanes.fnum_v[lane] = fnum;
-            lanes.block_v[lane] = block;
-            lanes.multiple_v[lane] = ymf262::MULTIPLE[usize::from(self.l20[lane] & 15)];
-            lanes.vibrato[lane] = (r20 >> 6) & 1;
-            lanes.vibrato_depth[lane] = u32::from(self.ldvb[lane]);
-            let wave = ymf262::wave(u32::from(self.le0[lane]));
-            lanes.phase_shift[lane] = wave.phase_shift;
-            lanes.turn_bit[lane] = wave.turn_bit;
-            lanes.mute_bit[lane] = wave.mute_bit;
-            lanes.sign_bit[lane] = wave.sign_bit;
-            lanes.square[lane] = wave.square;
-            lanes.sawtooth[lane] = wave.sawtooth;
-            let fb = i32::from(self.lfb[lane]);
-            let by = i32::from(self.modulation[lane]);
-            lanes.modulated_by[lane] = if by == 2 && fb == 0 { 0 } else { by };
-            let shift = 9 - fb;
-            lanes.feedback_shift[lane] = if fb != 0 { shift } else { 0 };
-            let w = i32::from(self.weight[lane]);
-            let pan = self.lpan[lane];
-            let on_a = (pan & 1) != 0;
-            let on_b = (pan & 2) != 0;
-            lanes.a_now[lane] = if on_a && s < FIRST_LATE_ON_A { w } else { 0 };
-            lanes.a_late[lane] = if on_a && s >= FIRST_LATE_ON_A { w } else { 0 };
-            lanes.b_now[lane] = if on_b && s < FIRST_LATE_ON_B { w } else { 0 };
-            lanes.b_late[lane] = if on_b && s >= FIRST_LATE_ON_B { w } else { 0 };
-            was.l20[lane] = self.l20[lane];
-            was.l40[lane] = self.l40[lane];
-            was.l60[lane] = self.l60[lane];
-            was.l80[lane] = self.l80[lane];
-            was.le0[lane] = self.le0[lane];
-            was.lfnum[lane] = self.lfnum[lane];
-            was.lblock[lane] = self.lblock[lane];
-            was.lkey[lane] = self.lkey[lane];
-            was.lpan[lane] = self.lpan[lane];
-            was.lfb[lane] = self.lfb[lane];
-            was.lnts[lane] = self.lnts[lane];
-            was.ldrum_keys[lane] = self.ldrum_keys[lane];
-            was.ldam[lane] = self.ldam[lane];
-            was.ldvb[lane] = self.ldvb[lane];
-            was.lrhythm_keys[lane] = self.lrhythm_keys[lane];
-            was.modulation[lane] = self.modulation[lane];
-            was.weight[lane] = self.weight[lane];
-        }
-        self.derive_soft_pan();
-        if any {
-            self.lanes.increments_for = u8::MAX;
         }
     }
 
-    /// The lanes whose inputs have changed since derive last read them, or
-    /// every lane after the variant is taken.
+    /// What the slots read, worked out again for the groups of registers alone
+    /// that a write has changed since the slots last read every write
+    /// (`Experiment::written`), with what `Core::relatch` takes for each: the
+    /// registers of a group no write has changed are what the slots read of
+    /// them already. Most writes change one group, the registers of a slot or
+    /// a channel's frequency, block and key, of three to eight lanes' reading.
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "its loops over the lanes belong in each tier's form of a sample, as relatch's do"
+    )]
+    pub(super) fn relatch_groups(&mut self) {
+        let written = self.experiment.written;
+        let since = SLOT_TIMES * self.landed_age - self.landed_slot_time;
+        if (written & SLOTS) != 0 {
+            for (i, &s) in SLOT_TIME.iter().enumerate() {
+                let own = since + s + READS_OWN >= 0;
+                self.l20[i] = latch(own, self.r20[i], self.l20[i]);
+                self.l40[i] = latch(own, self.r40[i], self.l40[i]);
+                self.l60[i] = latch(own, self.r60[i], self.l60[i]);
+                self.l80[i] = latch(own, self.r80[i], self.l80[i]);
+                self.le0[i] = latch(own, self.re0[i], self.le0[i]);
+            }
+        }
+        if (written & FREQUENCIES) != 0 {
+            for (i, &s) in SLOT_TIME.iter().enumerate() {
+                let own = since + s + READS_OWN >= 0;
+                self.lfnum[i] = latch(own, self.ch_fnum[i], self.lfnum[i]);
+                self.lblock[i] = latch(own, self.ch_block[i], self.lblock[i]);
+                self.lkey[i] = latch(own, self.ch_key[i], self.lkey[i]);
+            }
+        }
+        if (written & CHANNELS) != 0 {
+            for i in 0..LANES {
+                let s = SLOT_TIME[i];
+                let own = since + s + READS_OWN >= 0;
+                let channel_first = since + CHANNEL_FIRST_TIME[i] + READS_OWN >= 0;
+                let chain_first = since + CHAIN_FIRST_TIME[i] + READS_OWN >= 0;
+                self.lpan[i] = latch(own, self.ch_pan[i], self.lpan[i]);
+                self.lcon[i] = latch(channel_first, self.ch_con[i], self.lcon[i]);
+                self.lfirst_con[i] = latch(chain_first, self.first_con[i], self.lfirst_con[i]);
+                self.lsecond_con[i] = latch(chain_first, self.second_con[i], self.lsecond_con[i]);
+                self.lfb[i] = latch(since + s + READS_FEEDBACK >= 0, self.ch_fb[i], self.lfb[i]);
+            }
+        }
+        if (written & CHIP) != 0 {
+            for (i, &s) in SLOT_TIME.iter().enumerate() {
+                let chip = since + s + READS_CHIP >= 0;
+                self.lnts[i] = latch(chip, self.nts, self.lnts[i]);
+                self.ldrum_keys[i] = latch(chip, self.drum_keys, self.ldrum_keys[i]);
+                self.ldam[i] = latch(chip, self.dam, self.ldam[i]);
+                self.ldvb[i] = latch(chip, self.dvb, self.ldvb[i]);
+                self.lrhythm[i] = latch(chip, self.rhythm, self.lrhythm[i]);
+                self.lrhythm_keys[i] = latch(since + RHYTHM_KEYS_TIME >= 0, self.rhythm, self.lrhythm_keys[i]);
+                self.lrhythm_before[i] = latch(since + s + RHYTHM_BEFORE >= 0, self.rhythm, self.lrhythm_before[i]);
+                self.lrhythm_after[i] = latch(since + s + RHYTHM_AFTER >= 0, self.rhythm, self.lrhythm_after[i]);
+            }
+        }
+        if (written & CHAINS) != 0 {
+            for (i, &t) in CHAIN_READ_TIME.iter().enumerate() {
+                self.lfour_op[i] = latch(since + t >= 0, self.four_op, self.lfour_op[i]);
+            }
+        }
+    }
+
+    /// The lanes whose inputs may have changed since derive last read them, or
+    /// every lane after a reset, by the groups of registers written since the
+    /// slots last read every write (`Experiment::written`): what derive reads
+    /// of a group no write has changed is what it read before, and the routing
+    /// changes what it makes (`modulation`, `weight`) only when it has been
+    /// worked out again, after a write to a group it reads. Each group's
+    /// comparisons are a loop of their own, without short-circuits.
     #[inline(always)]
     #[expect(
         clippy::inline_always,
@@ -326,34 +344,53 @@ impl Core {
     )]
     #[expect(
         clippy::needless_bitwise_bool,
-        reason = "the comparisons without short-circuits are a loop that vectorizes"
+        reason = "the comparisons without short-circuits are loops that vectorize"
     )]
-    fn changed_lanes(&mut self) -> [bool; LANES] {
-        let all = self.experiment.derive_all;
-        self.experiment.derive_all = false;
-        let mut dirty = [false; LANES];
-        let was = &*self.experiment.derived;
-        for (lane, dirty) in dirty.iter_mut().enumerate() {
-            *dirty = all
-                | (self.l20[lane] != was.l20[lane])
-                | (self.l40[lane] != was.l40[lane])
-                | (self.l60[lane] != was.l60[lane])
-                | (self.l80[lane] != was.l80[lane])
-                | (self.le0[lane] != was.le0[lane])
-                | (self.lfnum[lane] != was.lfnum[lane])
-                | (self.lblock[lane] != was.lblock[lane])
-                | (self.lkey[lane] != was.lkey[lane])
-                | (self.lpan[lane] != was.lpan[lane])
-                | (self.lfb[lane] != was.lfb[lane])
-                | (self.lnts[lane] != was.lnts[lane])
-                | (self.ldrum_keys[lane] != was.ldrum_keys[lane])
-                | (self.ldam[lane] != was.ldam[lane])
-                | (self.ldvb[lane] != was.ldvb[lane])
-                | (self.lrhythm_keys[lane] != was.lrhythm_keys[lane])
-                | (self.modulation[lane] != was.modulation[lane])
-                | (self.weight[lane] != was.weight[lane]);
+    pub(super) fn changed_lanes_by_groups(&mut self) -> [bool; LANES] {
+        let all = self.derive_all;
+        self.derive_all = false;
+        if all {
+            return [true; LANES];
         }
-        dirty
+        let written = self.experiment.written;
+        let was = &self.derived;
+        let mut changed = [false; LANES];
+        if (written & SLOTS) != 0 {
+            for (lane, changed) in changed.iter_mut().enumerate() {
+                *changed |= (self.l20[lane] != was.l20[lane])
+                    | (self.l40[lane] != was.l40[lane])
+                    | (self.l60[lane] != was.l60[lane])
+                    | (self.l80[lane] != was.l80[lane])
+                    | (self.le0[lane] != was.le0[lane]);
+            }
+        }
+        if (written & FREQUENCIES) != 0 {
+            for (lane, changed) in changed.iter_mut().enumerate() {
+                *changed |= (self.lfnum[lane] != was.lfnum[lane])
+                    | (self.lblock[lane] != was.lblock[lane])
+                    | (self.lkey[lane] != was.lkey[lane]);
+            }
+        }
+        if (written & CHANNELS) != 0 {
+            for (lane, changed) in changed.iter_mut().enumerate() {
+                *changed |= (self.lpan[lane] != was.lpan[lane]) | (self.lfb[lane] != was.lfb[lane]);
+            }
+        }
+        if (written & CHIP) != 0 {
+            for (lane, changed) in changed.iter_mut().enumerate() {
+                *changed |= (self.lnts[lane] != was.lnts[lane])
+                    | (self.ldrum_keys[lane] != was.ldrum_keys[lane])
+                    | (self.ldam[lane] != was.ldam[lane])
+                    | (self.ldvb[lane] != was.ldvb[lane])
+                    | (self.lrhythm_keys[lane] != was.lrhythm_keys[lane]);
+            }
+        }
+        if (written & ROUTING) != 0 {
+            for (lane, changed) in changed.iter_mut().enumerate() {
+                *changed |= (self.modulation[lane] != was.modulation[lane]) | (self.weight[lane] != was.weight[lane]);
+            }
+        }
+        changed
     }
 
     /// What the pass written by hand goes by besides the lanes, as the core's
@@ -366,6 +403,43 @@ impl Core {
         ];
         let hold = [self.hold_history[LANE_13], self.hold_history[LANE_14]];
         PassInputs::new(&self.lanes.counters, self.lanes.noise, rhythm, hold, self.soft_pan)
+    }
+
+    /// The nanoseconds of a part, run `iterations` times: `pass` by the core's
+    /// own pass, written by hand or portable; `quiet` by `Core::generate`, once
+    /// the writes have all been taken; the others in the form of the core's
+    /// tier. The lanes go out of sight after each, so that none is left out as
+    /// the same as the one before.
+    ///
+    /// # Panics
+    ///
+    /// For a part of another name.
+    fn time(&mut self, part: &str, iterations: u32) -> f64 {
+        let part = match part {
+            "pass" => return self.time_pass(iterations),
+            "quiet" => return self.time_quiet(iterations),
+            "writes" => Part::Writes,
+            "relatch" => Part::Relatch,
+            "routing" => Part::Routing,
+            "derive-all" => Part::DeriveAll,
+            _ => panic!("no part {part}: pass, quiet, writes, relatch, routing or derive-all"),
+        };
+        let start = Instant::now();
+        match self.pass {
+            Pass::Hand(hand) => {
+                for _ in 0..iterations {
+                    hand.part(self, part);
+                    black_box(&mut self.lanes);
+                }
+            }
+            Pass::Portable => {
+                for _ in 0..iterations {
+                    self.experiment_part(part);
+                    black_box(&mut self.lanes);
+                }
+            }
+        }
+        start.elapsed().as_secs_f64() * 1e9 / f64::from(iterations)
     }
 
     /// The nanoseconds of a pass, run `iterations` times: by the core's own
@@ -396,25 +470,20 @@ impl Core {
         start.elapsed().as_secs_f64() * 1e9 / f64::from(iterations)
     }
 
-    /// The nanoseconds of the writes' handling, run `iterations` times in the
-    /// form of the core's tier. The lanes go out of sight after each, so that
-    /// none is left out as the same as the one before.
-    fn time_writes(&mut self, iterations: u32) -> f64 {
-        let start = Instant::now();
-        match self.pass {
-            Pass::Hand(hand) => {
-                for _ in 0..iterations {
-                    hand.rederive(self);
-                    black_box(&mut self.lanes);
-                }
-            }
-            Pass::Portable => {
-                for _ in 0..iterations {
-                    self.rederive();
-                    black_box(&mut self.lanes);
-                }
-            }
+    /// The nanoseconds of a whole sample with no write to take, run
+    /// `iterations` times by [`Core::generate`]: the samples first go on
+    /// until the queue is empty and the slots have read every write.
+    fn time_quiet(&mut self, iterations: u32) -> f64 {
+        while self.queue_count > 0 || self.landing_next.due || self.landed_age >= 0 {
+            black_box(self.generate());
         }
+        let start = Instant::now();
+        let mut sum = 0_i64;
+        for _ in 0..iterations {
+            let [a, b] = self.generate();
+            sum += i64::from(a) + i64::from(b);
+        }
+        black_box(sum);
         start.elapsed().as_secs_f64() * 1e9 / f64::from(iterations)
     }
 }

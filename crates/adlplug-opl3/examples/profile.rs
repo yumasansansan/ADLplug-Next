@@ -18,11 +18,13 @@
 //! soft panning; the run fails at its end if one does not. Then the parts: each
 //! core given the writes of seed 1 for 20000 samples, without soft panning and
 //! with the soft panning of those tests (the levels marked `soft`), and then
-//! measured as it stands, the pass alone and the writes' handling alone, with
-//! each way of writing derive that works the whole of it out, the best of five
-//! rounds of 20000. Last, whole samples with their writes, by the core's own
-//! code and by each variant, as the timing program measures them: the writes
-//! of the eight seeds and their soft panning, the best of five runs.
+//! measured as it stands, the best of five rounds of 20000 of each part
+//! (`Core::experiment_parts`): the pass alone, a whole sample with no write to
+//! take, and the writes' handling and its parts, what the slots read, the
+//! routing and derive for every lane, by each way of writing derive on
+//! x86-64. Last, whole samples with their writes, by the core's own code and
+//! by each variant, as the timing program measures them: the writes of the
+//! eight seeds and their soft panning, the best of five runs.
 //!
 //!     cargo run --release --locked -p adlplug-opl3 --features experiment --example profile
 //!
@@ -31,10 +33,10 @@
 //! clock alone; with `check`, the check of the variants alone, which fails if
 //! one makes other samples. With `run <level> <part> <iterations>
 //! [<variant>]`, a core of that level (or `portable`) given the same writes
-//! without soft panning, taking the variant where one is named, runs one part,
-//! `pass` or `writes`, that many times, for a profiler such as perf; and with
-//! the part `samples`, cores of the level make that many whole samples with
-//! their writes, as the last table measures them.
+//! without soft panning, taking the variant where one is named, runs one part
+//! of those, by its name in the table of the parts, that many times, for a
+//! profiler such as perf; and with the part `samples`, cores of the level make
+//! that many whole samples with their writes, as the last table measures them.
 
 #[path = "../tests/common/mod.rs"]
 mod common;
