@@ -67,9 +67,9 @@ download() {  # archive asset-id file sha256
   fi
   local actual
   if command -v sha256sum > /dev/null; then
-    actual=$(sha256sum "$2")
+    actual=$(sha256sum "$3")
   else
-    actual=$(shasum -a 256 "$2")
+    actual=$(shasum -a 256 "$3")
   fi
   actual=${actual%% *}
   if [ "$actual" != "$4" ]; then

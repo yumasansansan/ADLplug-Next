@@ -10,28 +10,29 @@
 #   ci/perf.sh <profile> <report>
 #
 # For rust-speed's experiments, on Linux under GitHub Actions (ci/speed.sh runs
-# it): perf, from Ubuntu's archive, over each part of a sample at every level
-# the processor has, by the profile program (<profile>, built from
-# crates/adlplug-opl3/examples/profile.rs) pinned to processor 0. perf stat
-# counts what the processor did, by its own counters where the virtual machine
-# lets the system read them and by the system's clock where it does not, with
-# the metrics of the first level of the top-down method where perf has them for
-# the processor; perf record samples where the pass spends its time, and perf
-# annotate tells it instruction by instruction. The report (<report>, the
-# summary of the run) takes the counts, the functions that took the most of the
-# samples and the forty instructions that took the most; the log takes the
-# whole of each annotation. What the runner does not allow is said and left
-# out: nothing here fails the job.
+# it): where the parts of a sample spend their time, by perf from Ubuntu's
+# archive and the profile program (<profile>, a build of
+# crates/adlplug-opl3/examples/profile.rs with the line tables, which
+# ci/speed.sh makes for it), pinned to processor 0. GitHub's runners give their
+# virtual machines no counters of the processor (perf stat finds cycles not
+# supported, and the events of the top-down method missing, on AMD's, Intel's
+# and Arm's alike), so perf samples by the system's clock: perf record over the
+# pass and over the writes' handling at every level the processor has, and over
+# the pass of the variant all where the level has one. The report (<report>,
+# the summary of the run) takes the functions that took the most of the
+# samples, the forty instructions of the first of them that took the most, and
+# for the writes' handling the lines of the source that took the most; the log
+# takes the whole of each annotation. Whether the counters are there is asked
+# once, so that a runner that gets them shows it. What the runner does not
+# allow is said and left out: nothing here fails the job.
 set -uo pipefail
 
 profile=$1
 report=$2
 work=$(mktemp -d)
 pin=(taskset -c 0)
-# Enough iterations for a second or so of counting, and for some ten thousand
-# samples of a part at the rate below.
-stat_iterations=1000000
-record_iterations=4000000
+# Enough iterations for some ten thousand samples of a part at the rate below.
+iterations=4000000
 
 # perf: Ubuntu's linux-perf where the archive has it, the tools of the
 # runner's kernel otherwise.
@@ -65,60 +66,43 @@ done < <("$profile" levels)
   echo '```'
   sudo perf version
   echo "perf_event_paranoid: $(cat /proc/sys/kernel/perf_event_paranoid)"
-  echo "the processor's events that perf knows: $(sudo perf list --raw-dump hw cache 2> /dev/null | wc -w)"
+  echo "the processor's counters, as perf stat finds cycles and instructions:"
+  sudo perf stat -x, -e cycles,instructions -- true 2>&1 | cut -d, -f1,3
   echo '```'
 } >> "$report"
 
-for level in "${levels[@]}"; do
-  for part in pass writes; do
-    out=$work/stat-$level-$part.txt
-    {
-      echo "== perf stat -d: $level, $part"
-      sudo perf stat -d -- "${pin[@]}" "$profile" run "$level" "$part" "$stat_iterations" 2>&1
-      echo "== perf stat -M TopdownL1: $level, $part"
-      sudo perf stat -M TopdownL1 -- "${pin[@]}" "$profile" run "$level" "$part" "$stat_iterations" 2>&1 ||
-        echo "(perf has no TopdownL1 here)"
-    } > "$out"
-    cat "$out"
+# perf record over one part, perf report and perf annotate of it: the level,
+# the part, the variant or nothing.
+record() {
+  local level=$1 part=$2 variant=${3:-}
+  local name="$level, $part${variant:+, the variant $variant}"
+  local data=$work/record.data
+  if ! sudo perf record -q -F 10000 -o "$data" -- \
+    "${pin[@]}" "$profile" run "$level" "$part" "$iterations" ${variant:+"$variant"} > "$work/record.log" 2>&1; then
     {
       echo
-      echo "##### perf stat: $level, $part"
-      echo
-      echo '```'
-      # The counts and the metrics, without the lines perf frames them with.
-      grep -vE '^\s*$|Performance counter stats|seconds (time elapsed|user|sys)' "$out"
-      echo '```'
-    } >> "$report"
-  done
-done
-
-for level in "${levels[@]}"; do
-  data=$work/record-$level.data
-  if ! sudo perf record -q -F 10000 -o "$data" -- "${pin[@]}" "$profile" run "$level" pass "$record_iterations" \
-    > "$work/record.log" 2>&1; then
-    {
-      echo
-      echo "perf record failed for $level:"
+      echo "perf record failed for $name:"
       echo
       echo '```'
       tail -n 5 "$work/record.log"
       echo '```'
     } >> "$report"
-    continue
+    return
   fi
-  functions=$work/functions-$level.txt
+  local functions=$work/functions.txt
   sudo perf report -i "$data" --stdio --no-children --sort symbol --percent-limit 0.5 2> /dev/null |
     grep -vE '^\s*(#|$)' > "$functions"
-  # The function that took the most of the samples: the pass written by hand at
-  # a level of its own, the core's own functions for the portable pass.
-  symbol=$(awk 'NR == 1 { $1 = ""; $2 = ""; sub(/^ +/, ""); print; exit }' "$functions")
-  annotation=$work/annotate-$level.txt
+  # The function that took the most of the samples, the third field of its
+  # line: its share, its kind ([.]) and its name, which has no spaces.
+  local symbol
+  symbol=$(awk 'NR == 1 { print $3; exit }' "$functions")
+  local annotation=$work/annotation.txt
   sudo perf annotate -i "$data" --stdio --no-source "$symbol" > "$annotation" 2> /dev/null
-  echo "== perf annotate: $level, pass, $symbol"
+  echo "== perf annotate: $name: $symbol"
   cat "$annotation"
   {
     echo
-    echo "##### perf record: $level, pass"
+    echo "##### perf record: $name"
     echo
     echo '```'
     cat "$functions"
@@ -127,7 +111,23 @@ for level in "${levels[@]}"; do
     awk -F ':' '$1 ~ /^ *[0-9]+\.[0-9]+ *$/ && $1 + 0 > 0 {
       percent = $1 + 0; sub(/^[^:]*: */, ""); printf "%6.2f  %s\n", percent, $0
     }' "$annotation" | sort -rn | head -n 40
+    if [ "$part" = writes ]; then
+      echo
+      echo "the lines of the source that took the most of the samples:"
+      sudo perf report -i "$data" --stdio --no-children --sort srcline --percent-limit 1 2> /dev/null |
+        grep -vE '^\s*(#|$)' | head -n 40
+    fi
     echo '```'
   } >> "$report"
+}
+
+for level in "${levels[@]}"; do
+  record "$level" pass
+  record "$level" writes
+  # grep reads to the end, so that the profile program is never cut off, which
+  # under pipefail would fail the test.
+  if "$profile" variants "$level" | grep -x all > /dev/null; then
+    record "$level" pass all
+  fi
 done
 sudo rm -rf "$work"

@@ -24,12 +24,13 @@
 //!
 //!     cargo run --release --locked -p adlplug-opl3 --features experiment --example profile
 //!
-//! With `levels`, the levels the processor has, one to a line; with `clock`,
-//! the clock alone; with `check`, the check of the variants alone, which fails
-//! if one makes other samples.
-//! With `run <level> <part> <iterations>`, a core of that level (or `portable`)
-//! given the same writes without soft panning runs one part, `pass` or
-//! `writes`, that many times, for a profiler such as perf.
+//! With `levels`, the levels the processor has, one to a line; with `variants
+//! <level>`, the variants of the level's pass, likewise; with `clock`, the
+//! clock alone; with `check`, the check of the variants alone, which fails if
+//! one makes other samples. With `run <level> <part> <iterations>
+//! [<variant>]`, a core of that level (or `portable`) given the same writes
+//! without soft panning, taking the variant where one is named, runs one part,
+//! `pass` or `writes`, that many times, for a profiler such as perf.
 
 #[path = "../tests/common/mod.rs"]
 mod common;
@@ -117,14 +118,24 @@ fn check_variants() -> Vec<String> {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.as_slice() {
-        [run, level, part, iterations] if run == "run" => {
+        [run, level, part, iterations, variant @ ..] if run == "run" && variant.len() <= 1 => {
             let mut core = warmed(level, false).expect("a level the processor has, or portable");
+            if let Some(variant) = variant.first() {
+                assert!(core.experiment_take(variant), "a variant of {level}: {variant}");
+            }
             core.experiment_run(part, iterations.parse().expect("a count of iterations"));
             return;
         }
         [levels] if levels == "levels" => {
             for level in Features::detect().levels() {
                 println!("{level}");
+            }
+            return;
+        }
+        [variants, level] if variants == "variants" => {
+            let core = core(level).expect("a level the processor has, or portable");
+            for variant in core.experiment_variants() {
+                println!("{variant}");
             }
             return;
         }
@@ -146,7 +157,10 @@ fn main() {
         }
         [] => {}
         _ => {
-            panic!("profile, profile levels, profile clock, profile check, or profile run <level> <part> <iterations>")
+            panic!(
+                "profile, profile levels, profile variants <level>, profile clock, profile check, \
+                 or profile run <level> <part> <iterations> [<variant>]"
+            )
         }
     }
     let ghz = Core::experiment_clock();

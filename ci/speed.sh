@@ -20,7 +20,7 @@
 # alone, the pass without one of its parts each, and the other ways of writing
 # the pass that this branch tries, each checked to make the samples of its
 # level. On Linux the runs are pinned to one processor (taskset), elsewhere they
-# are not, and under GitHub Actions perf counts and samples them as well
+# are not, and under GitHub Actions perf samples where they spend their time
 # (ci/perf.sh). Under GitHub Actions all of it goes into the summary of the run
 # as well.
 set -euo pipefail
@@ -97,8 +97,15 @@ for round in 1 2; do
   } >> "$report"
 done
 
+# perf takes a build of its own, with the line tables, by which it tells the
+# lines of the source. Here, with Rust 1.99.1, they left the code of the core's
+# functions as it was on x86-64 and AArch64, and changed main's and some of the
+# standard library's; the measurements above are of a build without them all
+# the same.
 if [ "$(uname -s)" = Linux ] && [ -n "${GITHUB_ACTIONS:-}" ]; then
-  bash ci/perf.sh "$profile" "$report"
+  CARGO_TARGET_DIR=target/perf CARGO_PROFILE_RELEASE_DEBUG=line-tables-only \
+    cargo build --release --locked -p adlplug-opl3 --features experiment --example profile
+  bash ci/perf.sh target/perf/release/examples/profile "$report"
 fi
 
 cat "$report"
