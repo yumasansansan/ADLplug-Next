@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# ADLplug-Next in Rust, as a Cargo workspace: every crate is under crates/, and
+# none is fetched from crates.io (cargo runs with --locked, and Cargo.lock names
+# the workspace's own crates only). What the operating systems offer is declared
+# by hand, and the formats the plugins read are parsed by hand.
+#
+# The lints are those of JPEG-Unround and KIRAL: missing documentation, missing
+# Debug and needless qualifications are errors, clippy's pedantic group too, as
+# is any conversion by `as`, and every unsafe block holds one operation and says
+# why it is sound. Crates that need no unsafe code forbid it in their roots.
+
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/yumasansansan/ADLplug-Next"
+publish = false
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "forbid"
+missing_debug_implementations = "deny"
+missing_docs = "deny"
+unused_qualifications = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+cast_lossless = "deny"
+as_conversions = "deny"
+
+# The release build as fast as the code can be made: the whole program
+# optimised together, in one unit, as the C++ version was with LTO at its
+# highest level. Nothing is traded for size.
+[profile.release]
+lto = "fat"
+codegen-units = 1

@@ -7,70 +7,31 @@
 # GNU General Public License, version 3 or any later version
 # (LICENSES/GPL-3.0-or-later.txt).
 #
-# Sets up a GitHub Actions runner to build and test ADLplug-Next: Clang, LLD and the
-# LLVM tools of one pinned version, pluginval, and on Linux the development
-# packages that JUCE needs, the tools for the tests and lv2lint. In the
-# AlmaLinux container where CI builds the rpm packages, it sets up LLVM and
-# the development packages alone, as root. The tools go
-# first on PATH for the later steps. Every download is checked: the
-# apt.llvm.org signing key by its fingerprint, archives by their SHA-256, and
-# lv2lint's source by its commit.
+#   ci/setup.sh
 #
-# To move to another version of a tool, change the values below. GitHub lists
-# the SHA-256 of release archives as the asset's digest; pluginval's releases
-# are older than that, so their SHA-256 were taken from the downloads.
+# Sets up a GitHub Actions runner to build and test ADLplug-Next: Clang, LLD and
+# the LLVM tools of one pinned version, first on PATH for the later steps, and
+# the latest stable Rust. Clang is the linker driver and LLD the linker on every
+# system (.cargo/config.toml), and Clang assembles the passes written in
+# assembly. The runner images carry an older LLVM, or none, so the toolchain is
+# fetched every time:
+#   - Windows and macOS: LLVM's release archives, checked by their SHA-256.
+#   - Ubuntu: the packages of apt.llvm.org, whose signing key is checked by its
+#     fingerprint. What apt.llvm.org offers for a release is a snapshot of its
+#     branch, rebuilt often, so its version can run ahead of the archives'.
+# On macOS, SDKROOT names the SDK for whatever runs Clang as a linker (cargo).
+#
+# To move to another version of LLVM, change the values below. GitHub lists the
+# SHA-256 of release archives as the asset's digest.
 set -euo pipefail
 
 llvm_major=23
-
-# Windows, macOS and the AlmaLinux container: LLVM's release archives.
 llvm_release=23.1.5
 windows_archive=clang+llvm-$llvm_release-x86_64-pc-windows-msvc.tar.zst
 windows_sha256=b2be33385ddc86e83511417a060de927ae8b09d1f3017cc3cdce5c73cd5029d7
 macos_archive=LLVM-$llvm_release-macOS-ARM64.tar.zst
 macos_sha256=503de30ef90311e0b143623801b19af2250adac6d69faed65ad0051170202e3b
-linux_archive=LLVM-$llvm_release-Linux-X64.tar.zst
-linux_sha256=c3107384835f788768f614db610e87fba7077f125ca950eb02a78bab0a308065
-
-# Linux: the packages of apt.llvm.org, signed with this key.
 apt_key_fingerprint=6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
-
-# pluginval, which loads the plugins as hosts do and tests them.
-pluginval_version=v1.0.4
-pluginval_windows_sha256=c08e61ce3b96db41636f8ec7e76f4c7e2c13ebdac7fa1b5a1f52b4f32ec715ab
-pluginval_linux_sha256=c01c49d8063965c4c2dea8324468336768f5c9139e0b1caebde14c2400b55352
-pluginval_macos_sha256=3c4c533bda0c5059eea3ddaea752d757ee2025041f0f47e6bcb0e87f6082b29f
-
-# lv2lint, which checks LV2 bundles, is not packaged by Ubuntu. It is built
-# from its 0.16.2 release, at the commit of that tag in the sfztools mirror.
-lv2lint_repository=https://github.com/sfztools/lv2lint.git
-lv2lint_commit=ea7126042356d245610ecf7a56354dd196fafff7
-
-# Development packages for the JUCE modules ADLplug uses, from JUCE's
-# docs/Linux Dependencies.md. curl and WebKit are left out: the build disables
-# both.
-linux_packages=(
-  libasound2-dev
-  libfontconfig1-dev libfreetype-dev
-  libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxi-dev
-  libxinerama-dev libxrandr-dev libxrender-dev
-)
-# For the tests (ci/test.sh): xwfb-run, which runs a command on Xwayland under
-# a headless Weston, a window manager for that Xwayland
-# (ci/with-window-manager.sh), and what lv2lint is built with.
-linux_packages+=(xwayland-run weston xwayland xauth openbox)
-linux_packages+=(meson liblilv-dev lv2-dev libelf-dev)
-
-# The same development packages in AlmaLinux 10, from its BaseOS, AppStream and
-# CRB repositories, with what the build needs besides: the headers and the
-# runtime of libstdc++, which come with GCC's C++ package (Clang compiles and
-# links), and rpmbuild.
-almalinux_packages=(
-  alsa-lib-devel fontconfig-devel freetype-devel
-  libX11-devel libXcomposite-devel libXcursor-devel libXext-devel libXi-devel
-  libXinerama-devel libXrandr-devel libXrender-devel
-  cmake ninja-build gcc-c++ git python3 tar xz zstd rpm-build
-)
 
 # Pipelines below are written so that no command stops reading early: with
 # pipefail, a writer killed by SIGPIPE would fail the script.
@@ -95,27 +56,15 @@ release_url() {  # archive
   echo "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvm_release/$name"
 }
 
-# Extracts a release archive into a directory, leaving out the static
-# libraries at the top of lib/, which are for programs built on LLVM and take
-# up most of the space. The compiler runtime lies deeper, in lib/clang/.
-#
-# From 23.1.2 on, LLVM compresses the archives with a window of 1 GiB (--long=30
-# in its .github/workflows/release-binaries.yml), and zstd decompresses a window
-# larger than 128 MiB only when it is told it may: without --long=30 it stops at
-# the first frame and asks for it.
+# Extracts a release archive, leaving out the static libraries at the top of
+# lib/, which are for programs built on LLVM. The compiler runtime lies deeper,
+# in lib/clang/. LLVM compresses the archives with a window of 1 GiB, which zstd
+# decompresses only when told it may (--long=30).
 extract() {  # archive directory tar static-library-suffix
   mkdir -p "$2"
   zstd --decompress --long=30 --stdout "$1" |
     "$3" -x -f - -C "$2" --strip-components 1 --no-wildcards-match-slash --exclude "*/lib/*$4"
   rm -f "$1"
-}
-
-# Downloads pluginval into <directory>/pluginval.
-setup_pluginval() {  # system sha256 directory
-  local archive=$3/pluginval.zip
-  download "https://github.com/Tracktion/pluginval/releases/download/$pluginval_version/pluginval_$1.zip" "$archive" "$2"
-  unzip -q -o "$archive" -d "$3/pluginval"
-  rm -f "$archive"
 }
 
 setup_linux() {
@@ -130,112 +79,34 @@ setup_linux() {
     exit 1
   fi
   gpg --dearmor < "$key" | sudo tee "$keyring" > /dev/null
-
   local codename
   codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
-  # The sources as well as the binaries. What apt.llvm.org offers for a release is
-  # a snapshot of its branch, rebuilt often, so two builds of the same version
-  # number are not the same sources: the only way to have the sources of the very
-  # binaries installed here is to ask apt for them, which the memory sanitizer's
-  # standard library is built from (ci/msan-libraries.sh).
-  {
-    echo "deb [signed-by=$keyring] https://apt.llvm.org/$codename/ llvm-toolchain-$codename-$llvm_major main"
-    echo "deb-src [signed-by=$keyring] https://apt.llvm.org/$codename/ llvm-toolchain-$codename-$llvm_major main"
-  } | sudo tee /etc/apt/sources.list.d/apt.llvm.org.list > /dev/null
-
-  # **The C++ library's headers, of the GCC its runtime comes from.** Clang
-  # compiles against the headers of the newest GCC it finds them for, and an
-  # image may carry the headers of an older GCC than the one its libstdc++6
-  # was built from: a program then sees only what the older headers declare,
-  # while it runs on the newer library. The development package of the
-  # runtime's own GCC closes the gap, whichever GCC that is.
-  local runtime
-  runtime=$(dpkg-query --show --showformat '${source:Package}' libstdc++6)
-  case "$runtime" in
-    gcc-[0-9]*) ;;
-    *) echo "error: libstdc++6 was built from '$runtime', not from a gcc-<N> source package" >&2; exit 1 ;;
-  esac
-
+  echo "deb [signed-by=$keyring] https://apt.llvm.org/$codename/ llvm-toolchain-$codename-$llvm_major main" |
+    sudo tee /etc/apt/sources.list.d/apt.llvm.org.list > /dev/null
   sudo apt-get update -qq
-  # libclang-rt has the profile runtime that the instrumented build of
-  # profile-guided optimisation links (cmake/PGO.cmake). clang-tidy is the
-  # static analysis of the job that runs ci/tidy.sh, and clang-tools brings
-  # run-clang-tidy, which is how that script reads many files at once; both are
-  # of the same version as the compiler, so that they parse what it compiles.
-  sudo apt-get install -y -qq --no-install-recommends \
-    "clang-$llvm_major" "lld-$llvm_major" "llvm-$llvm_major" "libclang-rt-$llvm_major-dev" \
-    "clang-tidy-$llvm_major" "clang-tools-$llvm_major" \
-    "libstdc++-${runtime#gcc-}-dev" \
-    "${linux_packages[@]}"
-  llvm_from=apt
+  sudo apt-get install -y -qq --no-install-recommends "clang-$llvm_major" "lld-$llvm_major" "llvm-$llvm_major"
   llvm_bin=/usr/lib/llvm-$llvm_major/bin
-
-  setup_pluginval Linux "$pluginval_linux_sha256" "$RUNNER_TEMP"
-  chmod +x "$RUNNER_TEMP/pluginval/pluginval"
-  tool_paths+=("$RUNNER_TEMP/pluginval")
-
-  # lv2lint, with Clang and LLD like everything else.
-  local source=$RUNNER_TEMP/lv2lint
-  git -c init.defaultBranch=main init --quiet "$source"
-  git -C "$source" fetch --quiet --depth 1 "$lv2lint_repository" "$lv2lint_commit"
-  git -C "$source" checkout --quiet --detach FETCH_HEAD
-  if [ "$(git -C "$source" rev-parse HEAD)" != "$lv2lint_commit" ]; then
-    echo "error: lv2lint is not at commit $lv2lint_commit" >&2
-    exit 1
-  fi
-  # lv2lint enables LTO by default. It is turned off: the archiver meson would
-  # pick up is binutils' ar, which cannot index Clang's bitcode.
-  PATH=$llvm_bin:$PATH CC=clang CC_LD=lld meson setup --buildtype release -Db_lto=false \
-    -Delf-tests=enabled -Dx11-tests=enabled "$source/build" "$source"
-  PATH=$llvm_bin:$PATH ninja -C "$source/build"
-  tool_paths+=("$source/build")
 }
 
 setup_windows() {
-  llvm_from=release
   local temp
   temp=$(cygpath --unix "$RUNNER_TEMP")
   download "$(release_url "$windows_archive")" "$temp/$windows_archive" "$windows_sha256"
   extract "$temp/$windows_archive" "$temp/llvm" tar .lib
   llvm_bin=$temp/llvm/bin
-
-  setup_pluginval Windows "$pluginval_windows_sha256" "$temp"
-  tool_paths+=("$temp/pluginval")
 }
 
 setup_macos() {
-  llvm_from=release
   download "$(release_url "$macos_archive")" "$RUNNER_TEMP/$macos_archive" "$macos_sha256"
   extract "$RUNNER_TEMP/$macos_archive" "$RUNNER_TEMP/llvm" gtar .a
-  # The plugins load the system's libc++, so they are compiled against the
-  # SDK's libc++ headers. Clang would take the newer headers that come with
-  # the toolchain first.
   rm -rf "$RUNNER_TEMP/llvm/include/c++"
   llvm_bin=$RUNNER_TEMP/llvm/bin
-
-  setup_pluginval macOS "$pluginval_macos_sha256" "$RUNNER_TEMP"
-  tool_paths+=("$RUNNER_TEMP/pluginval/pluginval.app/Contents/MacOS")
+  echo "SDKROOT=$(xcrun --show-sdk-path)" >> "$GITHUB_ENV"
 }
 
-setup_almalinux() {
-  llvm_from=release
-  dnf install -y -q --setopt=install_weak_deps=False "${almalinux_packages[@]}"
-  download "$(release_url "$linux_archive")" "$RUNNER_TEMP/$linux_archive" "$linux_sha256"
-  extract "$RUNNER_TEMP/$linux_archive" "$RUNNER_TEMP/llvm" tar .a
-  llvm_bin=$RUNNER_TEMP/llvm/bin
-  "$llvm_bin/ld.lld" --version
-}
-
-tool_paths=()
-llvm_from=
+llvm_bin=
 case "${RUNNER_OS:-}" in
-  Linux)
-    if [ -f /etc/almalinux-release ]; then
-      setup_almalinux
-    else
-      setup_linux
-    fi
-    ;;
+  Linux) setup_linux ;;
   Windows) setup_windows ;;
   macOS) setup_macos ;;
   *) echo "error: unsupported runner '${RUNNER_OS:-}'" >&2; exit 1 ;;
@@ -248,32 +119,20 @@ case "$version" in
   *"clang version $llvm_major."*) ;;
   *) echo "error: expected Clang $llvm_major" >&2; exit 1 ;;
 esac
-cmake --version
-ninja --version
+# Rust: the latest stable, which rust-toolchain.toml names. A runner's rustup
+# holds the stable of its image, which "stable" would take as it is, older than
+# the latest; updated here, every run builds with the latest, as a developer's
+# does after rustup update.
+rustup update stable --no-self-update
+rustc --version
+echo "== the processor of this runner"
+case "$RUNNER_OS" in
+  macOS) sysctl -n machdep.cpu.brand_string ;;
+  *) grep -m 1 '^model name' /proc/cpuinfo || true ;;
+esac
 
-for path in "$llvm_bin" ${tool_paths[@]+"${tool_paths[@]}"}; do
-  if [ "$RUNNER_OS" = Windows ]; then
-    cygpath --windows "$path"
-  else
-    echo "$path"
-  fi
-done >> "$GITHUB_PATH"
-
-# The configuration of every build checks that its toolchain is of this
-# version of LLVM (cmake/LLVMToolchain.cmake).
-echo "ADLplug_LLVM_MAJOR=$llvm_major" >> "$GITHUB_ENV"
-
-# Where LLVM came from, for whatever needs the sources of the very compiler
-# installed here rather than a compiler of the same number: Ubuntu takes the
-# packages of apt.llvm.org, and every other system the archives of LLVM's own
-# GitHub Releases. That is this project's one rule for it and this is where it is
-# written down; ci/msan-libraries.sh, which builds a C++ standard library with the
-# memory sanitizer, asks the same place for the sources of it. The difference
-# matters: a release is a tag and a tag does not move, while what apt.llvm.org
-# offers for a release is a snapshot of its branch, rebuilt often, and only apt can
-# say which of those builds is the one installed.
-if [ -z "$llvm_from" ]; then
-  echo "error: the setup of this runner did not say where LLVM came from" >&2
-  exit 1
-fi
-echo "ADLplug_LLVM_FROM=$llvm_from" >> "$GITHUB_ENV"
+if [ "$RUNNER_OS" = Windows ]; then
+  cygpath --windows "$llvm_bin"
+else
+  echo "$llvm_bin"
+fi >> "$GITHUB_PATH"

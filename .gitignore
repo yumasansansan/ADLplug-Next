@@ -1,22 +1,15 @@
-# SPDX-FileCopyrightText: 2021 Jean Pierre Cimalando
 # SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
-# SPDX-License-Identifier: BSL-1.0 AND GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 #
-# This file comes from ADLplug and was modified for ADLplug-Next. ADLplug gave
-# it no notice of its own; it was under ADLplug's license, the Boost Software
-# License 1.0 (LICENSES/BSL-1.0.txt). The SPDX lines name the copyright holders
-# and licenses in the machine-readable form of the REUSE specification:
-# ADLplug's part is under the Boost Software License 1.0, and ADLplug-Next's
-# changes are under the GNU General Public License, version 3 or any later
-# version (LICENSES/GPL-3.0-or-later.txt).
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
 
-/build/
-/.cache/
+# cargo's build tree
+target/
 
-# Leftover staging area from the dependency refresh. folly is no longer a
-# dependency (see sources/utility/atomic_bit_set.h); the directory can be
-# deleted whenever convenient.
-/thirdparty_new/
-
-# Commit message drafts handed over for manual signing
+# The message of the commit that is being prepared
 /COMMIT_MSG.txt
+
+.DS_Store

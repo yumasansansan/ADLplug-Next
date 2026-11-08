@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# Text is kept with LF line ends, in the repository and in every checkout, on
+# every system: a file that a tool on Windows wrote with CRLF is stored with LF
+# when it is added, rather than differing from its last version on every line.
+# The images, icons and fonts are bytes, kept as they are.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary
+*.gz binary
+*.knob binary

@@ -7,38 +7,16 @@
 # (LICENSES/GPL-3.0-or-later.txt).
 #
 # The copyright holders and licenses of the files that cannot name them in a
-# comment of their own: images, fonts, sounds, the generated HTML manuals, JSON
-# and the Windows resource scripts. Every other file names them at its top. The
-# license texts are in LICENSES/, and `reuse lint` checks the repository in the
-# CI.
+# comment of their own: Cargo.lock, which cargo writes over, images, fonts,
+# the generated HTML manuals and the Windows resource scripts. Every other file
+# names them at its top. The license texts are in LICENSES/, and `reuse lint`
+# checks the repository in the CI.
 
 version = 1
 
 # ADLplug-Next's own.
 [[annotations]]
-path = "CMakePresets.json"
-precedence = "override"
-SPDX-FileCopyrightText = "2026 Yuma Kakei <yumasansansan@gmail.com>"
-SPDX-License-Identifier = "GPL-3.0-or-later"
-
-# Inputs that once made a fuzz target fail, kept so that the fault stays fixed
-# (fuzz/CMakeLists.txt). A fuzzer made them, or they were written from what it
-# found; besides zeros, they hold only the words that open a WOPL or WOPN file,
-# for the MIDI target a handful of bytes that name an emulator, a volume model
-# and a note (fuzz/midi_synth.cc says what they mean), and for the state target
-# the tags of a state, written by hand.
-[[annotations]]
-path = "fuzz/regressions/**"
-precedence = "override"
-SPDX-FileCopyrightText = "2026 Yuma Kakei <yumasansansan@gmail.com>"
-SPDX-License-Identifier = "GPL-3.0-or-later"
-
-# The inputs a fuzz target starts from, for the target whose input CMake cannot
-# write: an instrument is mostly zeros, and CMake writes text. They hold the
-# registers of one instrument that sounds, written by hand from the layout of
-# the library's own structure (fuzz/measurement.cc says where each byte sits).
-[[annotations]]
-path = "fuzz/seeds/**"
+path = "Cargo.lock"
 precedence = "override"
 SPDX-FileCopyrightText = "2026 Yuma Kakei <yumasansansan@gmail.com>"
 SPDX-License-Identifier = "GPL-3.0-or-later"

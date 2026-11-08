@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# LLD links on every system: lld-link for Windows, and on the other systems
+# Clang as the linker driver with -fuse-ld=lld (ld.lld on Linux, ld64.lld on
+# macOS). macOS builds are for macOS 26.0 and later.
+#
+# On x86-64 the builds are for x86-64-v2 (SSE4.2 and POPCNT), and not for
+# x86-64-v3: the plugins have to run on every machine their hosts run on. The
+# emulator cores take the richer extensions a processor has at run time instead,
+# in passes written for them (crates/adlplug-cpu says which). ci/targets.sh
+# builds and tests the same code for x86-64-v3, and for x86-64-v4 with vectors
+# of 512 bits, as distributions that raise the baseline build it.
+
+[target.x86_64-pc-windows-msvc]
+linker = "lld-link"
+rustflags = ["-C", "target-cpu=x86-64-v2"]
+
+[target.aarch64-pc-windows-msvc]
+linker = "lld-link"
+
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld", "-C", "target-cpu=x86-64-v2"]
+
+[target.aarch64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.aarch64-apple-darwin]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[env]
+MACOSX_DEPLOYMENT_TARGET = "26.0"
