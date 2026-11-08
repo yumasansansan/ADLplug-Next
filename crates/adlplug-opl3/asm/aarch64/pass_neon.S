@@ -15,20 +15,20 @@
 // core in instructions of its own. The counters that src/ymf262.rs takes from
 // Nuked OPL3 stay in src/core.rs, which hands this pass what they give.
 //
-//     void adlplug_opl3_pass_neon(Lanes *lanes, const PassInputs *inputs,
-//                                 int32_t *frame);
-//     void adlplug_opl3_pass_neon_sha3(Lanes *lanes, const PassInputs *inputs,
-//                                      int32_t *frame);
-//     void adlplug_opl3_pass_sve(Lanes *lanes, const PassInputs *inputs,
-//                                int32_t *frame);
-//     void adlplug_opl3_pass_sve2(Lanes *lanes, const PassInputs *inputs,
-//                                 int32_t *frame);
+//     uint64_t adlplug_opl3_pass_neon(Lanes *lanes, const PassInputs *inputs);
+//     uint64_t adlplug_opl3_pass_neon_sha3(Lanes *lanes,
+//                                          const PassInputs *inputs);
+//     uint64_t adlplug_opl3_pass_sve(Lanes *lanes, const PassInputs *inputs);
+//     uint64_t adlplug_opl3_pass_sve2(Lanes *lanes, const PassInputs *inputs);
 //         AAPCS64
 //
 // What Core::generate() does between taking its writes in and moving its
 // counters on (src/aarch64.rs): the envelopes and the phases, the rhythm
 // phases, the operators stage by stage, the feedback history and the sums of
-// the two outputs. What it works out for a slot is what src/ymf262.rs works
+// the two outputs, which it returns in x0, output A's in its low half and
+// output B's in its high half, with no store and load between them and the
+// caller: a load of 64 bits takes no value forwarded from two stores of 32.
+// What it works out for a slot is what src/ymf262.rs works
 // out, in the order the pass for AVX2 works it out (x86_64/pass_avx2.S), each
 // of its vectors of eight lanes two vectors of four here.
 //
@@ -68,14 +68,14 @@
 // time (OPERATOR_PAIR), their parts between the lookups interleaved, so that
 // while one waits for a lookup the other has work to give the processor.
 //
-// Registers: x0 the lanes, x1 what the pass goes by, x2 the frame; x3 and x4
-// the tables of the log-sine and of the exponent; x5 the lanes' values from
-// OUT on, for the loads and stores in pairs; x9 to x16 for the scalars and the
-// lookups. The vectors are v0 to v7 and v16 to v31, all of them the caller's
-// to save: an operator takes v0 to v7 and v16, or v18 to v26, and the
-// operators' constants are in v27 to v31 for the whole pass; and in the forms
-// for SVE the whole of the z registers that they take of those, and the
-// predicate p0, the caller's as well. v8 to v15, whose low halves the
+// Registers: x0 the lanes, and the two samples at the end; x1 what the pass
+// goes by; x3 and x4 the tables of the log-sine and of the exponent; x5 the
+// lanes' values from OUT on, for the loads and stores in pairs; x9 to x16 for
+// the scalars and the lookups. The vectors are v0 to v7 and v16 to v31, all of
+// them the caller's to save: an operator takes v0 to v7 and v16, or v18 to
+// v26, and the operators' constants are in v27 to v31 for the whole pass; and
+// in the forms for SVE the whole of the z registers that they take of those,
+// and the predicate p0, the caller's as well. v8 to v15, whose low halves the
 // convention has the callee keep, are not touched, nor x18, nor the stack. So
 // the functions need no frame and no unwinding information on any of the
 // systems.
@@ -770,14 +770,13 @@ _\name:
         add       w11, w11, w13
         CLIP      w9, w13
         CLIP      w11, w13
-        str       w9, [x2]
-        str       w11, [x2, #4]
         str       w10, [x0, #CARRY]
         str       w12, [x0, #(CARRY + 4)]
         sbfiz     x10, x10, #16, #32
         sbfiz     x12, x12, #16, #32
         str       x10, [x0, #CARRY_SOFT]
         str       x12, [x0, #(CARRY_SOFT + 8)]
+        orr       x0, x9, x11, lsl #32                            // returned: a, b
         ret
 9:
         // With soft panning: the sums exact in 64 bits, and one rounding at
@@ -815,7 +814,6 @@ _\name:
         str       x10, [x0, #CARRY_SOFT]
         ROUND16   x9
         CLIP      w9, w13
-        str       w9, [x2]
         ROUND16   x10
         str       w10, [x0, #CARRY]
         ldr       x13, [x0, #(CARRY_SOFT + 8)]
@@ -823,9 +821,9 @@ _\name:
         str       x12, [x0, #(CARRY_SOFT + 8)]
         ROUND16   x11
         CLIP      w11, w13
-        str       w11, [x2, #4]
         ROUND16   x12
         str       w12, [x0, #(CARRY + 4)]
+        orr       x0, x9, x11, lsl #32                            // returned: a, b
         ret
 #if defined(__ELF__)
         .size     \name, . - \name

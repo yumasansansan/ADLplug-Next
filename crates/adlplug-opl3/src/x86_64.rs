@@ -22,14 +22,15 @@
 //! declared `extern "C"`, which is that convention in Rust. The files are
 //! assembled from the same source for ELF (Linux) and for COFF (Windows), and
 //! each function's entry and return are written for the convention of its
-//! object format: for ELF it takes the lanes, the inputs and the frame in rdi,
-//! rsi and rdx, as System V's convention passes them; for COFF in rcx, rdx and
-//! r8, as the Windows x64 convention passes them, and it keeps the low halves of
-//! xmm6 to xmm15, which that convention has a function keep, on the stack, with
-//! what the unwinder needs to know of it (`.seh_*`). Besides those it uses only
-//! registers that both conventions let a function overwrite: rax, rcx, rdx, r8
-//! to r11, the vector registers and the mask registers; and it returns with the
-//! upper halves of the vector registers zeroed (`vzeroupper`). So the one
+//! object format: for ELF it takes the lanes and the inputs in rdi and rsi, as
+//! System V's convention passes them; for COFF in rcx and rdx, as the Windows
+//! x64 convention passes them, and it keeps the low halves of xmm6 to xmm15,
+//! which that convention has a function keep, on the stack, with what the
+//! unwinder needs to know of it (`.seh_*`). Both return the two samples in rax.
+//! Besides those it uses only registers that both conventions let a function
+//! overwrite: rax, rcx, rdx, r8 to r11, the vector registers and the mask
+//! registers; and it returns with the upper halves of the vector registers
+//! zeroed (`vzeroupper`). So the one
 //! declaration is right on both, where `extern "sysv64"`, System V's convention
 //! on every target, would be wrong on Windows.
 //!
@@ -63,25 +64,26 @@ use adlplug_cpu::{Features, Level, Tier};
 use crate::core::Core;
 use crate::pass::{Lanes, PassInputs};
 
-/// A pass written by hand: the lanes, what the pass goes by besides, and the
-/// frame of two samples, output A then output B, that it writes.
-type Function = unsafe extern "C" fn(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+/// A pass written by hand: the lanes and what the pass goes by besides, and the
+/// two samples it returns in rax, output A's in the low half and output B's in
+/// the high half.
+type Function = unsafe extern "C" fn(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
 
 unsafe extern "C" {
     /// The pass for AVX2, looking tables up one lane at a time
     /// (`pass_avx2.S`).
-    fn adlplug_opl3_pass_avx2(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    fn adlplug_opl3_pass_avx2(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
     /// The pass for AVX2 that gathers and adds up with AVX-VNNI
     /// (`pass_avx2.S`).
-    fn adlplug_opl3_pass_avx2_vnni(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    fn adlplug_opl3_pass_avx2_vnni(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
     /// The pass for AVX-512 F, DQ, BW and VL (`pass_avx512.S`).
-    fn adlplug_opl3_pass_avx512(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    fn adlplug_opl3_pass_avx512(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
     /// The pass for AVX-512, adding up with AVX-512 VNNI (`pass_avx512.S`).
-    fn adlplug_opl3_pass_avx512_vnni(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    fn adlplug_opl3_pass_avx512_vnni(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
     /// The pass for AVX-512, looking the tables up by VBMI (`pass_avx512.S`).
-    fn adlplug_opl3_pass_avx512_vbmi(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    fn adlplug_opl3_pass_avx512_vbmi(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
     /// The pass for AVX-512 with VBMI and VNNI (`pass_avx512.S`).
-    fn adlplug_opl3_pass_avx512_vbmi_vnni(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    fn adlplug_opl3_pass_avx512_vbmi_vnni(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
 }
 
 /// The pass written by hand for a level that the processor has, and the tier of
@@ -153,7 +155,6 @@ impl Hand {
         reason = "the call into the assembly belongs in each tier's form of a sample"
     )]
     pub(crate) fn run(self, lanes: &mut Lanes, inputs: &PassInputs) -> [i32; 2] {
-        let mut frame = [0; 2];
         // SAFETY: a `Hand` is made only where the processor has the extensions
         // of its level, as adlplug-cpu reports them, with the system saving the
         // registers they use, and they are those its function executes: AVX2,
@@ -169,10 +170,14 @@ impl Hand {
         // alignment of 32 its aligned loads need, and through the pointers that
         // `PassInputs::new`, the one maker of one, sets to the core's tables, as
         // many entries of each as they hold (256 of 32 or 16 bits, or 512
-        // bytes), at indices of eight bits; and it writes the two values of
-        // `frame`.
-        unsafe { (self.function)(lanes, inputs, frame.as_mut_ptr()) };
-        frame
+        // bytes), at indices of eight bits; and it returns the two samples in
+        // rax, as declared.
+        let both = unsafe { (self.function)(lanes, inputs) };
+        let [a0, a1, a2, a3, b0, b1, b2, b3] = both.to_le_bytes();
+        [
+            i32::from_le_bytes([a0, a1, a2, a3]),
+            i32::from_le_bytes([b0, b1, b2, b3]),
+        ]
     }
 }
 

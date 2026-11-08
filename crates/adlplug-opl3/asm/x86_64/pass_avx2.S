@@ -15,15 +15,17 @@
 // core in instructions of its own. The counters that src/ymf262.rs takes from
 // Nuked OPL3 stay in src/core.rs, which hands this pass what they give.
 //
-//     void adlplug_opl3_pass_avx2(Lanes *lanes, const PassInputs *inputs,
-//                                 int32_t *frame);
-//     void adlplug_opl3_pass_avx2_vnni(Lanes *lanes, const PassInputs *inputs,
-//                                      int32_t *frame);
+//     uint64_t adlplug_opl3_pass_avx2(Lanes *lanes, const PassInputs *inputs);
+//     uint64_t adlplug_opl3_pass_avx2_vnni(Lanes *lanes,
+//                                          const PassInputs *inputs);
 //
 // Each does what Core::generate() does between taking its writes in and moving
 // its counters on (src/x86_64.rs): the envelopes and the phases, the rhythm
 // phases, the operators stage by stage, the feedback history and the sums of
-// the two outputs. The first needs AVX2, the second AVX-VNNI as well, which the
+// the two outputs, which it returns in rax, output A's in its low half and
+// output B's in its high half, with no store and load between them and the
+// caller: a load of 64 bits takes no value forwarded from two stores of 32.
+// The first needs AVX2, the second AVX-VNNI as well, which the
 // processor is asked for (src/x86_64.rs, through adlplug-cpu): Intel's have it
 // from Alder Lake on, AMD's from Zen 5.
 //
@@ -724,12 +726,10 @@
         vmovaps   xmmword ptr [rsp + 144], xmm15
         .seh_savexmm xmm15, 144
         .seh_endprologue
-        // The core, what the pass goes by and the frame, in r8, r9 and r10.
-        mov       r10, r8
+        // The core and what the pass goes by, in r8 and r9.
         mov       r9, rdx
         mov       r8, rcx
 #else
-        mov       r10, rdx
         mov       r9, rsi
         mov       r8, rdi
 #endif
@@ -776,7 +776,7 @@
         vpsrad    xmm2, xmm2, 13
         vpminsd   xmm2, xmm2, xmmword ptr [rip + .Lc_32767]
         vpmaxsd   xmm2, xmm2, xmmword ptr [rip + .Lc_minus_32768]
-        vmovq     qword ptr [r10], xmm2
+        vmovq     rax, xmm2                                           // returned: a, b
         vpshufd   xmm3, xmm8, 0x0d                                    // a late, b late
         vmovq     qword ptr [r8 + CARRY], xmm3
         vpmovsxdq xmm4, xmm3
@@ -817,7 +817,7 @@
         mov       qword ptr [r8 + CARRY_SOFT], r11
         ROUND16   rax, rcx
         CLIP      eax, ecx
-        mov       dword ptr [r10], eax
+        mov       r10d, eax                                           // a, for rax's low half
         ROUND16   r11, rcx
         mov       dword ptr [r8 + CARRY], r11d
         vextracti128 xmm12, ymm12, 1
@@ -831,7 +831,8 @@
         mov       qword ptr [r8 + CARRY_SOFT + 8], r11
         ROUND16   rax, rcx
         CLIP      eax, ecx
-        mov       dword ptr [r10 + 4], eax
+        shl       rax, 32
+        or        rax, r10                                            // returned: a, b
         ROUND16   r11, rcx
         mov       dword ptr [r8 + CARRY + 4], r11d
 .Ldone\vnni:

@@ -107,11 +107,6 @@ pub(crate) struct Lanes {
     /// comparison with it out from the lane's number instead, in 64 bits, as 48
     /// lanes do not fit in 32, and the vectorized loops pay for that.
     pub(crate) lane_slot: [i32; LANES],
-    /// Whether the slot is its channel's first, a constant kept as the slot is.
-    pub(crate) lane_first: [i32; LANES],
-    /// Whether the slot is in the second channel of a chain of four, a constant
-    /// kept as the slot is.
-    pub(crate) lane_second_channel: [i32; LANES],
     /// The state: the phase.
     pub(crate) phase: [u32; LANES],
     /// The level of the envelope, as the portable pass keeps it.
@@ -209,8 +204,6 @@ impl Lanes {
             gain_a: [0; LANES],
             gain_b: [0; LANES],
             lane_slot: [0; LANES],
-            lane_first: [0; LANES],
-            lane_second_channel: [0; LANES],
             phase: [0; LANES],
             level: [0; LANES],
             state: [0; LANES],

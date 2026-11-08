@@ -18,11 +18,12 @@
 //!
 //! The functions follow the procedure call standard of AArch64 (AAPCS64), which
 //! macOS, Windows and Linux share for what it takes and keeps: each takes the
-//! lanes, the inputs and the frame in x0, x1 and x2, and leaves alone the
-//! registers that the standard has a function keep, the low halves of v8 to v15
-//! among them, and x18, which Apple's and Windows' conventions keep for the
-//! system, and the stack. So the one `extern "C"` declaration is right on all
-//! three, and the functions need no unwinding information on any of them.
+//! lanes and the inputs in x0 and x1, returns the two samples in x0, and leaves
+//! alone the registers that the standard has a function keep, the low halves of
+//! v8 to v15 among them, and x18, which Apple's and Windows' conventions keep
+//! for the system, and the stack. So the one `extern "C"` declaration is right
+//! on all three, and the functions need no unwinding information on any of
+//! them.
 //!
 //! NEON is AArch64's baseline, which the build is compiled for as well: the code
 //! around the passes for NEON and SHA3 is the build's. Around the passes for SVE
@@ -45,19 +46,20 @@ use adlplug_cpu::{Features, Level, Tier};
 use crate::core::Core;
 use crate::pass::{Lanes, PassInputs};
 
-/// A pass written by hand: the lanes, what the pass goes by besides, and the
-/// frame of two samples, output A then output B, that it writes.
-type Function = unsafe extern "C" fn(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+/// A pass written by hand: the lanes and what the pass goes by besides, and the
+/// two samples it returns in x0, output A's in the low half and output B's in
+/// the high half.
+type Function = unsafe extern "C" fn(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
 
 unsafe extern "C" {
     /// The pass for NEON (`pass_neon.S`).
-    fn adlplug_opl3_pass_neon(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    fn adlplug_opl3_pass_neon(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
     /// The pass for NEON with SHA3's BCAX (`pass_neon.S`).
-    fn adlplug_opl3_pass_neon_sha3(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    fn adlplug_opl3_pass_neon_sha3(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
     /// The pass for SVE, with its gathers and its shifts (`pass_neon.S`).
-    fn adlplug_opl3_pass_sve(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    fn adlplug_opl3_pass_sve(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
     /// The pass for SVE2, with SVE2's BCAX and BSL1N besides (`pass_neon.S`).
-    fn adlplug_opl3_pass_sve2(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
+    fn adlplug_opl3_pass_sve2(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
 }
 
 /// The pass written by hand for a level that the processor has, and the tier of
@@ -132,7 +134,6 @@ impl Hand {
         reason = "the call into the assembly belongs in each tier's form of a sample"
     )]
     pub(crate) fn run(self, lanes: &mut Lanes, inputs: &PassInputs) -> [i32; 2] {
-        let mut frame = [0; 2];
         // SAFETY: a `Hand` is made only where the processor has the extensions
         // of its level, as adlplug-cpu reports them, with the system saving the
         // registers they use, and they are those its function executes: NEON,
@@ -146,9 +147,14 @@ impl Hand {
         // which need no alignment; it reads `inputs` within `PassInputs`, and
         // through the pointers that `PassInputs::new`, the one maker of one,
         // sets to the core's tables, the 256 entries of 32 bits of each, at
-        // indices of eight bits; and it writes the two values of `frame`.
-        unsafe { (self.function)(lanes, inputs, frame.as_mut_ptr()) };
-        frame
+        // indices of eight bits; and it returns the two samples in x0, as
+        // declared.
+        let both = unsafe { (self.function)(lanes, inputs) };
+        let [a0, a1, a2, a3, b0, b1, b2, b3] = both.to_le_bytes();
+        [
+            i32::from_le_bytes([a0, a1, a2, a3]),
+            i32::from_le_bytes([b0, b1, b2, b3]),
+        ]
     }
 }
 

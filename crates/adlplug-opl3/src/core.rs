@@ -287,24 +287,51 @@ macro_rules! by_lane {
 // the bit of 0xbd that also keys it in rhythm mode (slots 12 to 17: the bass
 // drum's two, the hi-hat, the tom, the snare and the top cymbal).
 
-/// The slot time.
-static SLOT_TIME: [i32; LANES] = by_lane!(i32, |s| s);
+/// The slot time, in a byte, as are the other slot times: relatch compares them
+/// in bytes with the least that has read a write ([`reads_from`]), so that its
+/// loops are vector code of bytes, as what the slots read is.
+static SLOT_TIME: [i8; LANES] = by_lane!(i8, |s| time_byte(s));
 /// The slot time of the channel's first slot.
-static CHANNEL_FIRST_TIME: [i32; LANES] = by_lane!(i32, |s| if is_first_operator(s) { s } else { s - 3 });
+static CHANNEL_FIRST_TIME: [i8; LANES] = by_lane!(i8, |s| time_byte(if is_first_operator(s) { s } else { s - 3 }));
 /// The slot time of the chain's first slot.
-static CHAIN_FIRST_TIME: [i32; LANES] = by_lane!(i32, |s| chain_first_time(s));
+static CHAIN_FIRST_TIME: [i8; LANES] = by_lane!(i8, |s| time_byte(chain_first_time(s)));
 /// The slot time the chain's flag is read at.
-static CHAIN_READ_TIME: [i32; LANES] = by_lane!(i32, |s| chain_time(s));
+static CHAIN_READ_TIME: [i8; LANES] = by_lane!(i8, |s| time_byte(chain_time(s)));
 /// The chain's bit in the register of the chains.
 static CHAIN_BIT: [u8; LANES] = by_lane!(u8, |s| if chain_of(s) < 0 { 0 } else { 1 << chain_of(s) });
 /// Whether the slot is its channel's first.
-static FIRST_OPERATOR: [i32; LANES] = by_lane!(i32, |s| if is_first_operator(s) { 1 } else { 0 });
+static FIRST_OPERATOR: [u8; LANES] = by_lane!(u8, |s| if is_first_operator(s) { 1 } else { 0 });
 /// Whether the slot is in the second channel of a chain.
-static CHAIN_SECOND_CHANNEL: [i32; LANES] = by_lane!(i32, |s| if chain_of(s) >= 0 && row_of(s) >= 6 { 1 } else { 0 });
+static CHAIN_SECOND_CHANNEL: [u8; LANES] = by_lane!(u8, |s| if chain_of(s) >= 0 && row_of(s) >= 6 { 1 } else { 0 });
 /// The drum whose phase the slot takes in rhythm mode.
 static DRUM_PHASE: [u8; LANES] = by_lane!(u8, |s| drum_phase(s));
+/// Whether the lane has a slot, and so is heard at all.
+static HEARD: [u8; LANES] = by_lane!(u8, |_s| 1);
+/// Whether the slot is one of the drums', 12 to 17.
+static DRUM: [u8; LANES] = by_lane!(u8, |s| if s >= 12 && s < 18 { 1 } else { 0 });
+/// Whether the slot is a drum alone, neither of the bass drum's two.
+static DRUM_ALONE: [u8; LANES] = by_lane!(u8, |s| if s >= 12 && s < 18 && s != 12 && s != 15 { 1 } else { 0 });
+/// How loud the drum is heard: 0 for the bass drum's first slot, else 2.
+static DRUM_WEIGHT: [u8; LANES] = by_lane!(u8, |s| if s == 12 { 0 } else { 2 });
+/// Whether the slot is the hi-hat's or the tom's, whose values are not stored
+/// for feedback in rhythm mode.
+static HOLDS: [u8; LANES] = by_lane!(u8, |s| if s == 13 || s == 14 { 1 } else { 0 });
 /// The bit of 0xbd that also keys the slot in rhythm mode.
 static DRUM_KEY_BIT: [u8; LANES] = by_lane!(u8, |s| drum_key_bit(s));
+
+/// A slot time in a byte, which every one fits.
+const fn time_byte(time: i32) -> i8 {
+    assert!(-128 <= time && time <= 127, "a slot time of a byte");
+    i8::from_le_bytes([time.to_le_bytes()[0]])
+}
+
+/// The least slot time that has read a write `since` slot times after it, of
+/// what is read `offset` slot times from the slot's turn: a slot whose time is
+/// that or more has read it (`since + time + offset >= 0`), held to a byte,
+/// which leaves every slot time on the same side.
+fn reads_from(since: i32, offset: i32) -> i8 {
+    i8::try_from((-(since + offset)).clamp(-128, 127)).expect("a number held to a byte")
+}
 
 /// The drum whose phase a slot takes in rhythm mode: 1 the hi-hat, 2 the
 /// snare, 3 the top cymbal, 0 none.
@@ -390,6 +417,48 @@ enum Pass {
     /// A pass written by hand.
     #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     Hand(Hand),
+}
+
+/// What the routing takes of each lane's slot, in bytes: constants, kept in the
+/// core all the same, as the lanes keep the slot (`Lanes::lane_slot` says why),
+/// so that the routing finds them in memory; and in the core, not on the heap,
+/// so that the compiler sees that the routing's stores do not reach them.
+struct SlotRoles {
+    /// `FIRST_OPERATOR`.
+    first: [u8; LANES],
+    /// `CHAIN_SECOND_CHANNEL`.
+    second_channel: [u8; LANES],
+    /// `HEARD`.
+    heard: [u8; LANES],
+    /// `DRUM`.
+    drum: [u8; LANES],
+    /// `DRUM_ALONE`.
+    alone: [u8; LANES],
+    /// `DRUM_WEIGHT`.
+    drum_weight: [u8; LANES],
+    /// `HOLDS`.
+    holds: [u8; LANES],
+    /// `CHAIN_BIT`.
+    chain_bit: [u8; LANES],
+    /// `DRUM_PHASE`.
+    drum_phase: [u8; LANES],
+}
+
+impl SlotRoles {
+    /// The tables, copied.
+    const fn new() -> Self {
+        Self {
+            first: FIRST_OPERATOR,
+            second_channel: CHAIN_SECOND_CHANNEL,
+            heard: HEARD,
+            drum: DRUM,
+            alone: DRUM_ALONE,
+            drum_weight: DRUM_WEIGHT,
+            holds: HOLDS,
+            chain_bit: CHAIN_BIT,
+            drum_phase: DRUM_PHASE,
+        }
+    }
 }
 
 /// What derive reads for each lane, besides the constants of the lanes, as it
@@ -600,6 +669,8 @@ pub struct Core {
     /// and derive take those alone: the registers of a group that no write
     /// has changed since are what the slots read of them already.
     written: u8,
+    /// What the routing takes of each lane's slot.
+    roles: SlotRoles,
 
     // By lane: the channels' registers as they stand, for the slots that read
     // them (spread()), so that no loop over the lanes reads another lane's:
@@ -789,6 +860,7 @@ impl Core {
             derived: DerivedFrom::new(),
             derive_all: true,
             written: ALL_GROUPS,
+            roles: SlotRoles::new(),
             ch_fnum: [0; LANES],
             ch_block: [0; LANES],
             ch_key: [0; LANES],
@@ -865,11 +937,9 @@ impl Core {
             self.spread(channel);
         }
         let lanes = &mut *self.lanes;
-        // The lanes' constants that the routing and derive() compare (the
-        // lanes say why they are kept there).
+        // The lanes' constant that derive() compares (the lanes say why it is
+        // kept there).
         lanes.lane_slot = SLOT_OF;
-        lanes.lane_first = FIRST_OPERATOR;
-        lanes.lane_second_channel = CHAIN_SECOND_CHANNEL;
         lanes.phase = [0; LANES];
         lanes.level = [0x1ff; LANES];
         lanes.state = [ymf262::RELEASE; LANES];
@@ -1269,53 +1339,59 @@ impl Core {
         let written = self.written;
         // Slot times from the write to this pass.
         let since = SLOT_TIMES * self.landed_age - self.landed_slot_time;
+        let own = reads_from(since, READS_OWN);
         if (written & GROUP_SLOT) != 0 {
             for (i, &s) in SLOT_TIME.iter().enumerate() {
-                let own = since + s + READS_OWN >= 0;
-                self.l20[i] = latch(own, self.r20[i], self.l20[i]);
-                self.l40[i] = latch(own, self.r40[i], self.l40[i]);
-                self.l60[i] = latch(own, self.r60[i], self.l60[i]);
-                self.l80[i] = latch(own, self.r80[i], self.l80[i]);
-                self.le0[i] = latch(own, self.re0[i], self.le0[i]);
+                let reads = s >= own;
+                self.l20[i] = latch(reads, self.r20[i], self.l20[i]);
+                self.l40[i] = latch(reads, self.r40[i], self.l40[i]);
+                self.l60[i] = latch(reads, self.r60[i], self.l60[i]);
+                self.l80[i] = latch(reads, self.r80[i], self.l80[i]);
+                self.le0[i] = latch(reads, self.re0[i], self.le0[i]);
             }
         }
         if (written & GROUP_FREQUENCY) != 0 {
             for (i, &s) in SLOT_TIME.iter().enumerate() {
-                let own = since + s + READS_OWN >= 0;
-                self.lfnum[i] = latch(own, self.ch_fnum[i], self.lfnum[i]);
-                self.lblock[i] = latch(own, self.ch_block[i], self.lblock[i]);
-                self.lkey[i] = latch(own, self.ch_key[i], self.lkey[i]);
+                let reads = s >= own;
+                self.lfnum[i] = latch(reads, self.ch_fnum[i], self.lfnum[i]);
+                self.lblock[i] = latch(reads, self.ch_block[i], self.lblock[i]);
+                self.lkey[i] = latch(reads, self.ch_key[i], self.lkey[i]);
             }
         }
         if (written & GROUP_CHANNEL) != 0 {
+            let feedback = reads_from(since, READS_FEEDBACK);
             for i in 0..LANES {
                 let s = SLOT_TIME[i];
-                let own = since + s + READS_OWN >= 0;
-                let channel_first = since + CHANNEL_FIRST_TIME[i] + READS_OWN >= 0;
-                let chain_first = since + CHAIN_FIRST_TIME[i] + READS_OWN >= 0;
-                self.lpan[i] = latch(own, self.ch_pan[i], self.lpan[i]);
+                let channel_first = CHANNEL_FIRST_TIME[i] >= own;
+                let chain_first = CHAIN_FIRST_TIME[i] >= own;
+                self.lpan[i] = latch(s >= own, self.ch_pan[i], self.lpan[i]);
                 self.lcon[i] = latch(channel_first, self.ch_con[i], self.lcon[i]);
                 self.lfirst_con[i] = latch(chain_first, self.first_con[i], self.lfirst_con[i]);
                 self.lsecond_con[i] = latch(chain_first, self.second_con[i], self.lsecond_con[i]);
-                self.lfb[i] = latch(since + s + READS_FEEDBACK >= 0, self.ch_fb[i], self.lfb[i]);
+                self.lfb[i] = latch(s >= feedback, self.ch_fb[i], self.lfb[i]);
             }
         }
         if (written & GROUP_CHIP) != 0 {
+            let chip = reads_from(since, READS_CHIP);
+            let before = reads_from(since, RHYTHM_BEFORE);
+            let after = reads_from(since, RHYTHM_AFTER);
+            let keys = since + RHYTHM_KEYS_TIME >= 0;
             for (i, &s) in SLOT_TIME.iter().enumerate() {
-                let chip = since + s + READS_CHIP >= 0;
-                self.lnts[i] = latch(chip, self.nts, self.lnts[i]);
-                self.ldrum_keys[i] = latch(chip, self.drum_keys, self.ldrum_keys[i]);
-                self.ldam[i] = latch(chip, self.dam, self.ldam[i]);
-                self.ldvb[i] = latch(chip, self.dvb, self.ldvb[i]);
-                self.lrhythm[i] = latch(chip, self.rhythm, self.lrhythm[i]);
-                self.lrhythm_keys[i] = latch(since + RHYTHM_KEYS_TIME >= 0, self.rhythm, self.lrhythm_keys[i]);
-                self.lrhythm_before[i] = latch(since + s + RHYTHM_BEFORE >= 0, self.rhythm, self.lrhythm_before[i]);
-                self.lrhythm_after[i] = latch(since + s + RHYTHM_AFTER >= 0, self.rhythm, self.lrhythm_after[i]);
+                let reads = s >= chip;
+                self.lnts[i] = latch(reads, self.nts, self.lnts[i]);
+                self.ldrum_keys[i] = latch(reads, self.drum_keys, self.ldrum_keys[i]);
+                self.ldam[i] = latch(reads, self.dam, self.ldam[i]);
+                self.ldvb[i] = latch(reads, self.dvb, self.ldvb[i]);
+                self.lrhythm[i] = latch(reads, self.rhythm, self.lrhythm[i]);
+                self.lrhythm_keys[i] = latch(keys, self.rhythm, self.lrhythm_keys[i]);
+                self.lrhythm_before[i] = latch(s >= before, self.rhythm, self.lrhythm_before[i]);
+                self.lrhythm_after[i] = latch(s >= after, self.rhythm, self.lrhythm_after[i]);
             }
         }
         if (written & GROUP_CHAINS) != 0 {
+            let reads = reads_from(since, 0);
             for (i, &t) in CHAIN_READ_TIME.iter().enumerate() {
-                self.lfour_op[i] = latch(since + t >= 0, self.four_op, self.lfour_op[i]);
+                self.lfour_op[i] = latch(t >= reads, self.four_op, self.lfour_op[i]);
             }
         }
     }
@@ -1324,36 +1400,50 @@ impl Core {
     /// by, how loud it is heard, the drum's phase it takes, and whether its
     /// value is stored for feedback. It reads the connections, the rhythm and
     /// the chains alone, so it is left as it is after a write to none of those
-    /// ([`Core::written`]).
+    /// ([`Core::written`]). Its loop is vector code of bytes, as what it reads
+    /// and makes are, at every tier: what it takes of each lane's slot is in
+    /// bytes ([`SlotRoles`]), everything it reads is loaded first, and its
+    /// conditions are `&` and `|` in place of `&&` and `||`, which say the same
+    /// of booleans, as with `&&` LLVM branched around the loads of the bytes it
+    /// picked and did not vectorize the loop at all. Taking the slot's number
+    /// in 32 bits, the loop took 54 to 61 ns on the Neoverse N2, 50 to 79 at
+    /// x86-64-v3 and 84 to 113 at the baseline on GitHub's runners, and 21 to
+    /// 23, 11 to 18 and 11 to 14 by bytes.
     #[inline(always)]
     #[expect(
         clippy::inline_always,
         reason = "its loop over the lanes belongs in each tier's form of a sample, where it is vector code of the tier's width"
     )]
+    #[expect(
+        clippy::needless_bitwise_bool,
+        reason = "conditions without short-circuits are what keep the loop free of branches, and vector code"
+    )]
     fn refresh_routing(&mut self) {
         if (self.written & ROUTING_GROUPS) == 0 {
             return;
         }
-        let lanes = &*self.lanes;
+        let roles = &self.roles;
         for i in 0..LANES {
-            let s = lanes.lane_slot[i];
-            let first = lanes.lane_first[i] != 0;
-            let second_channel = lanes.lane_second_channel[i] != 0;
-            let chain = (self.lfour_op[i] & CHAIN_BIT[i]) != 0;
+            let first = roles.first[i] != 0;
+            let second_channel = roles.second_channel[i] != 0;
+            let heard = roles.heard[i] != 0;
+            let drum = roles.drum[i] != 0;
+            let alone = roles.alone[i] != 0;
+            let drum_weight = roles.drum_weight[i];
+            let holds = roles.holds[i] != 0;
+            let chain = (self.lfour_op[i] & roles.chain_bit[i]) != 0;
+            let phase = roles.drum_phase[i];
             let con = self.lcon[i] != 0;
             let first_con = self.lfirst_con[i] != 0;
             let second_con = self.lsecond_con[i] != 0;
             let rhythm_early = self.lrhythm_before[i] != 0;
             let rhythm = self.lrhythm[i] != 0;
             let rhythm_late = self.lrhythm_after[i] != 0;
-            let phase = DRUM_PHASE[i];
-            let heard = s >= 0;
             // Two operators: what the channel's first slot read of its
             // connection decides both whether that slot is heard and whether it
             // modulates the second.
-            let second_modulation = u8::from(!con);
-            let mut modulation = if first { 2 } else { second_modulation };
-            let mut weight = u8::from(!first || con);
+            let mut modulation = if first { 2 } else { u8::from(!con) };
+            let mut weight = u8::from(!first | con);
             // Four operators: the chain A B C D of channels f and f + 3. B is
             // heard and C goes unmodulated when the chain adds A and B to C and
             // D (the first channel's connection 0, the second's 1, both as A
@@ -1361,34 +1451,27 @@ impl Core {
             // operators, when the second channel's connection as C read it is
             // 1, but not then. A goes as for two operators, and so does B's
             // modulation, and D is heard.
-            let two_pairs = !first_con && second_con;
-            let c_heard = !two_pairs && con;
-            let is_b = chain && !second_channel && !first;
-            let is_c = chain && second_channel && first;
-            let is_d = chain && second_channel && !first;
-            let b_weight = u8::from(two_pairs);
-            let c_weight = u8::from(c_heard);
-            let c_modulation = u8::from(!two_pairs);
-            let d_modulation = u8::from(!c_heard);
-            weight = if is_b { b_weight } else { weight };
-            weight = if is_c { c_weight } else { weight };
-            modulation = if is_c { c_modulation } else { modulation };
-            modulation = if is_d { d_modulation } else { modulation };
+            let two_pairs = !first_con & second_con;
+            let c_heard = !two_pairs & con;
+            let is_b = chain & !second_channel & !first;
+            let is_c = chain & second_channel & first;
+            let is_d = chain & second_channel & !first;
+            weight = if is_b { u8::from(two_pairs) } else { weight };
+            weight = if is_c { u8::from(c_heard) } else { weight };
+            modulation = if is_c { u8::from(!two_pairs) } else { modulation };
+            modulation = if is_d { u8::from(!c_heard) } else { modulation };
             // Rhythm: channels 6, 7 and 8 of the first bank, slots 12 to 17.
             // The bass drum is the pair of channel 6 as it is, heard from its
             // carrier alone; the other four drums are a slot each, with neither
             // feedback nor modulation. A drum is heard twice as loud, and the
             // values of the hi-hat's and the tom's slots are not stored for
             // feedback.
-            let drum = (12..18).contains(&s);
-            let alone = drum && s != 12 && s != 15;
-            let drum_weight = if s == 12 { 0 } else { 2 };
-            modulation = if alone && rhythm_early { 0 } else { modulation };
-            weight = if drum && rhythm_late { drum_weight } else { weight };
+            modulation = if alone & rhythm_early { 0 } else { modulation };
+            weight = if drum & rhythm_late { drum_weight } else { weight };
             weight = if heard { weight } else { 0 };
             self.modulation[i] = modulation;
             self.weight[i] = weight;
-            self.hold_history[i] = u8::from(rhythm_late && (s == 13 || s == 14));
+            self.hold_history[i] = u8::from(rhythm_late & holds);
             self.rhythm_phase[i] = if rhythm { phase } else { 0 };
         }
     }
