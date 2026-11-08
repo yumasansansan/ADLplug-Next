@@ -40,13 +40,21 @@
 //! left scalar where the model counts the lookups dear, the operators' for
 //! x86-64-v2, v3 and AArch64 and `derive`'s for x86-64-v2 and AArch64, as
 //! LLVM 23 compiles them. Every other loop over the lanes is vectorized there.
+//!
+//! Around a pass written by hand, the code of a sample (`Core::generate_by_hand`)
+//! is compiled for the tier of the pass's level as well (`x86_64.rs`): the
+//! loops over the lanes that it runs and what makes the pass's inputs are
+//! inlined into it (`#[inline(always)]`), so that they take the tier's
+//! instructions, its vectors of 256 or 512 bits among them; the rest, the queue
+//! and the registers as a write reaches them, is scalar code, which the compiler
+//! inlines or calls as it sees fit.
 #![forbid(unsafe_code)]
 
 use std::cmp::Ordering;
 use std::f64::consts::PI;
 use std::fmt;
 
-use adlplug_cpu::{Choice, Features, LEVELS, Level};
+use adlplug_cpu::{Choice, Features, LEVELS, Level, Tier};
 
 #[cfg(target_arch = "x86_64")]
 use crate::pass::PassInputs;
@@ -379,8 +387,10 @@ enum Pass {
 /// A core works its passes over the slots out, one a sample, at a level of the
 /// processor ([`Level`]): by a pass written by hand in assembly at the levels of
 /// x86-64 from `avx2` on, and by the portable pass, loops in Rust, at `v2` and
-/// `neon`, the baselines, and on an architecture without levels. All make the
-/// same samples. A core keeps to the pass it is made with ([`Core::level`]).
+/// `neon`, the baselines, and on an architecture without levels; the code around
+/// a pass written by hand is taken at the tier of x86-64 of its level, where
+/// the processor has it ([`Core::tier`]). All make the same samples. A core
+/// keeps to the pass it is made with ([`Core::level`]).
 ///
 /// What a core works with, its lanes and its queue of writes, is on the heap,
 /// so that moving one moves a few kilobytes.
@@ -594,6 +604,18 @@ impl Core {
         self.level
     }
 
+    /// The tier of x86-64 that the code around the core's pass is compiled for
+    /// ([`Tier`]): for a pass written by hand, its level's, or the most below
+    /// it that the processor has; the baseline for the portable pass.
+    #[must_use]
+    pub const fn tier(&self) -> Tier {
+        match self.pass {
+            Pass::Portable => Tier::Baseline,
+            #[cfg(target_arch = "x86_64")]
+            Pass::Hand(hand) => hand.tier(),
+        }
+    }
+
     /// A core of noughts that takes a pass, reset.
     fn with(level: Option<Level>, pass: Pass) -> Self {
         let mut core = Self {
@@ -731,6 +753,8 @@ impl Core {
         self.landed_age = 0;
         self.landed_slot_time = -4; // everything read afresh
         self.relatch();
+        self.refresh_routing();
+        self.derive();
         self.landed_age = -1;
     }
 
@@ -794,6 +818,48 @@ impl Core {
 
     /// One sample at the chip's rate: output A, then output B.
     pub fn generate(&mut self) -> [i32; 2] {
+        match self.pass {
+            Pass::Portable => {
+                self.take_writes();
+                self.envelope_and_phase();
+                self.rhythm_phases();
+                self.operators();
+                self.store_history();
+                let frame = self.accumulate();
+                self.advance();
+                frame
+            }
+            #[cfg(target_arch = "x86_64")]
+            Pass::Hand(hand) => hand.generate(self),
+        }
+    }
+
+    /// One sample by a pass written by hand, as [`Core::generate`] makes it:
+    /// `x86_64.rs` compiles it for the tier of the pass, as well as for the
+    /// baseline.
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "each tier's form of a sample is compiled whole for that tier, its loops vector code of the tier's width"
+    )]
+    pub(crate) fn generate_by_hand(&mut self, hand: Hand) -> [i32; 2] {
+        self.take_writes();
+        let frame = self.hand_written_pass(hand);
+        self.advance();
+        frame
+    }
+
+    /// The writes, over the sample this call stands for: what the slots read of
+    /// the last write that they had not read yet, the write that takes effect
+    /// in this pass, if any, and what they read of it; then what the routing
+    /// and the passes make of what they have read.
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "its loops over the lanes belong in each tier's form of a sample, where they are vector code of the tier's width"
+    )]
+    fn take_writes(&mut self) {
         // The write that takes effect in this pass: one the last sample sent
         // into it, or one this sample sends so early that it still reaches it
         // (the writes are 80 slot times apart, so never both).
@@ -803,7 +869,8 @@ impl Core {
         let due = if now.due { now } else { sent_before };
 
         // What the slots read of the last write that they had not read yet.
-        if self.landed_age >= 0 {
+        let reading = self.landed_age >= 0;
+        if reading {
             self.relatch();
             if SLOT_TIMES * self.landed_age + READS_FEEDBACK >= self.landed_slot_time {
                 self.landed_age = -1;
@@ -813,24 +880,27 @@ impl Core {
             self.land(due);
             self.relatch();
         }
+        // The routing and what the passes go by come of what the slots have
+        // read and of nothing that a write changes, so once for both readings.
+        if reading || due.due {
+            self.refresh_routing();
+            self.derive();
+        }
+    }
 
-        let frame = match self.pass {
-            Pass::Portable => {
-                self.envelope_and_phase();
-                self.rhythm_phases();
-                self.operators();
-                self.store_history();
-                self.accumulate()
-            }
-            #[cfg(target_arch = "x86_64")]
-            Pass::Hand(hand) => self.hand_written_pass(hand),
-        };
+    /// The counters and the noise, on to the next pass, and the age of the last
+    /// write.
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "it belongs in each tier's form of a sample with the rest of the sample"
+    )]
+    fn advance(&mut self) {
         self.lanes.counters.advance();
         self.lanes.noise = ymf262::noise_pass(self.lanes.noise);
         if self.landed_age >= 0 {
             self.landed_age += 1;
         }
-        frame
     }
 
     /// The queue, over the sample this call stands for: the write, if any,
@@ -1001,7 +1071,13 @@ impl Core {
 
     /// What each slot reads for the pass worked out now: the registers as they
     /// stand if it reads them after the last write took effect, or else what it
-    /// read before.
+    /// read before. The routing and what the passes go by follow from it
+    /// (`refresh_routing()`, `derive()`).
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "its loop over the lanes belongs in each tier's form of a sample, where it is vector code of the tier's width"
+    )]
     fn relatch(&mut self) {
         // Slot times from the write to this pass.
         let since = SLOT_TIMES * self.landed_age - self.landed_slot_time;
@@ -1034,13 +1110,16 @@ impl Core {
             self.lrhythm_after[i] = latch(since + s + RHYTHM_AFTER >= 0, self.rhythm, self.lrhythm_after[i]);
             self.lfour_op[i] = latch(since + CHAIN_READ_TIME[i] >= 0, self.four_op, self.lfour_op[i]);
         }
-        self.refresh_routing();
-        self.derive();
     }
 
     /// What the routing makes of what the slots read: what each is modulated
     /// by, how loud it is heard, the drum's phase it takes, and whether its
     /// value is stored for feedback.
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "its loop over the lanes belongs in each tier's form of a sample, where it is vector code of the tier's width"
+    )]
     fn refresh_routing(&mut self) {
         let lanes = &*self.lanes;
         for i in 0..LANES {
@@ -1102,6 +1181,11 @@ impl Core {
     }
 
     /// What the passes go by, from what the slots read and the routing.
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "its loop over the lanes belongs in each tier's form of a sample, where it is vector code of the tier's width"
+    )]
     fn derive(&mut self) {
         let lanes = &mut *self.lanes;
         for (lane, &drum_key_bit) in DRUM_KEY_BIT.iter().enumerate() {
@@ -1166,6 +1250,11 @@ impl Core {
     }
 
     /// How loud each slot is on each output with soft panning.
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "its loop over the lanes belongs in each tier's form of a sample, where it is vector code of the tier's width"
+    )]
     fn derive_soft_pan(&mut self) {
         let lanes = &mut *self.lanes;
         for i in 0..LANES {
@@ -1355,6 +1444,11 @@ impl Core {
     /// the lanes: what the counters and the noise give for this pass, and what
     /// the routing says of the drums and of the shared feedback history.
     #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "the pass's inputs are made in each tier's form of a sample, and stored as wide as the pass loads them"
+    )]
     fn hand_written_pass(&mut self, hand: Hand) -> [i32; 2] {
         let rhythm = [
             self.rhythm_phase[LANE_13],
@@ -1390,7 +1484,11 @@ impl fmt::Debug for Core {
 /// `if` lets the compiler move each read into its arm and then read from the
 /// place it chooses, which in a loop over the lanes is a gather from two
 /// arrays, and keeps the loop from being vectorized.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "a lane's reading belongs in the loop over the lanes, in each tier's form of a sample"
+)]
 fn latch<T>(reads: bool, now: T, held: T) -> T {
     std::hint::select_unpredictable(reads, now, held)
 }

@@ -20,11 +20,13 @@
 //!   one side silences the other (`opl3_core_soft_panning`).
 //!
 //! And a core takes the level it is made at, the most preferred the processor
-//! has when none is named, and none that the processor has not.
+//! has when none is named, and none that the processor has not; and the code
+//! around its pass the tier of the level, or the most below it that the
+//! processor has.
 
 mod common;
 
-use adlplug_cpu::{Choice, Features, LEVELS, Level};
+use adlplug_cpu::{Choice, Features, LEVELS, Level, Tier};
 use adlplug_opl3::Core;
 
 /// A core's samples for writes, each written before the sample it is at, and
@@ -106,10 +108,16 @@ fn soft_panning_at_the_centre_is_the_chip_and_hard_to_a_side_silences_the_other(
 #[test]
 fn a_core_takes_the_level_it_is_made_at() {
     let core = Core::new();
-    println!("a core made without a level takes {}", Choice { level: core.level() });
+    println!(
+        "a core made without a level takes {}, with the code around its pass at {}",
+        Choice { level: core.level() },
+        core.tier()
+    );
     assert_eq!(core.level(), Choice::new(Features::detect()).level);
     assert_eq!(Core::portable().level(), LEVELS.first().copied());
-    let levels = Features::detect().levels();
+    assert_eq!(Core::portable().tier(), Tier::Baseline);
+    let features = Features::detect();
+    let levels = features.levels();
     let all = [
         Level::V2,
         Level::Avx2,
@@ -123,6 +131,6 @@ fn a_core_takes_the_level_it_is_made_at() {
     for level in all {
         let core = Core::at(level);
         assert_eq!(core.is_some(), levels.contains(&level), "{level}");
-        assert!(core.is_none_or(|core| core.level() == Some(level)));
+        assert!(core.is_none_or(|core| core.level() == Some(level) && core.tier() == features.tier(level)));
     }
 }

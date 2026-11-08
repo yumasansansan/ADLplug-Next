@@ -7,8 +7,9 @@
 // (LICENSES/GPL-3.0-or-later.txt).
 
 //! The processor ADLplug-Next runs on: the extensions of its instruction set
-//! that the passes of the emulator cores are written for, and the level of the
-//! passes chosen from them.
+//! that the passes of the emulator cores are written for, the level of the
+//! passes chosen from them, and the tier of x86-64 that the code around a pass
+//! is compiled for.
 //!
 //! A [`Level`] is a set of extensions that one form of a pass is written for.
 //! On x86-64 they are `v2`, the baseline the build is compiled for, which has
@@ -27,9 +28,18 @@
 //! which waits longer than a lookup by words on AMD's (Zen 4 and 5) and less on
 //! Intel's, as the pass for AVX-512 measured it.
 //!
+//! A [`Tier`] is one of the levels of x86-64 that its psABI defines, x86-64-v2,
+//! v3 and v4, called tiers here to keep them apart from the levels of the
+//! passes. The builds are for the baseline, x86-64-v2 on x86-64, and the code in
+//! Rust around a pass written by hand -- the writes the core takes in, what its
+//! passes go by, its counters -- is compiled twice more, for x86-64-v3 and for
+//! x86-64-v4, so that it takes the wider vectors too; a core takes the form for
+//! the tier of its level's processors ([`Level::tier`]), or for the most below
+//! it that the processor has ([`Features::tier`]).
+//!
 //! The extensions are those std's `is_x86_feature_detected!` reports, which
-//! asks the processor and the system: AVX-512 counts only where the system saves
-//! its registers.
+//! asks the processor and the system: AVX and AVX-512 count only where the
+//! system saves their registers.
 #![forbid(unsafe_code)]
 
 use std::fmt;
@@ -122,6 +132,20 @@ impl Level {
     pub fn is_native(self) -> bool {
         LEVELS.contains(&self)
     }
+
+    /// The tier of the processors that the level's pass is written for, as they
+    /// are made: the baseline for `v2` and `neon`, x86-64-v3 for the levels of
+    /// AVX2, and x86-64-v4 for those of AVX-512. A processor may still lack
+    /// some of the tier's extensions, as a virtual machine may report them;
+    /// [`Features::tier`] then takes the most it has.
+    #[must_use]
+    pub const fn tier(self) -> Tier {
+        match self {
+            Self::V2 | Self::Neon => Tier::Baseline,
+            Self::Avx2 | Self::Avx2Vnni => Tier::V3,
+            Self::Avx512 | Self::Avx512Vnni | Self::Avx512Vbmi | Self::Avx512VbmiVnni => Tier::V4,
+        }
+    }
 }
 
 impl fmt::Display for Level {
@@ -130,8 +154,43 @@ impl fmt::Display for Level {
     }
 }
 
-/// The extensions that the levels need, as the processor and the system report
-/// them. The fields of the other architecture stay false.
+/// A tier of x86-64, one of the levels its psABI defines: what the code around a
+/// pass is compiled for. The order of the type is the order of preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Tier {
+    /// The baseline the build is compiled for: x86-64-v2 on x86-64 as the
+    /// builds are shipped, and the architecture's own on the others.
+    Baseline,
+    /// x86-64-v3: AVX, AVX2, BMI1, BMI2, F16C, FMA, LZCNT and MOVBE, besides the
+    /// baseline.
+    V3,
+    /// x86-64-v4: x86-64-v3, and AVX-512 F, BW, CD, DQ and VL.
+    V4,
+}
+
+/// The tiers, the least preferred first.
+const TIERS: [Tier; 3] = [Tier::Baseline, Tier::V3, Tier::V4];
+
+impl Tier {
+    /// The tier's name.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Baseline => "baseline",
+            Self::V3 => "x86-64-v3",
+            Self::V4 => "x86-64-v4",
+        }
+    }
+}
+
+impl fmt::Display for Tier {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.name())
+    }
+}
+
+/// The extensions that the levels and the tiers need, as the processor and the
+/// system report them. The fields of the other architecture stay false.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -142,12 +201,28 @@ pub struct Features {
     pub sse4_2: bool,
     /// POPCNT.
     pub popcnt: bool,
+    /// AVX, with the system saving its registers.
+    pub avx: bool,
     /// AVX2.
     pub avx2: bool,
+    /// BMI1.
+    pub bmi1: bool,
+    /// BMI2.
+    pub bmi2: bool,
+    /// F16C.
+    pub f16c: bool,
+    /// FMA.
+    pub fma: bool,
+    /// LZCNT.
+    pub lzcnt: bool,
+    /// MOVBE.
+    pub movbe: bool,
     /// AVX-VNNI, the VEX form of VNNI's instructions.
     pub avx_vnni: bool,
     /// AVX-512 F, with the system saving its registers.
     pub avx512f: bool,
+    /// AVX-512 CD.
+    pub avx512cd: bool,
     /// AVX-512 DQ.
     pub avx512dq: bool,
     /// AVX-512 BW.
@@ -175,9 +250,17 @@ impl Features {
             Self {
                 sse4_2: is_x86_feature_detected!("sse4.2"),
                 popcnt: is_x86_feature_detected!("popcnt"),
+                avx: is_x86_feature_detected!("avx"),
                 avx2: is_x86_feature_detected!("avx2"),
+                bmi1: is_x86_feature_detected!("bmi1"),
+                bmi2: is_x86_feature_detected!("bmi2"),
+                f16c: is_x86_feature_detected!("f16c"),
+                fma: is_x86_feature_detected!("fma"),
+                lzcnt: is_x86_feature_detected!("lzcnt"),
+                movbe: is_x86_feature_detected!("movbe"),
                 avx_vnni: is_x86_feature_detected!("avxvnni"),
                 avx512f: is_x86_feature_detected!("avx512f"),
+                avx512cd: is_x86_feature_detected!("avx512cd"),
                 avx512dq: is_x86_feature_detected!("avx512dq"),
                 avx512bw: is_x86_feature_detected!("avx512bw"),
                 avx512vl: is_x86_feature_detected!("avx512vl"),
@@ -222,6 +305,30 @@ impl Features {
     #[must_use]
     pub fn levels(self) -> Vec<Level> {
         LEVELS.iter().copied().filter(|&level| self.has(level)).collect()
+    }
+
+    /// Whether the extensions include every one of a tier's. The baseline's are
+    /// those the build is compiled for, which a processor that runs it has.
+    #[must_use]
+    pub const fn has_tier(self, tier: Tier) -> bool {
+        let v3 = self.avx && self.avx2 && self.bmi1 && self.bmi2 && self.f16c && self.fma && self.lzcnt && self.movbe;
+        let v4 = v3 && self.avx512f && self.avx512bw && self.avx512cd && self.avx512dq && self.avx512vl;
+        match tier {
+            Tier::Baseline => true,
+            Tier::V3 => v3,
+            Tier::V4 => v4,
+        }
+    }
+
+    /// The tier that the code around a level's pass is taken at: the level's
+    /// own ([`Level::tier`]) where the extensions include its, or else the most
+    /// preferred tier below it that they do.
+    #[must_use]
+    pub fn tier(self, level: Level) -> Tier {
+        TIERS
+            .into_iter()
+            .rfind(|&tier| tier <= level.tier() && self.has_tier(tier))
+            .unwrap_or(Tier::Baseline)
     }
 }
 
@@ -290,9 +397,17 @@ mod tests {
         Features {
             sse4_2: true,
             popcnt: true,
+            avx: true,
             avx2: true,
+            bmi1: true,
+            bmi2: true,
+            f16c: true,
+            fma: true,
+            lzcnt: true,
+            movbe: true,
             avx_vnni: true,
             avx512f: true,
+            avx512cd: true,
             avx512dq: true,
             avx512bw: true,
             avx512vl: true,
@@ -336,5 +451,56 @@ mod tests {
         assert_eq!(Choice::new(baseline).level, Some(Level::V2));
         assert_eq!(Choice::new(Features::default()).level, None);
         assert_eq!(Choice::new(Features::default()).to_string(), "portable");
+    }
+
+    #[test]
+    fn the_tiers_of_the_levels() {
+        let tiers = ALL.map(Level::tier);
+        assert_eq!(
+            tiers,
+            [
+                Tier::Baseline,
+                Tier::V3,
+                Tier::V3,
+                Tier::V4,
+                Tier::V4,
+                Tier::V4,
+                Tier::V4,
+                Tier::Baseline
+            ]
+        );
+        let mut sorted = TIERS.to_vec();
+        sorted.sort_unstable();
+        assert_eq!(sorted, TIERS);
+        assert_eq!(Tier::V4.to_string(), "x86-64-v4");
+    }
+
+    #[test]
+    #[cfg(target_arch = "x86_64")]
+    fn the_tier_the_code_around_a_pass_is_taken_at() {
+        let all = everything();
+        for level in LEVELS.iter().copied() {
+            assert_eq!(all.tier(level), level.tier(), "{level}");
+        }
+
+        // AVX-512 without CD, which no processor has been made with, but a
+        // virtual machine may report: the levels of AVX-512 take x86-64-v3.
+        let no_cd = Features { avx512cd: false, ..all };
+        assert!(no_cd.has(Level::Avx512));
+        assert_eq!(no_cd.tier(Level::Avx512), Tier::V3);
+        assert_eq!(no_cd.tier(Level::Avx2), Tier::V3);
+
+        // AVX2 without BMI2: the code around every pass is the baseline's.
+        let no_bmi2 = Features { bmi2: false, ..all };
+        assert!(no_bmi2.has(Level::Avx2));
+        assert_eq!(no_bmi2.tier(Level::Avx2), Tier::Baseline);
+        assert_eq!(no_bmi2.tier(Level::Avx512VbmiVnni), Tier::Baseline);
+
+        // A level takes no more than its own tier, and the baseline is always
+        // there.
+        assert_eq!(all.tier(Level::V2), Tier::Baseline);
+        assert!(Features::default().has_tier(Tier::Baseline));
+        assert!(!Features::default().has_tier(Tier::V3));
+        assert_eq!(Features::default().tier(Level::Avx512), Tier::Baseline);
     }
 }

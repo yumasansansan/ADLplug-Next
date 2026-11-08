@@ -13,20 +13,27 @@
 # On x86-64 the builds are for x86-64-v2 (SSE4.2 and POPCNT), and not for
 # x86-64-v3: the plugins have to run on every machine their hosts run on. The
 # emulator cores take the richer extensions a processor has at run time instead,
-# in passes written for them (crates/adlplug-cpu says which). ci/targets.sh
-# builds and tests the same code for x86-64-v3, and for x86-64-v4 with vectors
-# of 512 bits, as distributions that raise the baseline build it.
+# in passes written for them and in code around them compiled for x86-64-v3 and
+# v4 as well (crates/adlplug-cpu says which). ci/targets.sh builds and tests the
+# same code for x86-64-v3 and for x86-64-v4, as distributions that raise the
+# baseline build it.
+#
+# Wherever code is compiled for AVX-512, it takes vectors of 512 bits: LLVM
+# keeps to 256 bits for x86-64-v4 and for Intel's processors of AVX-512 unless
+# told otherwise, which -prefer-256-bit turned off does, for the functions
+# compiled for x86-64-v4 at run time and for the whole of a build for it (rustc
+# passes the feature to LLVM, and warns that it does not know it).
 
 [target.x86_64-pc-windows-msvc]
 linker = "lld-link"
-rustflags = ["-C", "target-cpu=x86-64-v2"]
+rustflags = ["-C", "target-cpu=x86-64-v2", "-C", "target-feature=-prefer-256-bit"]
 
 [target.aarch64-pc-windows-msvc]
 linker = "lld-link"
 
 [target.x86_64-unknown-linux-gnu]
 linker = "clang"
-rustflags = ["-C", "link-arg=-fuse-ld=lld", "-C", "target-cpu=x86-64-v2"]
+rustflags = ["-C", "link-arg=-fuse-ld=lld", "-C", "target-cpu=x86-64-v2", "-C", "target-feature=-prefer-256-bit"]
 
 [target.aarch64-unknown-linux-gnu]
 linker = "clang"

@@ -12,11 +12,11 @@
 # Builds the workspace for the levels of x86-64 above the one it is shipped for
 # (x86-64-v2, .cargo/config.toml), as distributions that raise their baseline
 # build it: x86-64-v3, with vectors of 256 bits, and x86-64-v4 with vectors of
-# 512 bits -- for which LLVM keeps to 256 bits unless told otherwise, which
-# -prefer-256-bit turned off does (rustc passes the feature to LLVM, and warns
-# that it does not know it). The portable form of a pass is then vector code of
-# that width. The target is named, so that build scripts, which run here, are
-# built for this processor; the builds go to target/targets/.
+# 512 bits, as .cargo/config.toml has every x86-64 build take them where there
+# is AVX-512 (its flags come first, and these after them). The portable form of
+# a pass is then vector code of that width. The target is named, so that build
+# scripts, which run here, are built for this processor; the builds go to
+# target/targets/.
 #
 # With `test`, each build's tests run too, where the processor has what the
 # build needs: AVX2, FMA, BMI1, BMI2, F16C, LZCNT and MOVBE for x86-64-v3, and
@@ -42,7 +42,7 @@ has() {
 
 builds=(
     'v3 ["-C", "target-cpu=x86-64-v3"] avx2 fma bmi1 bmi2 f16c abm movbe'
-    'v4 ["-C", "target-cpu=x86-64-v4", "-C", "target-feature=-prefer-256-bit"] avx2 fma bmi1 bmi2 f16c abm movbe avx512f avx512bw avx512cd avx512dq avx512vl'
+    'v4 ["-C", "target-cpu=x86-64-v4"] avx2 fma bmi1 bmi2 f16c abm movbe avx512f avx512bw avx512cd avx512dq avx512vl'
 )
 for build in "${builds[@]}"; do
     name=${build%% *}

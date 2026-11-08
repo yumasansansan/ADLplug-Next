@@ -143,7 +143,11 @@ const _: () = assert!(high_steps_agree());
 
 /// The key scaling of the rates, from the block and the note select bit of the
 /// frequency number, whole when the register asks for it and else a quarter.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "it belongs in the loop of derive(), in each tier's form of a sample"
+)]
 pub(crate) fn key_scale(fnum: u32, block: u32, note_select_low: bool, scaled: bool) -> u32 {
     let bit8 = (fnum >> 8) & 1;
     let bit9 = (fnum >> 9) & 1;
@@ -154,7 +158,11 @@ pub(crate) fn key_scale(fnum: u32, block: u32, note_select_low: bool, scaled: bo
 }
 
 /// A rate of an envelope with its key scaling, 15 at the most.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "it belongs in the loop of derive(), in each tier's form of a sample"
+)]
 pub(crate) fn scaled_rate(rate: u32, ksr: u32) -> u32 {
     (rate + (ksr >> 2)).min(15)
 }
@@ -162,7 +170,11 @@ pub(crate) fn scaled_rate(rate: u32, ksr: u32) -> u32 {
 /// The attenuation of the key scale level and the total level, in steps of
 /// the envelope. The frequency number has ten bits, the top four of which pick
 /// the key scale level's attenuation.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "it belongs in the loop of derive(), in each tier's form of a sample"
+)]
 pub(crate) fn level_offset(fnum: u32, block: u32, ksl: u32, total_level: u32) -> u32 {
     let rom = KSL_ROM[index((fnum >> 6) & 15)];
     let sum = (rom & 63) + (block << 3);
@@ -173,7 +185,11 @@ pub(crate) fn level_offset(fnum: u32, block: u32, ksl: u32, total_level: u32) ->
 
 /// A number of 32 bits as an index of a table, which every architecture the
 /// core is built for holds whole.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "it belongs in the loop of derive(), in each tier's form of a sample"
+)]
 fn index(value: u32) -> usize {
     usize::try_from(value).expect("an index of 32 bits")
 }
@@ -200,7 +216,11 @@ pub(crate) struct Wave {
 }
 
 /// The waveform of the three bits of a slot's register.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "it belongs in the loop of derive(), in each tier's form of a sample"
+)]
 pub(crate) fn wave(waveform: u32) -> Wave {
     let w = waveform & 7;
     let mute_low = if w == 3 { 256 } else { 0 };

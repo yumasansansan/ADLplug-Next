@@ -278,6 +278,11 @@ impl PassInputs {
     /// slots 13 and 14 are held out of their queues), whether the outputs are
     /// soft panned, and the core's tables. It is the one way to make one, so
     /// that the tables it points at are always the core's.
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "made in each tier's form of a sample, it is stored as wide as the pass loads it, and then loaded from the stores"
+    )]
     pub(crate) fn new(counters: &Counters, noise: u32, rhythm: [u8; 3], hold: [u8; 2], soft_pan: bool) -> Self {
         let timing = counters.envelope_timing();
         let high_from_less_1 = i16::try_from(timing.high_from - 1).expect("a key scaling of two bits");
