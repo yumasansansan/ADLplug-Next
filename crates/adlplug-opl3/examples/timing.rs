@@ -6,8 +6,9 @@
 // GNU General Public License, version 3 or any later version
 // (LICENSES/GPL-3.0-or-later.txt).
 
-//! How long the core takes for a sample, at every level of the passes this
-//! processor has, with the tier of the code around the pass: the random writes
+//! The extensions of the processor as adlplug-cpu detects them, and how long
+//! the core takes for a sample, at every level of the passes this processor
+//! has, with the tier of the code around the pass: the random writes
 //! of the tests (`tests/common/mod.rs`), 20000 samples for each of eight seeds,
 //! the best of five runs; and the same samples with no writes after the first
 //! 2000, which is the pass alone.
@@ -59,6 +60,7 @@ fn per_sample(make: &dyn Fn() -> Core, until: u32) -> f64 {
 }
 
 fn main() {
+    println!("{:?}", Features::detect());
     println!("{:<28} {:>12} {:>14}", "level, tier", "with writes", "pass alone");
     let report = |name: &str, make: &dyn Fn() -> Core| {
         println!(

@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+# and its license, in the machine-readable form of the REUSE specification: the
+# GNU General Public License, version 3 or any later version
+# (LICENSES/GPL-3.0-or-later.txt).
+#
+# The speed of ADLplug-Next OPL3's core on GitHub's runners, for the
+# experiments of this branch: each job records what its runner is, the system,
+# the image, the processor and its extensions, and how long a sample takes at
+# every level the processor has (ci/speed.sh), into the summary of the run.
+# Every kind of runner runs three times, so that the jobs land on as many of the
+# processors behind a label as they will, and a run shows how much one job's
+# numbers differ from another's on the same processor. The Windows runners are
+# those with Visual Studio 2026 by their labels, as in CI.
+#
+# The checkout is plain git, and ci/setup.sh installs the pinned LLVM toolchain
+# and the latest stable Rust, as in CI. No action from elsewhere is used.
+
+name: Speed
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  speed:
+    name: speed (${{ matrix.os }}, ${{ matrix.try }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025-vs2026, ubuntu-26.04, windows-11-vs2026-arm, ubuntu-26.04-arm, macos-26]
+        try: [1, 2, 3]
+
+    steps:
+      - name: Check out
+        run: |
+          git config --global core.autocrlf false
+          git -c init.defaultBranch=main init --quiet
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --quiet --depth 1 origin "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          git log -1 --format='%H %s'
+
+      - name: Set up the toolchain
+        run: bash ci/setup.sh
+
+      - name: Measure
+        run: bash ci/speed.sh
