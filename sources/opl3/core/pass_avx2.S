@@ -1,40 +1,19 @@
-//
-// Copyright (C) 2023 nukeykt
-//
-// This file is part of YMF262-LLE.
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-//  YMF262 emulator
-//  Thanks:
-//      John McMaster (siliconpr0n.org):
-//          YMF262 decap and die shot
-//
-// SPDX-FileCopyrightText: 2023 nukeykt
 // SPDX-FileCopyrightText: 2026 Yuma Kakei <yumasansansan@gmail.com>
-// SPDX-License-Identifier: GPL-2.0-or-later AND GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 //
-// This file is part of ADLplug-Next. It is a pass of ADLplug-Next OPL3's core
-// (core.cc) written by hand for AVX2, and what it works out for a slot is what
-// ymf262_logic.h works out: the envelope, the phase, the operator, the
-// modulation and the rhythm phases, which follow the code of YMF262-LLE by
-// nukeykt, an emulator of the YMF262 (OPL3) drawn from a die shot of the chip.
-// The notice at the top is that one's, as the file stands in libADLMIDI
-// (nuked_fmopl3.c, under the GNU General Public License, version 2 or any later
-// version, LICENSES/GPL-2.0-or-later.txt); the counters that ymf262_logic.h
-// takes from Nuked OPL3 stay in core.cc, which hands this pass what they give.
-// The SPDX lines name the copyright holders and licenses in the
-// machine-readable form of the REUSE specification, with ADLplug-Next's code
-// under the GNU General Public License, version 3 or any later version
+// This file is part of ADLplug-Next. The SPDX lines name its copyright holder
+// and its license, in the machine-readable form of the REUSE specification: the
+// GNU General Public License, version 3 or any later version
 // (LICENSES/GPL-3.0-or-later.txt).
+//
+// It is a pass of ADLplug-Next OPL3's core (core.cc) written by hand for
+// AVX2, and what it works out for a slot is what ymf262_logic.h works out: the
+// envelope, the phase, the operator, the modulation and the rhythm phases.
+// ymf262_logic.h follows the code of YMF262-LLE by nukeykt, an emulator of the
+// YMF262 (OPL3) drawn from a die shot of the chip, and carries its notice; this
+// file holds none of that code, and works the same out for the lanes of the
+// core in instructions of its own. The counters that ymf262_logic.h takes from
+// Nuked OPL3 stay in core.cc, which hands this pass what they give.
 //
 //     void adlplug_opl3_pass_avx2(Core *core, const Pass_inputs *inputs,
 //                                 std::int32_t *frame);
