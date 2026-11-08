@@ -18,13 +18,14 @@ fn the_level_chosen_is_the_most_preferred_the_processor_has() {
     let features = Features::detect();
     let levels = features.levels();
     let choice = Choice::new(features);
-    let tiers = [Tier::Baseline, Tier::V3, Tier::V4, Tier::Sve]
+    let tiers = [Tier::Baseline, Tier::V3, Tier::V4, Tier::Sve, Tier::Sve2]
         .into_iter()
         .filter(|&tier| features.has_tier(tier));
     println!(
-        "levels of this processor: {}; chosen: {choice}; tiers: {}",
+        "levels of this processor: {}; chosen: {choice}; tiers: {}; SHA3: {}",
         levels.iter().map(ToString::to_string).collect::<Vec<_>>().join(", "),
-        tiers.map(|tier| tier.to_string()).collect::<Vec<_>>().join(", ")
+        tiers.map(|tier| tier.to_string()).collect::<Vec<_>>().join(", "),
+        features.sha3
     );
     assert_eq!(choice.level, levels.last().copied());
     for level in &levels {

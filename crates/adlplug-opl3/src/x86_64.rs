@@ -55,7 +55,7 @@
 //! [`Core::generate`]: crate::Core::generate
 #![allow(
     unsafe_code,
-    reason = "the calls into assembly and into the forms of a sample compiled for the tiers, each the one operation of a block whose comment says why it is sound"
+    reason = "the calls into assembly and into the forms of a sample compiled for the tiers, and the experiments' chain of additions in assembly, each the one operation of a block whose comment says why it is sound"
 )]
 
 use adlplug_cpu::{Features, Level, Tier};
@@ -109,7 +109,7 @@ impl Hand {
             Level::Avx512Vnni => adlplug_opl3_pass_avx512_vnni,
             Level::Avx512Vbmi => adlplug_opl3_pass_avx512_vbmi,
             Level::Avx512VbmiVnni => adlplug_opl3_pass_avx512_vbmi_vnni,
-            Level::V2 | Level::Neon | Level::Sve => return None,
+            Level::V2 | Level::Neon | Level::Sve | Level::Sve2 | Level::Sve2Shifts => return None,
         };
         let features = Features::detect();
         features.has(level).then(|| Self {
@@ -142,7 +142,47 @@ impl Hand {
                 // they are those that `generate_v3` is compiled for.
                 unsafe { generate_v3(core, self) }
             }
-            Tier::Baseline | Tier::Sve => core.generate_by_hand(self),
+            Tier::Baseline | Tier::Sve | Tier::Sve2 => core.generate_by_hand(self),
+        }
+    }
+
+    /// The forms of the pass without one of its parts, for the experiments'
+    /// measurements: none on x86-64.
+    #[cfg(feature = "experiment")]
+    #[expect(
+        clippy::unused_self,
+        reason = "the experiments ask every architecture's Hand alike, and AArch64's has them"
+    )]
+    pub(crate) fn ablations(self) -> Vec<(&'static str, Self)> {
+        Vec::new()
+    }
+
+    /// The other ways of writing the pass that the experiments try: none on
+    /// x86-64 yet.
+    #[cfg(feature = "experiment")]
+    #[expect(
+        clippy::unused_self,
+        reason = "the experiments ask every architecture's Hand alike, and AArch64's has them"
+    )]
+    pub(crate) fn variants(self) -> Vec<(&'static str, Self)> {
+        Vec::new()
+    }
+
+    /// What the slots read, the routing and what the passes go by worked out
+    /// once (`Core::rederive`), in the form compiled for the tier, for the
+    /// experiments' measurements alone.
+    #[cfg(feature = "experiment")]
+    pub(crate) fn rederive(self, core: &mut Core) {
+        match self.tier {
+            Tier::V4 => {
+                // SAFETY: as in `generate`, for `rederive_v4`.
+                unsafe { rederive_v4(core) }
+            }
+            Tier::V3 => {
+                // SAFETY: as in `generate`, for `rederive_v3`.
+                unsafe { rederive_v3(core) }
+            }
+            Tier::Baseline | Tier::Sve | Tier::Sve2 => core.rederive(),
         }
     }
 
@@ -191,4 +231,53 @@ fn generate_v3(core: &mut Core, hand: Hand) -> [i32; 2] {
 #[target_feature(enable = "avx,avx2,bmi1,bmi2,f16c,fma,lzcnt,movbe,avx512f,avx512bw,avx512cd,avx512dq,avx512vl")]
 fn generate_v4(core: &mut Core, hand: Hand) -> [i32; 2] {
     core.generate_by_hand(hand)
+}
+
+/// `Core::rederive` compiled for x86-64-v3, for the experiments' measurements.
+#[cfg(feature = "experiment")]
+#[target_feature(enable = "avx,avx2,bmi1,bmi2,f16c,fma,lzcnt,movbe")]
+fn rederive_v3(core: &mut Core) {
+    core.rederive();
+}
+
+/// `Core::rederive` compiled for x86-64-v4, for the experiments' measurements.
+#[cfg(feature = "experiment")]
+#[target_feature(enable = "avx,avx2,bmi1,bmi2,f16c,fma,lzcnt,movbe,avx512f,avx512bw,avx512cd,avx512dq,avx512vl")]
+fn rederive_v4(core: &mut Core) {
+    core.rederive();
+}
+
+/// Eight additions of `step`, each waiting for the one before, `rounds` times,
+/// for the experiments' measure of the clock (`Core::experiment_clock`): of a
+/// register, not of a number written in the instruction: a processor may take
+/// those as it renames the registers, without waiting, as the performance
+/// cores of an Intel Core i7-1360P did, five additions of 1 in a cycle.
+#[cfg(feature = "experiment")]
+pub(crate) fn chain(rounds: u64, step: u64) -> u64 {
+    let mut value = 0_u64;
+    let mut count = rounds;
+    // SAFETY: the instructions change only the two registers given to them to
+    // change, and the flags, which `asm!` takes as changed, and read besides
+    // only the one given them to read; they touch no memory and no stack. The
+    // loop ends when the count, which is at least one, reaches nought.
+    unsafe {
+        std::arch::asm!(
+            "2:",
+            "add {value}, {step}",
+            "add {value}, {step}",
+            "add {value}, {step}",
+            "add {value}, {step}",
+            "add {value}, {step}",
+            "add {value}, {step}",
+            "add {value}, {step}",
+            "add {value}, {step}",
+            "dec {count}",
+            "jnz 2b",
+            value = inout(reg) value,
+            count = inout(reg) count,
+            step = in(reg) step,
+            options(nomem, nostack),
+        );
+    }
+    value + count
 }

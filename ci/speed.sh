@@ -14,9 +14,15 @@
 # profile), twice, one run after the other, and records what the machine is:
 # the system and, under GitHub Actions, the runner's image; the processor's
 # name; the extensions the system reports for it; and those adlplug-cpu
-# detects, which the timing program prints. On Linux the runs are pinned to one
-# processor (taskset), elsewhere they are not. Under GitHub Actions all of it
-# goes into the summary of the run as well.
+# detects, which the timing program prints. Then what the parts of a sample
+# take at every level, twice as well (crates/adlplug-opl3/examples/profile.rs,
+# built with the feature experiment): the pass alone, the writes' handling
+# alone, the pass without one of its parts each, and the other ways of writing
+# the pass that this branch tries, each checked to make the samples of its
+# level. On Linux the runs are pinned to one processor (taskset), elsewhere they
+# are not, and under GitHub Actions perf counts and samples them as well
+# (ci/perf.sh). Under GitHub Actions all of it goes into the summary of the run
+# as well.
 set -euo pipefail
 
 report=$(mktemp)
@@ -75,7 +81,28 @@ for round in 1 2; do
   } >> "$report"
 done
 
+cargo build --release --locked -p adlplug-opl3 --features experiment --example profile
+profile=target/release/examples/profile
+# A variant that makes other samples than its level fails the profile program
+# once it has printed everything, and the script once the report is out.
+status=0
+for round in 1 2; do
+  {
+    echo
+    echo "#### The parts of a sample, round $round${pin[0]:+, pinned to processor 0}"
+    echo
+    echo '```'
+    ${pin[@]+"${pin[@]}"} "$profile" 2>&1 || status=1
+    echo '```'
+  } >> "$report"
+done
+
+if [ "$(uname -s)" = Linux ] && [ -n "${GITHUB_ACTIONS:-}" ]; then
+  bash ci/perf.sh "$profile" "$report"
+fi
+
 cat "$report"
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   cat "$report" >> "$GITHUB_STEP_SUMMARY"
 fi
+exit "$status"

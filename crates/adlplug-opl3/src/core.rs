@@ -1258,6 +1258,10 @@ impl Core {
             lanes.b_late[lane] = if on_b && s >= FIRST_LATE_ON_B { w } else { 0 };
         }
         self.derive_soft_pan();
+        #[cfg(feature = "experiment")]
+        {
+            self.lanes.increments_for = u8::MAX;
+        }
     }
 
     /// How loud each slot is on each output with soft panning.
@@ -1469,9 +1473,59 @@ impl Core {
         ];
         let hold = [self.hold_history[LANE_13], self.hold_history[LANE_14]];
         let inputs = PassInputs::new(&self.lanes.counters, self.lanes.noise, rhythm, hold, self.soft_pan);
+        #[cfg(feature = "experiment")]
+        self.refresh_increments();
         hand.run(&mut self.lanes, &inputs)
     }
+
+    /// For rust-speed's experiments: the lanes' phase increments in this pass,
+    /// as the pass works them out, worked out again when what they come of has
+    /// changed since they were: the vibrato's position, which moves on every
+    /// 1024 samples, or what the passes go by, which only writes change.
+    #[cfg(feature = "experiment")]
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "it belongs in each tier's form of a sample with the rest of the sample"
+    )]
+    fn refresh_increments(&mut self) {
+        let lanes = &mut *self.lanes;
+        let position = lanes.counters.vibrato_position;
+        if lanes.increments_for == position {
+            return;
+        }
+        lanes.increments_for = position;
+        let vibrato = ymf262::vibrato(position);
+        for i in 0..LANES {
+            lanes.increment.0[i] = ymf262::phase_increment(
+                lanes.fnum_v[i],
+                lanes.block_v[i],
+                lanes.multiple_v[i],
+                lanes.vibrato[i] != 0,
+                lanes.vibrato_depth[i] != 0,
+                &vibrato,
+            );
+        }
+    }
+
+    /// What the slots read, the routing and what the passes go by worked out
+    /// once: the heaviest of what a sample's writes take, which a written
+    /// sample takes once or twice, for the experiments' measurements alone.
+    #[cfg(feature = "experiment")]
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "each tier's form of it is compiled whole for that tier, as a sample's is"
+    )]
+    pub(crate) fn rederive(&mut self) {
+        self.relatch();
+        self.refresh_routing();
+        self.derive();
+    }
 }
+
+#[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
+mod experiment;
 
 impl Default for Core {
     /// [`Core::new`].

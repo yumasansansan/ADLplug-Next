@@ -153,7 +153,27 @@ pub(crate) struct Lanes {
     /// mode stops storing those of slots 13 and 14, and so mixes theirs with
     /// those of slots 31 and 32; the two queues are kept as they are.
     pub(crate) shared_history: [[i32; 4]; 2],
+    /// For rust-speed's experiments: the phase increments of the lanes in this
+    /// pass, as the pass works them out, for the forms of the pass written by
+    /// hand that take them from here, which the core works out again when what
+    /// they come of changes (`Core::refresh_increments`).
+    #[cfg(feature = "experiment")]
+    pub(crate) increment: Aligned<[u32; LANES]>,
+    /// Room for the indices of the lookups of the form that takes them out
+    /// through memory, two of four lanes for each four lanes of operators.
+    #[cfg(feature = "experiment")]
+    pub(crate) scratch: Aligned<[u32; 96]>,
+    /// The vibrato's position that the increments are for, of 0 to 7, or
+    /// [`u8::MAX`] when what they come of has changed since.
+    #[cfg(feature = "experiment")]
+    pub(crate) increments_for: u8,
 }
+
+/// Values on lines of the cache of their own, for the experiments' lanes after
+/// the single values, which the passes load 16 bytes at a time.
+#[cfg(feature = "experiment")]
+#[repr(C, align(64))]
+pub(crate) struct Aligned<T>(pub(crate) T);
 
 impl Lanes {
     /// Lanes of noughts, which the core's reset then fills.
@@ -211,6 +231,12 @@ impl Lanes {
             noise: 0,
             rhythm_bits: RhythmBits::default(),
             shared_history: [[0; 4]; 2],
+            #[cfg(feature = "experiment")]
+            increment: Aligned([0; LANES]),
+            #[cfg(feature = "experiment")]
+            scratch: Aligned([0; 96]),
+            #[cfg(feature = "experiment")]
+            increments_for: u8::MAX,
         }
     }
 }
@@ -515,6 +541,10 @@ const _: () = {
     assert!(offset_of!(RhythmBits, hh7) == 8 && offset_of!(RhythmBits, hh8) == 12);
     assert!(offset_of!(RhythmBits, tc3) == 16 && offset_of!(RhythmBits, tc5) == 20);
     assert!(offset_of!(Lanes, shared_history) == defined("ADLPLUG_OPL3_SHARED_HISTORY"));
+    #[cfg(feature = "experiment")]
+    assert!(offset_of!(Lanes, increment) == defined("ADLPLUG_OPL3_INCREMENT"));
+    #[cfg(feature = "experiment")]
+    assert!(offset_of!(Lanes, scratch) == defined("ADLPLUG_OPL3_SCRATCH"));
 };
 
 // What a pass goes by besides, likewise: aligned for the aligned loads of 32

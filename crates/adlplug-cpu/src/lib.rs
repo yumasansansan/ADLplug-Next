@@ -20,7 +20,9 @@
 //! Linux run on alike, and whose pass is written by hand; and, as this branch's
 //! experiment has it, `sve`, NEON's pass with its two tables looked up by SVE's
 //! gathers, for the processors with SVE, with the code around it compiled for
-//! SVE as well.
+//! SVE as well; and two more for SVE2's experiment: `sve2`, the same pass with
+//! the code around it compiled for SVE2, and `sve2-shifts`, its pass shifting
+//! down by SVE's shifts by a vector, which need no negated count.
 //!
 //! A processor has some of the levels, and not always every less preferred
 //! one: Intel has made processors with AVX-512 VNNI and no VBMI (Cascade Lake,
@@ -75,6 +77,11 @@ pub enum Level {
     Neon,
     /// `sve`: NEON with SVE, whose gathers look the tables up.
     Sve,
+    /// `sve2`: `sve`'s pass, with the code around it compiled for SVE2.
+    Sve2,
+    /// `sve2-shifts`: `sve2` with the pass's shifts down by SVE's shifts by a
+    /// vector.
+    Sve2Shifts,
 }
 
 /// The levels of the architecture ADLplug-Next is built for, the least
@@ -92,14 +99,14 @@ pub const LEVELS: &[Level] = &[
 /// The levels of the architecture ADLplug-Next is built for, the least
 /// preferred first.
 #[cfg(target_arch = "aarch64")]
-pub const LEVELS: &[Level] = &[Level::Neon, Level::Sve];
+pub const LEVELS: &[Level] = &[Level::Neon, Level::Sve, Level::Sve2, Level::Sve2Shifts];
 /// The levels of the architecture ADLplug-Next is built for: none, on an
 /// architecture whose passes are the portable form alone.
 #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
 pub const LEVELS: &[Level] = &[];
 
 /// Every level, of every architecture.
-const ALL: [Level; 9] = [
+const ALL: [Level; 11] = [
     Level::V2,
     Level::Avx2,
     Level::Avx2Vnni,
@@ -109,6 +116,8 @@ const ALL: [Level; 9] = [
     Level::Avx512VbmiVnni,
     Level::Neon,
     Level::Sve,
+    Level::Sve2,
+    Level::Sve2Shifts,
 ];
 
 impl Level {
@@ -125,6 +134,8 @@ impl Level {
             Self::Avx512VbmiVnni => "avx512-vbmi-vnni",
             Self::Neon => "neon",
             Self::Sve => "sve",
+            Self::Sve2 => "sve2",
+            Self::Sve2Shifts => "sve2-shifts",
         }
     }
 
@@ -152,6 +163,7 @@ impl Level {
             Self::Avx2 | Self::Avx2Vnni => Tier::V3,
             Self::Avx512 | Self::Avx512Vnni | Self::Avx512Vbmi | Self::Avx512VbmiVnni => Tier::V4,
             Self::Sve => Tier::Sve,
+            Self::Sve2 | Self::Sve2Shifts => Tier::Sve2,
         }
     }
 }
@@ -176,10 +188,12 @@ pub enum Tier {
     V4,
     /// AArch64 with SVE, as this branch's experiment has it.
     Sve,
+    /// AArch64 with SVE2.
+    Sve2,
 }
 
 /// The tiers, the least preferred first.
-const TIERS: [Tier; 4] = [Tier::Baseline, Tier::V3, Tier::V4, Tier::Sve];
+const TIERS: [Tier; 5] = [Tier::Baseline, Tier::V3, Tier::V4, Tier::Sve, Tier::Sve2];
 
 impl Tier {
     /// The tier's name.
@@ -190,6 +204,7 @@ impl Tier {
             Self::V3 => "x86-64-v3",
             Self::V4 => "x86-64-v4",
             Self::Sve => "sve",
+            Self::Sve2 => "sve2",
         }
     }
 }
@@ -253,6 +268,9 @@ pub struct Features {
     pub sve: bool,
     /// SVE2.
     pub sve2: bool,
+    /// SHA3 and SHA512 (`FEAT_SHA3`, `FEAT_SHA512`), which the standard library
+    /// reports together, for rust-speed's experiments with SHA3's BCAX.
+    pub sha3: bool,
 }
 
 impl Features {
@@ -291,6 +309,7 @@ impl Features {
                 neon: std::arch::is_aarch64_feature_detected!("neon"),
                 sve: std::arch::is_aarch64_feature_detected!("sve"),
                 sve2: std::arch::is_aarch64_feature_detected!("sve2"),
+                sha3: std::arch::is_aarch64_feature_detected!("sha3"),
                 ..Self::default()
             }
         }
@@ -315,6 +334,7 @@ impl Features {
             Level::Avx512VbmiVnni => avx512 && vbmi && self.avx512_vnni,
             Level::Neon => self.neon,
             Level::Sve => self.neon && self.sve,
+            Level::Sve2 | Level::Sve2Shifts => self.neon && self.sve && self.sve2,
         }
     }
 
@@ -336,6 +356,7 @@ impl Features {
             Tier::V3 => v3,
             Tier::V4 => v4,
             Tier::Sve => self.sve,
+            Tier::Sve2 => self.sve && self.sve2,
         }
     }
 
@@ -436,6 +457,7 @@ mod tests {
             neon: false,
             sve: false,
             sve2: false,
+            sha3: false,
         }
     }
 
@@ -488,7 +510,9 @@ mod tests {
                 Tier::V4,
                 Tier::V4,
                 Tier::Baseline,
-                Tier::Sve
+                Tier::Sve,
+                Tier::Sve2,
+                Tier::Sve2
             ]
         );
         let mut sorted = TIERS.to_vec();

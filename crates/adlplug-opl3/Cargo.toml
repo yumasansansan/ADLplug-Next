@@ -23,5 +23,16 @@ publish.workspace = true
 [dependencies]
 adlplug-cpu = { path = "../adlplug-cpu" }
 
+# The measurements of the parts of a sample and of the other ways of writing
+# the passes, for rust-speed's experiments (src/core/experiment.rs,
+# examples/profile.rs), with what those ways take of the core besides: the
+# lanes' phase increments, which the core then works out, and room for indices.
+[features]
+experiment = []
+
+[[example]]
+name = "profile"
+required-features = ["experiment"]
+
 [lints]
 workspace = true

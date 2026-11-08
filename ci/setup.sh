@@ -24,25 +24,47 @@
 #     often, so its version can run ahead of the archives'.
 # On macOS, SDKROOT names the SDK for whatever runs Clang as a linker (cargo).
 #
-# To move to another version of LLVM, change the values below. GitHub lists the
-# SHA-256 of release archives as the asset's digest.
+# To move to another version of LLVM, change the values below. GitHub lists
+# each release asset's id and SHA-256 (its digest): gh api
+# repos/llvm/llvm-project/releases/tags/llvmorg-<version> --jq '.assets[] |
+# [.name, .id, .digest]'.
 set -euo pipefail
 
 llvm_major=23
 llvm_release=23.1.5
 windows_archive=clang+llvm-$llvm_release-x86_64-pc-windows-msvc.tar.zst
+windows_asset=705478406
 windows_sha256=b2be33385ddc86e83511417a060de927ae8b09d1f3017cc3cdce5c73cd5029d7
 windows_arm64_archive=clang+llvm-$llvm_release-aarch64-pc-windows-msvc.tar.zst
+windows_arm64_asset=705760017
 windows_arm64_sha256=cb523582d9fe00862c5584ce5f7715f963037c11bba95181fa98425f48e06863
 macos_archive=LLVM-$llvm_release-macOS-ARM64.tar.zst
+macos_asset=705801926
 macos_sha256=503de30ef90311e0b143623801b19af2250adac6d69faed65ad0051170202e3b
 apt_key_fingerprint=6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
 
 # Pipelines below are written so that no command stops reading early: with
 # pipefail, a writer killed by SIGPIPE would fail the script.
 
-download() {  # url file sha256
-  curl --fail --location --silent --show-error --retry 3 --retry-all-errors --output "$2" "$1"
+# A download is tried again on any error, eight times: curl waits a second
+# before the first retry and twice as long before each next, so that the tries
+# span some four minutes, through a passing outage of the server.
+retries=(--retry 8 --retry-all-errors)
+
+# A release archive of LLVM, by the link of the release's page, tried three
+# times over seven seconds, and where GitHub answers that link with errors, by
+# the link of the release API to the same asset, by its id, tried as above.
+# GitHub serves the two links its own ways: on 2026-11-08 it answered the page's
+# link to the macOS archive with 504 for half an hour and more, and those to the
+# Windows archives now and then, failing every job that took them, while the
+# API's link to the macOS asset answered with it. Either way the archive is
+# checked by its SHA-256.
+download() {  # archive asset-id file sha256
+  if ! curl --fail --location --silent --show-error --retry 3 --retry-all-errors --output "$3" "$(release_url "$1")"; then
+    echo "note: the release's link to $1 failed; taking the asset by the release API's link" >&2
+    curl --fail --location --silent --show-error "${retries[@]}" --header 'Accept: application/octet-stream' \
+      --output "$3" "https://api.github.com/repos/llvm/llvm-project/releases/assets/$2"
+  fi
   local actual
   if command -v sha256sum > /dev/null; then
     actual=$(sha256sum "$2")
@@ -50,8 +72,8 @@ download() {  # url file sha256
     actual=$(shasum -a 256 "$2")
   fi
   actual=${actual%% *}
-  if [ "$actual" != "$3" ]; then
-    echo "error: $2 has SHA-256 $actual, expected $3" >&2
+  if [ "$actual" != "$4" ]; then
+    echo "error: $3 has SHA-256 $actual, expected $4" >&2
     exit 1
   fi
 }
@@ -75,7 +97,7 @@ extract() {  # archive directory tar static-library-suffix
 setup_linux() {
   local key=$RUNNER_TEMP/apt.llvm.org.asc
   local keyring=/usr/share/keyrings/apt.llvm.org.gpg
-  curl --fail --location --silent --show-error --retry 3 --retry-all-errors --output "$key" \
+  curl --fail --location --silent --show-error "${retries[@]}" --output "$key" \
     https://apt.llvm.org/llvm-snapshot.gpg.key
   local fingerprint
   fingerprint=$(gpg --show-keys --with-colons "$key" | awk -F : '$1 == "fpr" && !found { print $10; found = 1 }')
@@ -94,20 +116,20 @@ setup_linux() {
 }
 
 setup_windows() {
-  local temp archive sha256
+  local temp archive asset sha256
   temp=$(cygpath --unix "$RUNNER_TEMP")
   case "${RUNNER_ARCH:-}" in
-    X64) archive=$windows_archive sha256=$windows_sha256 ;;
-    ARM64) archive=$windows_arm64_archive sha256=$windows_arm64_sha256 ;;
+    X64) archive=$windows_archive asset=$windows_asset sha256=$windows_sha256 ;;
+    ARM64) archive=$windows_arm64_archive asset=$windows_arm64_asset sha256=$windows_arm64_sha256 ;;
     *) echo "error: unsupported Windows runner architecture '${RUNNER_ARCH:-}'" >&2; exit 1 ;;
   esac
-  download "$(release_url "$archive")" "$temp/$archive" "$sha256"
+  download "$archive" "$asset" "$temp/$archive" "$sha256"
   extract "$temp/$archive" "$temp/llvm" tar .lib
   llvm_bin=$temp/llvm/bin
 }
 
 setup_macos() {
-  download "$(release_url "$macos_archive")" "$RUNNER_TEMP/$macos_archive" "$macos_sha256"
+  download "$macos_archive" "$macos_asset" "$RUNNER_TEMP/$macos_archive" "$macos_sha256"
   extract "$RUNNER_TEMP/$macos_archive" "$RUNNER_TEMP/llvm" gtar .a
   rm -rf "$RUNNER_TEMP/llvm/include/c++"
   llvm_bin=$RUNNER_TEMP/llvm/bin
@@ -135,10 +157,15 @@ esac
 # does after rustup update.
 rustup update stable --no-self-update
 rustc --version
+# The processor's name as the system gives it: lscpu's on Linux, which names the
+# Arm cores that /proc/cpuinfo gives only by number; Win32_Processor's on
+# Windows, which names those MSYS2's /proc/cpuinfo calls a virtual CPU. grep
+# reads the whole of lscpu's output (no -m), so that lscpu is never cut off.
 echo "== the processor of this runner"
 case "$RUNNER_OS" in
   macOS) sysctl -n machdep.cpu.brand_string ;;
-  *) grep -m 1 '^model name' /proc/cpuinfo || true ;;
+  Linux) LC_ALL=C lscpu | grep '^Model name' || true ;;
+  Windows) powershell -NoProfile -Command '(Get-CimInstance Win32_Processor).Name' ;;
 esac
 
 if [ "$RUNNER_OS" = Windows ]; then

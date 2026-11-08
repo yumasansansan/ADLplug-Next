@@ -56,6 +56,11 @@
 #define ADLPLUG_OPL3_CARRY 8296
 #define ADLPLUG_OPL3_RHYTHM_BITS 8308
 #define ADLPLUG_OPL3_SHARED_HISTORY 8332
+// For rust-speed's experiments alone, in the lanes of a core built with the
+// feature experiment: the phase increments and room for the indices of the
+// lookups.
+#define ADLPLUG_OPL3_INCREMENT 8384
+#define ADLPLUG_OPL3_SCRATCH 8576
 
 // Byte offsets in what a pass goes by besides the lanes.
 #define ADLPLUG_OPL3_IN_HIGH_FROM_LESS_1 0
