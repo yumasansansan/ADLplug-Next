@@ -135,10 +135,15 @@ esac
 # does after rustup update.
 rustup update stable --no-self-update
 rustc --version
+# The processor's name as the system gives it: lscpu's on Linux, which names the
+# Arm cores that /proc/cpuinfo gives only by number; Win32_Processor's on
+# Windows, which names those MSYS2's /proc/cpuinfo calls a virtual CPU. grep
+# reads the whole of lscpu's output (no -m), so that lscpu is never cut off.
 echo "== the processor of this runner"
 case "$RUNNER_OS" in
   macOS) sysctl -n machdep.cpu.brand_string ;;
-  *) grep -m 1 '^model name' /proc/cpuinfo || true ;;
+  Linux) LC_ALL=C lscpu | grep '^Model name' || true ;;
+  Windows) powershell -NoProfile -Command '(Get-CimInstance Win32_Processor).Name' ;;
 esac
 
 if [ "$RUNNER_OS" = Windows ]; then
