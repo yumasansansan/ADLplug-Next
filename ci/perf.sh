@@ -19,15 +19,15 @@
 # finds cycles not supported, and the events of the top-down method missing on
 # all three). So perf stat counts the cycles and the instructions of every form
 # of each part where it can, and perf record samples by the system's clock:
-# over the pass and over the writes' handling at every level the processor has,
-# and over the pass of the variant all where the level has one. The report
-# (<report>, the summary of the run) takes the counts, the functions that took
-# the most of the samples, the forty instructions of the first of them that
-# took the most, and for the writes' handling the lines of the source that took
-# the most; the log takes the whole of each annotation. Whether the counters
-# are there is asked once and printed, so that a runner that gets them shows
-# it. What the runner does not allow is said and left out: nothing here fails
-# the job.
+# over the pass, over the writes' handling and over whole samples with their
+# writes at every level the processor has, and over the pass of the variant all
+# where the level has one. The report (<report>, the summary of the run) takes
+# the counts, the functions that took the most of the samples, the forty
+# instructions of the first of them that took the most, and for the writes'
+# handling and whole samples the lines of the source that took the most; the
+# log takes the whole of each annotation. Whether the counters are there is
+# asked once and printed, so that a runner that gets them shows it. What the
+# runner does not allow is said and left out: nothing here fails the job.
 set -uo pipefail
 
 profile=$1
@@ -114,7 +114,7 @@ record() {
     awk -F ':' '$1 ~ /^ *[0-9]+\.[0-9]+ *$/ && $1 + 0 > 0 {
       percent = $1 + 0; sub(/^[^:]*: */, ""); printf "%6.2f  %s\n", percent, $0
     }' "$annotation" | sort -rn | head -n 40
-    if [ "$part" = writes ]; then
+    if [ "$part" = writes ] || [ "$part" = samples ]; then
       echo
       echo "the lines of the source that took the most of the samples:"
       sudo perf report -i "$data" --stdio --no-children --sort srcline --percent-limit 1 2> /dev/null |
@@ -128,8 +128,11 @@ record() {
 # instructions (on GitHub's runners the Neoverse-N2's), each part's per pass:
 # the counts of a run of the part less those of a run of none, which is the
 # program's setting up and the writes before the part, over the part's
-# iterations. Every form of the pass that the level has, and the writes'
-# handling with each variant of its own.
+# iterations. Every form of the pass that the level has; the writes' handling,
+# by the level's own code and with each variant of derive that works the whole
+# of it out; and whole samples with their writes, by the level's own code and
+# with each variant of derive, derive lanes among them, which does nothing when
+# the writes' handling is asked again without a write between.
 count_iterations=1000000
 counts() {  # level part variant: the two counts of the run, cycles first
   sudo perf stat -x, -e cycles,instructions -- \
@@ -157,13 +160,18 @@ if sudo perf stat -x, -e cycles -- true 2>&1 | grep -q '^[0-9]'; then
     printf '%-44s %9s %9s %6s\n' 'level, part, variant' cycles insns IPC
     for level in "${levels[@]}"; do
       count "$level" pass
+      count "$level" writes
+      count "$level" samples
       while IFS= read -r variant; do
         case "$variant" in
-          derive*) count "$level" writes "$variant" ;;
+          'derive lanes') count "$level" samples "$variant" ;;
+          derive*)
+            count "$level" writes "$variant"
+            count "$level" samples "$variant"
+            ;;
           *) count "$level" pass "$variant" ;;
         esac
       done < <("$profile" variants "$level")
-      count "$level" writes
     done
     echo '```'
   } >> "$report"
@@ -172,6 +180,7 @@ fi
 for level in "${levels[@]}"; do
   record "$level" pass
   record "$level" writes
+  record "$level" samples
   # grep reads to the end, so that the profile program is never cut off, which
   # under pipefail would fail the test.
   if "$profile" variants "$level" | grep -x all > /dev/null; then

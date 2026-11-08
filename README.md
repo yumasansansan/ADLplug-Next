@@ -33,7 +33,9 @@ What it is to be:
   systems offer declared by hand;
 - for x86-64 processors from x86-64-v2 on, taking AVX2 and AVX-512 where the
   processor has them, and for AArch64: Apple's processors, and Windows and Linux
-  on AArch64.
+  on AArch64, taking SHA3 (Arm's instructions for the SHA-3 hash, one of which
+  the core takes) and SVE and SVE2 (Arm's extensions for vectors of scalable
+  length) where the processor has them.
 
 ## Building and testing
 

@@ -61,11 +61,6 @@
         .set KEY_ON, ADLPLUG_OPL3_KEY_ON
         .set LEVEL_OFFSET, ADLPLUG_OPL3_LEVEL_OFFSET
         .set TREMOLO_DEPTH, ADLPLUG_OPL3_TREMOLO_DEPTH
-        .set FNUM, ADLPLUG_OPL3_FNUM
-        .set BLOCK, ADLPLUG_OPL3_BLOCK
-        .set MULTIPLE, ADLPLUG_OPL3_MULTIPLE
-        .set VIBRATO, ADLPLUG_OPL3_VIBRATO
-        .set VIBRATO_DEPTH, ADLPLUG_OPL3_VIBRATO_DEPTH
         .set PHASE_SHIFT, ADLPLUG_OPL3_PHASE_SHIFT
         .set TURN_BIT, ADLPLUG_OPL3_TURN_BIT
         .set MUTE_BIT, ADLPLUG_OPL3_MUTE_BIT
@@ -88,8 +83,6 @@
         .set OUT_2, ADLPLUG_OPL3_OUT_2
         .set EG_OUT, ADLPLUG_OPL3_EG_OUT
         .set PHASE_OUT, ADLPLUG_OPL3_PHASE_OUT
-        // For rust-speed's experiments alone: the lanes' phase increments,
-        // which the core works out when what they come of changes.
         .set INCREMENT, ADLPLUG_OPL3_INCREMENT
         .set LEVEL16, ADLPLUG_OPL3_LEVEL16
         .set STATE16, ADLPLUG_OPL3_STATE16
@@ -106,10 +99,6 @@
         .set IN_HIGH_FROM_LESS_1, ADLPLUG_OPL3_IN_HIGH_FROM_LESS_1
         .set IN_ADD, ADLPLUG_OPL3_IN_ADD
         .set IN_TREMOLO, ADLPLUG_OPL3_IN_TREMOLO
-        .set IN_VIBRATO_SHIFT, ADLPLUG_OPL3_IN_VIBRATO_SHIFT
-        .set IN_VIBRATO_MASK, ADLPLUG_OPL3_IN_VIBRATO_MASK
-        .set IN_VIBRATO_SIGN, ADLPLUG_OPL3_IN_VIBRATO_SIGN
-        .set IN_VIBRATO_WRAP, ADLPLUG_OPL3_IN_VIBRATO_WRAP
         .set IN_EG_SECOND, ADLPLUG_OPL3_IN_EG_SECOND
         .set IN_RHYTHM_13, ADLPLUG_OPL3_IN_RHYTHM_13
         .set IN_RHYTHM_16, ADLPLUG_OPL3_IN_RHYTHM_16
@@ -354,12 +343,11 @@
         vpunpcklwd ymm3, ymm3, ymm3
 .endm
 
-// The phases of the eight lanes at byte \v (ymf262::phase_increment(),
-// phase_out() and next_phase()): what the operator reads of this pass's phase,
-// and the phase for the next pass, from nought on dokon (\restart). With \inc
-// 1, the experiments' form, by the increments in the lanes.
-.macro PHASE v, restart, inc
-.if \inc
+// The phases of the eight lanes at byte \v (ymf262::phase_out() and
+// next_phase()): what the operator reads of this pass's phase, and the phase for
+// the next pass, from nought on dokon (\restart), moved on by the lanes'
+// increments, which the core works out when what they come of changes.
+.macro PHASE v, restart
         vmovdqa   ymm6, ymmword ptr [r8 + PHASE + \v]
         vpsrld    ymm7, ymm6, 9
         vmovdqa   ymmword ptr [r8 + PHASE_OUT + \v], ymm7
@@ -367,38 +355,12 @@
         vpaddd    ymm6, ymm6, ymmword ptr [r8 + INCREMENT + \v]
         vpand     ymm6, ymm6, ymmword ptr [rip + .Lc_0x7ffff]
         vmovdqa   ymmword ptr [r8 + PHASE + \v], ymm6
-        .exitm
-.endif
-        vmovdqa   ymm4, ymmword ptr [r8 + VIBRATO_DEPTH + \v]
-        vmovdqa   ymm5, ymmword ptr [r8 + FNUM + \v]
-        vpsllvd   ymm6, ymm5, ymm4
-        vpsrlvd   ymm6, ymm6, ymmword ptr [r9 + IN_VIBRATO_SHIFT]   // fnum shifted down as the depth asks
-        vpxor     ymm4, ymm4, ymmword ptr [rip + .Lc_1]
-        vmovdqa   ymm7, ymmword ptr [r9 + IN_VIBRATO_MASK]
-        vpsrlvd   ymm4, ymm7, ymm4                                    // the depth's bits
-        vpand     ymm6, ymm6, ymm4
-        vpsubd    ymm4, ymm15, ymmword ptr [r8 + VIBRATO + \v]
-        vpand     ymm6, ymm6, ymm4                                    // the vibrato's swing
-        vpsignd   ymm6, ymm6, ymmword ptr [r9 + IN_VIBRATO_SIGN]
-        vpaddd    ymm5, ymm5, ymm6
-        vpand     ymm5, ymm5, ymmword ptr [r9 + IN_VIBRATO_WRAP]    // the frequency number
-        vpsllvd   ymm5, ymm5, ymmword ptr [r8 + BLOCK + \v]
-        vpsrld    ymm5, ymm5, 1
-        vpmulld   ymm5, ymm5, ymmword ptr [r8 + MULTIPLE + \v]
-        vpsrld    ymm5, ymm5, 1                                       // the increment
-        vmovdqa   ymm6, ymmword ptr [r8 + PHASE + \v]
-        vpsrld    ymm7, ymm6, 9
-        vmovdqa   ymmword ptr [r8 + PHASE_OUT + \v], ymm7
-        vpandn    ymm6, \restart, ymm6
-        vpaddd    ymm6, ymm6, ymm5
-        vpand     ymm6, ymm6, ymmword ptr [rip + .Lc_0x7ffff]
-        vmovdqa   ymmword ptr [r8 + PHASE + \v], ymm6
 .endm
 
-.macro ENVELOPES_AND_PHASES second, g, inc
+.macro ENVELOPES_AND_PHASES second, g
         ENVELOPE  \second, \g
-        PHASE     \g, ymm3, \inc
-        PHASE     \g + 32, ymm8, \inc
+        PHASE     \g, ymm3
+        PHASE     \g + 32, ymm8
 .endm
 
 // The eight lanes of \idx looked up in the table at \table, into \dst, \dstx and
@@ -704,26 +666,25 @@
 // lanes 16 to 31, modulated by stage 0, stage 2 lanes 32 to 39 and stage 3 lanes
 // 40 to 47, modulated by stages 1 and 2. The hi-hat's phase comes before stage
 // 0, and the snare's and the top cymbal's before stage 1.
-.macro PASS second, vnni, inc
+.macro PASS second, vnni
         mov       rcx, qword ptr [r9 + IN_LOGSIN]
         mov       rdx, qword ptr [r9 + IN_EXP]
-        ENVELOPES_AND_PHASES \second, 0, \inc
+        ENVELOPES_AND_PHASES \second, 0
         HI_HAT
         OPERATOR  0, 0, \vnni
         OPERATOR  32, 32, \vnni
-        ENVELOPES_AND_PHASES \second, 64, \inc
+        ENVELOPES_AND_PHASES \second, 64
         SNARE_AND_TOP_CYMBAL
         OPERATOR  64, 0, \vnni
         OPERATOR  96, 32, \vnni
-        ENVELOPES_AND_PHASES \second, 128, \inc
+        ENVELOPES_AND_PHASES \second, 128
         OPERATOR  128, 64, \vnni
         OPERATOR  160, 128, \vnni
 .endm
 
 // The pass \name, for the processors with AVX-VNNI (\vnni 1) or for the
-// others, its phases by the lanes' increments with \inc 1. Its labels end in
-// \vnni\inc.
-.macro PASS_FUNCTION name, vnni, inc
+// others. Its labels end in \vnni.
+.macro PASS_FUNCTION name, vnni
         .globl    \name
 #if defined(_WIN32)
         .def      \name
@@ -776,12 +737,12 @@
         SHARED_READ 0, 7, 10, IN_HOLD_13
         SHARED_READ 1, 8, 11, IN_HOLD_14
         cmp       dword ptr [r9 + IN_EG_SECOND], 0
-        jne       .Lsecond\vnni\inc
-        PASS      0, \vnni, \inc
-        jmp       .Lsums\vnni\inc
-.Lsecond\vnni\inc:
-        PASS      1, \vnni, \inc
-.Lsums\vnni\inc:
+        jne       .Lsecond\vnni
+        PASS      0, \vnni
+        jmp       .Lsums\vnni
+.Lsecond\vnni:
+        PASS      1, \vnni
+.Lsums\vnni:
         HISTORY   0
         HISTORY   32
         HISTORY   64
@@ -795,7 +756,7 @@
         vpxor     xmm10, xmm10, xmm10
         vpxor     xmm11, xmm11, xmm11
         cmp       dword ptr [r9 + IN_SOFT_PAN], 0
-        jne       .Lsoft\vnni\inc
+        jne       .Lsoft\vnni
         // Core::accumulate() without soft panning.
         HEARD     0, \vnni
         HEARD     32, \vnni
@@ -821,8 +782,8 @@
         vpmovsxdq xmm4, xmm3
         vpsllq    xmm4, xmm4, 16
         vmovdqu   xmmword ptr [r8 + CARRY_SOFT], xmm4
-        jmp       .Ldone\vnni\inc
-.Lsoft\vnni\inc:
+        jmp       .Ldone\vnni
+.Lsoft\vnni:
         // With soft panning: the sums exact in 64 bits, and one rounding at
         // the end.
         vpxor     xmm12, xmm12, xmm12
@@ -873,7 +834,7 @@
         mov       dword ptr [r10 + 4], eax
         ROUND16   r11, rcx
         mov       dword ptr [r8 + CARRY + 4], r11d
-.Ldone\vnni\inc:
+.Ldone\vnni:
         vzeroupper
 #if defined(_WIN32)
         vmovaps   xmm6, xmmword ptr [rsp]
@@ -895,13 +856,8 @@
 #endif
 .endm
 
-        PASS_FUNCTION adlplug_opl3_pass_avx2, 0, 0
-        PASS_FUNCTION adlplug_opl3_pass_avx2_vnni, 1, 0
-
-// For rust-speed's experiments: the two forms with their phases moved on by the
-// lanes' increments.
-        PASS_FUNCTION adlplug_opl3_pass_avx2_increments, 0, 1
-        PASS_FUNCTION adlplug_opl3_pass_avx2_vnni_increments, 1, 1
+        PASS_FUNCTION adlplug_opl3_pass_avx2, 0
+        PASS_FUNCTION adlplug_opl3_pass_avx2_vnni, 1
 
 #if !defined(_WIN32)
         .section  .note.GNU-stack, "", @progbits

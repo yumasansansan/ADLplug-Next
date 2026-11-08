@@ -9,18 +9,20 @@
 //! What the parts of a sample take, at every level of the passes this
 //! processor has, for rust-speed's experiments (the feature `experiment`).
 //!
-//! First the processor's clock, as a chain of additions takes it, by which the
-//! nanoseconds are cycles as well. Then the other ways of writing the portable
-//! core's and each level's pass and the core's own code that the experiments
-//! try, each checked to make the samples of a core without it, as the tests
-//! check the levels against the portable pass (`tests/levels.rs`): the random
-//! writes of the tests (`tests/common/mod.rs`) for 20000 samples of each of
-//! eight seeds, with their soft panning; the run fails at its end if one does
-//! not. Then the parts: each core given the writes of seed 1 for 20000 samples,
-//! without soft panning and with the soft panning of those tests (the levels
-//! marked `soft`), and then measured as it stands, the pass alone, the writes'
-//! handling alone, the passes for NEON and SVE without one part each, and the
-//! other ways of writing them, the best of five rounds of 20000.
+//! First the CPU's clock, as a chain of additions takes it, by which the
+//! nanoseconds are cycles as well. Then the other ways of writing the core's own
+//! code that the experiments try (`Core::experiment_variants`), each checked to
+//! make the samples of a core without it, as the tests check the levels against
+//! the portable pass (`tests/levels.rs`): the random writes of the tests
+//! (`tests/common/mod.rs`) for 20000 samples of each of eight seeds, with their
+//! soft panning; the run fails at its end if one does not. Then the parts: each
+//! core given the writes of seed 1 for 20000 samples, without soft panning and
+//! with the soft panning of those tests (the levels marked `soft`), and then
+//! measured as it stands, the pass alone and the writes' handling alone, with
+//! each way of writing derive that works the whole of it out, the best of five
+//! rounds of 20000. Last, whole samples with their writes, by the core's own
+//! code and by each variant, as the timing program measures them: the writes
+//! of the eight seeds and their soft panning, the best of five runs.
 //!
 //!     cargo run --release --locked -p adlplug-opl3 --features experiment --example profile
 //!
@@ -30,7 +32,9 @@
 //! one makes other samples. With `run <level> <part> <iterations>
 //! [<variant>]`, a core of that level (or `portable`) given the same writes
 //! without soft panning, taking the variant where one is named, runs one part,
-//! `pass` or `writes`, that many times, for a profiler such as perf.
+//! `pass` or `writes`, that many times, for a profiler such as perf; and with
+//! the part `samples`, cores of the level make that many whole samples with
+//! their writes, as the last table measures them.
 
 #[path = "../tests/common/mod.rs"]
 mod common;
@@ -43,6 +47,7 @@ use adlplug_opl3::Core;
 const SAMPLES: u32 = 20000;
 const ITERATIONS: u32 = 20000;
 const ROUNDS: u32 = 5;
+const RUNS: u32 = 5;
 
 /// A core of a level, or by the portable pass for `portable`.
 fn core(level: &str) -> Option<Core> {
@@ -94,6 +99,57 @@ fn differ(level: &str, variant: &str) -> usize {
         .sum()
 }
 
+/// The writes of the eight seeds, for [`samples`].
+fn seeds_writes() -> Vec<Vec<common::Write>> {
+    (1..=8).map(|seed| common::random_writes(seed, SAMPLES)).collect()
+}
+
+/// The sum of `count` samples with their writes by cores of the level (or
+/// portable) that take the variant, or their own code, as the timing program
+/// makes them (`examples/timing.rs`): the writes of the eight seeds in turn,
+/// `writes`, with their soft panning, a new core for each seed's 20000 samples.
+fn samples(level: &str, variant: Option<&str>, writes: &[Vec<common::Write>], count: u32) -> i64 {
+    let mut sum = 0_i64;
+    let mut left = count;
+    for (seed, writes) in (1..=8).zip(writes).cycle() {
+        if left == 0 {
+            break;
+        }
+        let mut core = core(level).expect("a level the processor has, or portable");
+        if let Some(variant) = variant {
+            assert!(core.experiment_take(variant), "a variant of {level}: {variant}");
+        }
+        let mut next = writes.iter().peekable();
+        let these = SAMPLES.min(left);
+        for n in 0..these {
+            while let Some(write) = next.next_if(|write| write.at <= n) {
+                core.write(write.address, write.value);
+            }
+            if let Some((address, pan)) = common::soft_pan(n, seed) {
+                core.write_pan(address, pan);
+            }
+            let [a, b] = core.generate();
+            sum += i64::from(a) + i64::from(b);
+        }
+        left -= these;
+    }
+    sum
+}
+
+/// The nanoseconds of a sample with its writes by a core of the level (or
+/// portable) that takes the variant, or its own code ([`samples`]): those of
+/// the eight seeds, whose writes are made before the clock starts, the best of
+/// [`RUNS`] runs.
+fn per_sample(level: &str, variant: Option<&str>, writes: &[Vec<common::Write>]) -> f64 {
+    let mut best = f64::INFINITY;
+    for _ in 0..RUNS {
+        let started = std::time::Instant::now();
+        black_box(samples(level, variant, writes, 8 * SAMPLES));
+        best = best.min(started.elapsed().as_secs_f64() * 1e9 / (8.0 * f64::from(SAMPLES)));
+    }
+    best
+}
+
 /// Each variant of the portable core's and of each level's checked against the
 /// core without it: a line for each, and those that make other samples.
 fn check_variants() -> Vec<String> {
@@ -119,6 +175,12 @@ fn check_variants() -> Vec<String> {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.as_slice() {
+        [run, level, part, count, variant @ ..] if run == "run" && part == "samples" && variant.len() <= 1 => {
+            let writes = seeds_writes();
+            let count = count.parse().expect("a count of samples");
+            black_box(samples(level, variant.first().map(String::as_str), &writes, count));
+            return;
+        }
         [run, level, part, iterations, variant @ ..] if run == "run" && variant.len() <= 1 => {
             let mut core = warmed(level, false).expect("a level the processor has, or portable");
             if let Some(variant) = variant.first() {
@@ -184,6 +246,24 @@ fn main() {
                 let cycles = ns * ghz;
                 println!("{name:<18} {part:<34} {ns:>8.1} {cycles:>8.0}");
             }
+        }
+    }
+    println!();
+    println!(
+        "{:<18} {:<34} {:>8} {:>8}",
+        "level", "samples with writes", "ns", "cycles"
+    );
+    let writes = seeds_writes();
+    let names = std::iter::once("portable").chain(Features::detect().levels().into_iter().map(Level::name));
+    for level in names {
+        let variants = core(level)
+            .expect("a level the processor has, or portable")
+            .experiment_variants();
+        for variant in std::iter::once(None).chain(variants.into_iter().map(Some)) {
+            let ns = per_sample(level, variant, &writes);
+            let cycles = ns * ghz;
+            let name = variant.unwrap_or("its own code");
+            println!("{level:<18} {name:<34} {ns:>8.1} {cycles:>8.0}");
         }
     }
     // The measurements of a variant that makes other samples are of no use,

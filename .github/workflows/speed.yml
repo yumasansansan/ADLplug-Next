@@ -10,7 +10,7 @@
 # experiments of this branch: each job records what its runner is, the system,
 # the image, the processor and its extensions, how long a sample takes at every
 # level the processor has, and what the parts of a sample take there, with the
-# other ways of writing the passes that the experiments try, each checked to
+# other ways of writing the core that the experiments try, each checked to
 # make its level's samples; on Linux perf samples where they spend their time
 # (ci/speed.sh, ci/perf.sh). It all goes into the summary of the run.
 # Every kind of runner runs three times, so that the jobs land on as many of the

@@ -8,12 +8,16 @@
 
 //! Where the passes find what they read and write: the lanes of the core
 //! ([`Lanes`]), which every pass works on, and what a pass written by hand goes
-//! by besides ([`PassInputs`], x86-64 and AArch64). Both are laid out as the C++ version
-//! laid them out, the lanes as the members of its core from its rates to its
-//! shared feedback history, in their order and of their types. The passes in assembly
-//! take the offsets from `asm/pass.h`, and the assertions here check each of
-//! them against the structures as they are compiled, with the numbers read from
-//! `asm/pass.h` itself, so that a field out of its place stops the build.
+//! by besides ([`PassInputs`], x86-64 and AArch64). The lanes are laid out as
+//! the C++ version laid them out, as the members of its core from its rates to
+//! its shared feedback history, in their order and of their types, and after
+//! them the phase increments, which the passes take from the lanes where the C++
+//! version's passes worked them out; what a pass goes by besides is the C++
+//! version's without what those passes took for the increments. The passes in
+//! assembly take the offsets from `asm/pass.h`, and the assertions here check
+//! each of them against the structures as they are compiled, with the numbers
+//! read from `asm/pass.h` itself, so that a field out of its place stops the
+//! build.
 #![forbid(unsafe_code)]
 
 use std::mem::offset_of;
@@ -50,15 +54,15 @@ pub(crate) struct Lanes {
     pub(crate) level_offset: [i32; LANES],
     /// The depth of the tremolo: 0 none, 1 shallow, 2 deep.
     pub(crate) tremolo_depth: [i32; LANES],
-    /// The frequency number.
+    /// The frequency number, for the increments.
     pub(crate) fnum_v: [u32; LANES],
-    /// The block.
+    /// The block, for the increments.
     pub(crate) block_v: [u32; LANES],
-    /// Twice the multiple of the frequency.
+    /// Twice the multiple of the frequency, for the increments.
     pub(crate) multiple_v: [u32; LANES],
-    /// The vibrato is on (1) or off (0).
+    /// The vibrato is on (1) or off (0), for the increments.
     pub(crate) vibrato: [u32; LANES],
-    /// The vibrato is deep (1) or shallow (0).
+    /// The vibrato is deep (1) or shallow (0), for the increments.
     pub(crate) vibrato_depth: [u32; LANES],
     /// The waveform: how far the phase is shifted up.
     pub(crate) phase_shift: [i32; LANES],
@@ -153,25 +157,20 @@ pub(crate) struct Lanes {
     /// mode stops storing those of slots 13 and 14, and so mixes theirs with
     /// those of slots 31 and 32; the two queues are kept as they are.
     pub(crate) shared_history: [[i32; 4]; 2],
-    /// For rust-speed's experiments: the phase increments of the lanes in this
-    /// pass, as the pass works them out, for the forms of the pass written by
-    /// hand that take them from here, which the core works out again when what
-    /// they come of changes (`Core::refresh_increments`).
-    #[cfg(feature = "experiment")]
+    /// The phase increments of the lanes in this pass, which every pass takes:
+    /// worked out from the frequency numbers, the blocks, the multiples and the
+    /// vibrato when one of them changes (`Core::refresh_increments`), not in
+    /// each pass, as they stay the same between the writes and the vibrato's
+    /// steps.
     pub(crate) increment: Aligned<[u32; LANES]>,
-    /// Room for the indices of the lookups of the form that takes them out
-    /// through memory, two of four lanes for each four lanes of operators.
-    #[cfg(feature = "experiment")]
-    pub(crate) scratch: Aligned<[u32; 96]>,
     /// The vibrato's position that the increments are for, of 0 to 7, or
-    /// [`u8::MAX`] when what they come of has changed since.
-    #[cfg(feature = "experiment")]
+    /// [`u8::MAX`] when what they come of has changed since they were worked
+    /// out.
     pub(crate) increments_for: u8,
 }
 
-/// Values on lines of the cache of their own, for the experiments' lanes after
-/// the single values, which the passes load 16 bytes at a time.
-#[cfg(feature = "experiment")]
+/// Values on a line of the cache of their own, for the lanes after the single
+/// values, which the passes load 16, 32 and 64 bytes at a time.
 #[repr(C, align(64))]
 pub(crate) struct Aligned<T>(pub(crate) T);
 
@@ -231,11 +230,7 @@ impl Lanes {
             noise: 0,
             rhythm_bits: RhythmBits::default(),
             shared_history: [[0; 4]; 2],
-            #[cfg(feature = "experiment")]
             increment: Aligned([0; LANES]),
-            #[cfg(feature = "experiment")]
-            scratch: Aligned([0; 96]),
-            #[cfg(feature = "experiment")]
             increments_for: u8::MAX,
         }
     }
@@ -254,14 +249,6 @@ pub(crate) struct PassInputs {
     add: [i16; 16],
     /// By the tremolo's depth (0 to 2): nought, the shallow, the deep; twice.
     tremolo: [u8; 32],
-    /// The shallow vibrato's shift; the deep's is one less.
-    vibrato_shift: [i32; 8],
-    /// The deep vibrato's bits; the shallow's are half of them.
-    vibrato_mask: [i32; 8],
-    /// -1 when the vibrato takes off the frequency, else 1.
-    vibrato_sign: [i32; 8],
-    /// 1023 when it takes off, else all ones.
-    vibrato_wrap: [i32; 8],
     /// The envelope timer's second half is on.
     eg_second: i32,
     /// The hi-hat takes a phase of its own.
@@ -321,21 +308,12 @@ impl PassInputs {
         tremolo[2] = deep;
         tremolo[17] = shallow;
         tremolo[18] = deep;
-        let vibrato = ymf262::vibrato(counters.vibrato_position);
-        let shift = vibrato.shallow_shift.cast_signed();
-        let mask = vibrato.deep_mask.cast_signed();
-        let sign = if vibrato.down { -1 } else { 1 };
-        let wrap = if vibrato.down { 1023 } else { -1 };
         let [rhythm_13, rhythm_16, rhythm_17] = rhythm.map(i32::from);
         let [hold_13, hold_14] = hold.map(i32::from);
         Self {
             high_from_less_1: [high_from_less_1; 16],
             add: [add; 16],
             tremolo,
-            vibrato_shift: [shift; 8],
-            vibrato_mask: [mask; 8],
-            vibrato_sign: [sign; 8],
-            vibrato_wrap: [wrap; 8],
             eg_second: timing.second,
             rhythm_13,
             rhythm_16,
@@ -503,11 +481,6 @@ const _: () = {
     assert!(offset_of!(Lanes, key_on) == defined("ADLPLUG_OPL3_KEY_ON"));
     assert!(offset_of!(Lanes, level_offset) == defined("ADLPLUG_OPL3_LEVEL_OFFSET"));
     assert!(offset_of!(Lanes, tremolo_depth) == defined("ADLPLUG_OPL3_TREMOLO_DEPTH"));
-    assert!(offset_of!(Lanes, fnum_v) == defined("ADLPLUG_OPL3_FNUM"));
-    assert!(offset_of!(Lanes, block_v) == defined("ADLPLUG_OPL3_BLOCK"));
-    assert!(offset_of!(Lanes, multiple_v) == defined("ADLPLUG_OPL3_MULTIPLE"));
-    assert!(offset_of!(Lanes, vibrato) == defined("ADLPLUG_OPL3_VIBRATO"));
-    assert!(offset_of!(Lanes, vibrato_depth) == defined("ADLPLUG_OPL3_VIBRATO_DEPTH"));
     assert!(offset_of!(Lanes, phase_shift) == defined("ADLPLUG_OPL3_PHASE_SHIFT"));
     assert!(offset_of!(Lanes, turn_bit) == defined("ADLPLUG_OPL3_TURN_BIT"));
     assert!(offset_of!(Lanes, mute_bit) == defined("ADLPLUG_OPL3_MUTE_BIT"));
@@ -541,10 +514,7 @@ const _: () = {
     assert!(offset_of!(RhythmBits, hh7) == 8 && offset_of!(RhythmBits, hh8) == 12);
     assert!(offset_of!(RhythmBits, tc3) == 16 && offset_of!(RhythmBits, tc5) == 20);
     assert!(offset_of!(Lanes, shared_history) == defined("ADLPLUG_OPL3_SHARED_HISTORY"));
-    #[cfg(feature = "experiment")]
     assert!(offset_of!(Lanes, increment) == defined("ADLPLUG_OPL3_INCREMENT"));
-    #[cfg(feature = "experiment")]
-    assert!(offset_of!(Lanes, scratch) == defined("ADLPLUG_OPL3_SCRATCH"));
 };
 
 // What a pass goes by besides, likewise: aligned for the aligned loads of 32
@@ -555,10 +525,6 @@ const _: () = {
     assert!(offset_of!(PassInputs, high_from_less_1) == defined("ADLPLUG_OPL3_IN_HIGH_FROM_LESS_1"));
     assert!(offset_of!(PassInputs, add) == defined("ADLPLUG_OPL3_IN_ADD"));
     assert!(offset_of!(PassInputs, tremolo) == defined("ADLPLUG_OPL3_IN_TREMOLO"));
-    assert!(offset_of!(PassInputs, vibrato_shift) == defined("ADLPLUG_OPL3_IN_VIBRATO_SHIFT"));
-    assert!(offset_of!(PassInputs, vibrato_mask) == defined("ADLPLUG_OPL3_IN_VIBRATO_MASK"));
-    assert!(offset_of!(PassInputs, vibrato_sign) == defined("ADLPLUG_OPL3_IN_VIBRATO_SIGN"));
-    assert!(offset_of!(PassInputs, vibrato_wrap) == defined("ADLPLUG_OPL3_IN_VIBRATO_WRAP"));
     assert!(offset_of!(PassInputs, eg_second) == defined("ADLPLUG_OPL3_IN_EG_SECOND"));
     assert!(offset_of!(PassInputs, rhythm_13) == defined("ADLPLUG_OPL3_IN_RHYTHM_13"));
     assert!(offset_of!(PassInputs, rhythm_16) == defined("ADLPLUG_OPL3_IN_RHYTHM_16"));

@@ -398,11 +398,11 @@ enum Pass {
 ///
 /// A core works its passes over the slots out, one a sample, at a level of the
 /// processor ([`Level`]): by a pass written by hand in assembly at the levels of
-/// x86-64 from `avx2` on and at AArch64's `neon`, and by the portable pass,
-/// loops in Rust, at `v2`, x86-64's baseline, and on an architecture without
-/// levels; on x86-64 the code around a pass written by hand is taken at the
-/// tier of its level, where the processor has it ([`Core::tier`]). All make the
-/// same samples. A core keeps to the pass it is made with ([`Core::level`]).
+/// x86-64 from `avx2` on and at every level of AArch64, and by the portable
+/// pass, loops in Rust, at `v2`, x86-64's baseline, and on an architecture
+/// without levels; the code around a pass written by hand is taken at the tier
+/// of its level, where the processor has it ([`Core::tier`]). All make the same
+/// samples. A core keeps to the pass it is made with ([`Core::level`]).
 ///
 /// What a core works with, its lanes and its queue of writes, is on the heap,
 /// so that moving one moves a few kilobytes.
@@ -479,6 +479,14 @@ pub struct Core {
     level: Option<Level>,
     /// That pass.
     pass: Pass,
+    /// Whether what the passes go by is worked out by [`Core::derive_split`],
+    /// as on AMD's processors, where it takes less time than [`Core::derive`]
+    /// at every tier: on the EPYC 7763, 9V74 and 9V45 of GitHub's runners the
+    /// writes' handling took 1 to 6% less at x86-64-v2, 10 to 12% at v3 (but
+    /// on the 9V45, 1% more) and 17 to 22% at v4, where on an Intel Core
+    /// i7-1360P it took 1 to 8% more at v3. Asked once, as the core is made.
+    #[cfg(target_arch = "x86_64")]
+    split_derive: bool,
     /// For rust-speed's experiments: the other ways of writing the core's own
     /// code that it takes in place of its own (`Core::experiment_take`).
     #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
@@ -667,6 +675,8 @@ impl Core {
             soft_pan: false,
             level,
             pass,
+            #[cfg(target_arch = "x86_64")]
+            split_derive: Features::detect().amd,
             #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
             experiment: experiment::Experiment::default(),
             ch_fnum: [0; LANES],
@@ -852,8 +862,8 @@ impl Core {
     }
 
     /// One sample by a pass written by hand, as [`Core::generate`] makes it:
-    /// `x86_64.rs` compiles it for the tier of the pass, as well as for the
-    /// baseline; `aarch64.rs` for the baseline alone.
+    /// `x86_64.rs` and `aarch64.rs` compile it for the tier of the pass, as well
+    /// as for the baseline.
     #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     #[inline(always)]
     #[expect(
@@ -902,6 +912,37 @@ impl Core {
         if reading || due.due {
             self.refresh_routing();
             self.derive();
+        }
+        self.refresh_increments();
+    }
+
+    /// The lanes' phase increments in this pass, worked out again when what
+    /// they come of has changed since they were: the vibrato's position, which
+    /// moves on every 1024 samples, or what the passes go by, which only writes
+    /// change ([`Core::derive`] marks them). Every pass takes them from the
+    /// lanes, which the C++ version's passes worked out in each pass.
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "its loop over the lanes belongs in each tier's form of a sample, where it is vector code of the tier's width"
+    )]
+    fn refresh_increments(&mut self) {
+        let lanes = &mut *self.lanes;
+        let position = lanes.counters.vibrato_position;
+        if lanes.increments_for == position {
+            return;
+        }
+        lanes.increments_for = position;
+        let vibrato = ymf262::vibrato(position);
+        for i in 0..LANES {
+            lanes.increment.0[i] = ymf262::phase_increment(
+                lanes.fnum_v[i],
+                lanes.block_v[i],
+                lanes.multiple_v[i],
+                lanes.vibrato[i] != 0,
+                lanes.vibrato_depth[i] != 0,
+                &vibrato,
+            );
         }
     }
 
@@ -1205,13 +1246,13 @@ impl Core {
     )]
     fn derive(&mut self) {
         #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
-        if self.experiment.derive_split {
-            self.derive_split();
+        if self.experiment.derive_lanes {
+            self.derive_lanes();
             return;
         }
-        #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
-        if self.experiment.derive_flat {
-            self.derive_flat();
+        #[cfg(target_arch = "x86_64")]
+        if self.split_derive {
+            self.derive_split();
             return;
         }
         let lanes = &mut *self.lanes;
@@ -1274,102 +1315,20 @@ impl Core {
             lanes.b_late[lane] = if on_b && s >= FIRST_LATE_ON_B { w } else { 0 };
         }
         self.derive_soft_pan();
-        #[cfg(feature = "experiment")]
-        {
-            self.lanes.increments_for = u8::MAX;
-        }
+        self.lanes.increments_for = u8::MAX;
     }
 
-    /// For rust-speed's experiments: [`Core::derive`] with its conditions
-    /// without short-circuits, `&` and `|` in place of `&&` and `||`, which
-    /// say the same of booleans. Of the values the loop stores, those that
-    /// `&&` picked made LLVM branch around the stores, and a loop with stores
-    /// under branches vectorizes only where the tier has stores under masks,
-    /// as SVE and AVX-512 have them and NEON and SSE do not.
-    #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
-    #[inline(always)]
-    #[expect(
-        clippy::inline_always,
-        reason = "its loop over the lanes belongs in each tier's form of a sample, where it is vector code of the tier's width"
-    )]
-    #[expect(
-        clippy::needless_bitwise_bool,
-        reason = "conditions without short-circuits are what this form is for: with them the loop stores without branches"
-    )]
-    fn derive_flat(&mut self) {
-        let lanes = &mut *self.lanes;
-        for (lane, &drum_key_bit) in DRUM_KEY_BIT.iter().enumerate() {
-            let s = lanes.lane_slot[lane];
-            let r20 = u32::from(self.l20[lane]);
-            let r40 = u32::from(self.l40[lane]);
-            let r60 = u32::from(self.l60[lane]);
-            let r80 = u32::from(self.l80[lane]);
-            let fnum = u32::from(self.lfnum[lane]);
-            let block = u32::from(self.lblock[lane]);
-            let key = self.lkey[lane] != 0;
-            let rhythm_keys = self.lrhythm_keys[lane] != 0;
-            let dam = self.ldam[lane] != 0;
-            let drum_keys = drum_key_bit & self.ldrum_keys[lane];
-            let ksr = ymf262::key_scale(fnum, block, self.lnts[lane] != 0, ((r20 >> 4) & 1) != 0);
-            let ar = r60 >> 4;
-            let dr = r60 & 15;
-            let rr = r80 & 15;
-            let egt = (r20 >> 5) & 1;
-            let by_state = [ar, dr, if egt != 0 { 0 } else { rr }, rr];
-            let mut rates = 0;
-            for (st, &rate) in by_state.iter().enumerate() {
-                rates |= (ymf262::scaled_rate(rate, ksr) | if rate != 0 { 16 } else { 0 }) << (8 * st);
-            }
-            lanes.rates[lane] = rates;
-            lanes.key_scale[lane] = ksr.cast_signed();
-            lanes.key_scale_low[lane] = (ksr & 3).cast_signed();
-            let sl = r80 >> 4;
-            let sustain = sl.cast_signed();
-            lanes.sustain[lane] = if sl == 15 { 31 } else { sustain };
-            lanes.key_on[lane] = i32::from(key | (rhythm_keys & (drum_keys != 0)));
-            lanes.level_offset[lane] = ymf262::level_offset(fnum, block, r40 >> 6, r40 & 63).cast_signed();
-            let depth = if dam { 2 } else { 1 };
-            lanes.tremolo_depth[lane] = if (r20 & 0x80) != 0 { depth } else { 0 };
-            lanes.fnum_v[lane] = fnum;
-            lanes.block_v[lane] = block;
-            lanes.multiple_v[lane] = ymf262::MULTIPLE[usize::from(self.l20[lane] & 15)];
-            lanes.vibrato[lane] = (r20 >> 6) & 1;
-            lanes.vibrato_depth[lane] = u32::from(self.ldvb[lane]);
-            let wave = ymf262::wave(u32::from(self.le0[lane]));
-            lanes.phase_shift[lane] = wave.phase_shift;
-            lanes.turn_bit[lane] = wave.turn_bit;
-            lanes.mute_bit[lane] = wave.mute_bit;
-            lanes.sign_bit[lane] = wave.sign_bit;
-            lanes.square[lane] = wave.square;
-            lanes.sawtooth[lane] = wave.sawtooth;
-            let fb = i32::from(self.lfb[lane]);
-            let by = i32::from(self.modulation[lane]);
-            lanes.modulated_by[lane] = if (by == 2) & (fb == 0) { 0 } else { by };
-            let shift = 9 - fb;
-            lanes.feedback_shift[lane] = if fb != 0 { shift } else { 0 };
-            let w = i32::from(self.weight[lane]);
-            let pan = self.lpan[lane];
-            let on_a = (pan & 1) != 0;
-            let on_b = (pan & 2) != 0;
-            lanes.a_now[lane] = if on_a & (s < FIRST_LATE_ON_A) { w } else { 0 };
-            lanes.a_late[lane] = if on_a & (s >= FIRST_LATE_ON_A) { w } else { 0 };
-            lanes.b_now[lane] = if on_b & (s < FIRST_LATE_ON_B) { w } else { 0 };
-            lanes.b_late[lane] = if on_b & (s >= FIRST_LATE_ON_B) { w } else { 0 };
-        }
-        self.derive_soft_pan();
-        #[cfg(feature = "experiment")]
-        {
-            self.lanes.increments_for = u8::MAX;
-        }
-    }
-
-    /// For rust-speed's experiments: [`Core::derive_flat`] with the one table
-    /// that no expression takes the place of, the key scale level's ROM,
-    /// looked up lane by lane first, and the rest worked out in a loop of its
-    /// own, with the multiples and the shifts of the key scale level by
-    /// expressions (`ymf262::multiple_of`, `ymf262::ksl_shift_of`): a loop
-    /// without lookups, which takes no gathers where the tier has none.
-    #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
+    /// [`Core::derive`] for AMD's processors ([`Core::split_derive`]): with the
+    /// one table that no expression takes the place of, the key scale level's
+    /// ROM, looked up lane by lane first, and the rest worked out in a loop of
+    /// its own, without lookups and without short-circuits. The multiples and
+    /// the shifts of the key scale level are expressions
+    /// (`ymf262::multiple_of`, `ymf262::ksl_shift_of`), and the conditions are
+    /// `&` and `|` in place of `&&` and `||`, which say the same of booleans:
+    /// of the values the loop stores, those that `&&` picked made LLVM branch
+    /// around the stores, and a loop with stores under branches vectorizes
+    /// only where the tier has stores under masks.
+    #[cfg(target_arch = "x86_64")]
     #[inline(always)]
     #[expect(
         clippy::inline_always,
@@ -1445,10 +1404,7 @@ impl Core {
             lanes.b_late[lane] = if on_b & (s >= FIRST_LATE_ON_B) { w } else { 0 };
         }
         self.derive_soft_pan();
-        #[cfg(feature = "experiment")]
-        {
-            self.lanes.increments_for = u8::MAX;
-        }
+        self.lanes.increments_for = u8::MAX;
     }
 
     /// How loud each slot is on each output with soft panning.
@@ -1495,29 +1451,9 @@ impl Core {
             lanes.state[i] = e.state;
             lanes.restart[i] = i32::from(e.restart);
         }
-        #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
-        if self.experiment.increments {
-            self.refresh_increments();
-            let lanes = &mut *self.lanes;
-            for i in 0..LANES {
-                lanes.phase_out[i] = ymf262::phase_out(lanes.phase[i]);
-                lanes.phase[i] = ymf262::next_phase(lanes.phase[i], lanes.increment.0[i], lanes.restart[i] != 0);
-            }
-            return;
-        }
-        let lanes = &mut *self.lanes;
-        let vibrato = ymf262::vibrato(lanes.counters.vibrato_position);
         for i in 0..LANES {
-            let increment = ymf262::phase_increment(
-                lanes.fnum_v[i],
-                lanes.block_v[i],
-                lanes.multiple_v[i],
-                lanes.vibrato[i] != 0,
-                lanes.vibrato_depth[i] != 0,
-                &vibrato,
-            );
             lanes.phase_out[i] = ymf262::phase_out(lanes.phase[i]);
-            lanes.phase[i] = ymf262::next_phase(lanes.phase[i], increment, lanes.restart[i] != 0);
+            lanes.phase[i] = ymf262::next_phase(lanes.phase[i], lanes.increment.0[i], lanes.restart[i] != 0);
         }
     }
 
@@ -1653,7 +1589,8 @@ impl Core {
     }
 
     /// The pass written by hand, for AVX2 (`pass_avx2.S`) without AVX-VNNI or
-    /// with it, for AVX-512 (`pass_avx512.S`), or for NEON (`pass_neon.S`),
+    /// with it, for AVX-512 (`pass_avx512.S`), or for NEON, SHA3, SVE or SVE2
+    /// (`pass_neon.S`),
     /// given what it goes by besides the lanes: what the counters and the noise
     /// give for this pass, and what the routing says of the drums and of the
     /// shared feedback history.
@@ -1671,45 +1608,15 @@ impl Core {
         ];
         let hold = [self.hold_history[LANE_13], self.hold_history[LANE_14]];
         let inputs = PassInputs::new(&self.lanes.counters, self.lanes.noise, rhythm, hold, self.soft_pan);
-        #[cfg(feature = "experiment")]
-        self.refresh_increments();
         hand.run(&mut self.lanes, &inputs)
     }
+}
 
-    /// For rust-speed's experiments: the lanes' phase increments in this pass,
-    /// as the pass works them out, worked out again when what they come of has
-    /// changed since they were: the vibrato's position, which moves on every
-    /// 1024 samples, or what the passes go by, which only writes change.
-    #[cfg(feature = "experiment")]
-    #[inline(always)]
-    #[expect(
-        clippy::inline_always,
-        reason = "it belongs in each tier's form of a sample with the rest of the sample"
-    )]
-    fn refresh_increments(&mut self) {
-        let lanes = &mut *self.lanes;
-        let position = lanes.counters.vibrato_position;
-        if lanes.increments_for == position {
-            return;
-        }
-        lanes.increments_for = position;
-        let vibrato = ymf262::vibrato(position);
-        for i in 0..LANES {
-            lanes.increment.0[i] = ymf262::phase_increment(
-                lanes.fnum_v[i],
-                lanes.block_v[i],
-                lanes.multiple_v[i],
-                lanes.vibrato[i] != 0,
-                lanes.vibrato_depth[i] != 0,
-                &vibrato,
-            );
-        }
-    }
-
+#[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
+impl Core {
     /// What the slots read, the routing and what the passes go by worked out
     /// once: the heaviest of what a sample's writes take, which a written
     /// sample takes once or twice, for the experiments' measurements alone.
-    #[cfg(feature = "experiment")]
     #[inline(always)]
     #[expect(
         clippy::inline_always,

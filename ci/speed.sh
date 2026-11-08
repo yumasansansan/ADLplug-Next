@@ -16,13 +16,13 @@
 # name; the extensions the system reports for it; and those adlplug-cpu
 # detects, which the timing program prints. Then what the parts of a sample
 # take at every level, twice as well (crates/adlplug-opl3/examples/profile.rs,
-# built with the feature experiment): the pass alone, the writes' handling
-# alone, the pass without one of its parts each, and the other ways of writing
-# the pass and the core's own code that this branch tries, each checked to make
-# the samples of the core without it. On Linux the runs are pinned to one processor (taskset), elsewhere they
-# are not, and under GitHub Actions perf samples where they spend their time
-# (ci/perf.sh). Under GitHub Actions all of it goes into the summary of the run
-# as well.
+# built with the feature experiment): the pass alone and the writes' handling
+# alone, and whole samples with their writes, by the core's own code and by the
+# other ways of writing it that this branch tries, each checked to make the
+# samples of the core without it. On Linux the runs are pinned to one
+# processor (taskset), elsewhere they are not, and under GitHub Actions perf
+# samples where they spend their time (ci/perf.sh). Under GitHub Actions all of
+# it goes into the summary of the run as well.
 set -euo pipefail
 
 report=$(mktemp)

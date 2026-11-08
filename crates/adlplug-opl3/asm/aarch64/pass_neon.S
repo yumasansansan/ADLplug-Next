@@ -7,8 +7,8 @@
 // (LICENSES/GPL-3.0-or-later.txt).
 //
 // It is a pass of ADLplug-Next OPL3's core (src/core.rs) written by hand for
-// NEON, and what it works out for a slot is what src/ymf262.rs works out: the
-// envelope, the phase, the operator, the modulation and the rhythm phases.
+// AArch64, and what it works out for a slot is what src/ymf262.rs works out:
+// the envelope, the phase, the operator, the modulation and the rhythm phases.
 // src/ymf262.rs follows the code of YMF262-LLE by nukeykt, an emulator of the
 // YMF262 (OPL3) drawn from a die shot of the chip, and carries its notice; this
 // file holds none of that code, and works the same out for the lanes of the
@@ -17,17 +17,20 @@
 //
 //     void adlplug_opl3_pass_neon(Lanes *lanes, const PassInputs *inputs,
 //                                 int32_t *frame);
+//     void adlplug_opl3_pass_neon_sha3(Lanes *lanes, const PassInputs *inputs,
+//                                      int32_t *frame);
 //     void adlplug_opl3_pass_sve(Lanes *lanes, const PassInputs *inputs,
 //                                int32_t *frame);
+//     void adlplug_opl3_pass_sve2(Lanes *lanes, const PassInputs *inputs,
+//                                 int32_t *frame);
 //         AAPCS64
 //
 // What Core::generate() does between taking its writes in and moving its
-// counters on (src/aarch64.rs), for NEON (Advanced SIMD), which every AArch64
-// processor has: the envelopes and the phases, the rhythm phases, the operators
-// stage by stage, the feedback history and the sums of the two outputs. What
-// it works out for a slot is what src/ymf262.rs works out, in the order the
-// pass for AVX2 works it out (x86_64/pass_avx2.S), each of its vectors of
-// eight lanes two vectors of four here.
+// counters on (src/aarch64.rs): the envelopes and the phases, the rhythm
+// phases, the operators stage by stage, the feedback history and the sums of
+// the two outputs. What it works out for a slot is what src/ymf262.rs works
+// out, in the order the pass for AVX2 works it out (x86_64/pass_avx2.S), each
+// of its vectors of eight lanes two vectors of four here.
 //
 // The lanes are those of the core, four to a vector of 32 bits, but for the
 // envelopes, which are worked out eight to a vector of 16 bits: every value
@@ -35,44 +38,55 @@
 // envelopes keep their levels and states in the lanes' own order, which the
 // narrowing instructions leave them in. NEON shifts each lane by a count of its
 // own, in 16 bits as in 32 (ushl, sshl, the count negative for a shift down),
-// and looks a byte up in a table of sixteen (tbl, nought past the table), so
-// the envelope's steps are shifts and its small tables tbl. The tables of the
-// log-sine and the exponent are looked up one lane at a time, as the pass for
-// AVX2 without AVX-VNNI looks them up: NEON has no gather.
+// and looks bytes up in a table of sixteen or thirty-two (tbl, nought past the
+// table), so the envelope's steps are shifts and its small tables tbl, the
+// rate of each lane's state among them, a byte of the four of its rates. The
+// phases move on by the lanes' increments, which the core works out when what
+// they come of changes (Core::refresh_increments). The tables of the log-sine
+// and the exponent are looked up one lane at a time where NEON alone is there,
+// as the pass for AVX2 without AVX-VNNI looks them up, by each lane's low
+// byte, which is the index, the values loaded into their lanes; and by SVE's
+// gathers where it is there.
 //
-// The second function, this branch's experiment, is the first with those two
-// tables looked up by SVE's gathers (ld1w), four lanes at a time under a
-// predicate of four elements (ptrue vl4), so that it works the same on SVE's
-// vectors of any length: the rest of the pass is NEON's, and a NEON instruction
-// that writes a vector zeroes the bits of its SVE register above it, which
-// nothing reads. Both are assembled from the same macros, the second's lookups
-// alone different. So are the other forms of the experiments, at the end: one
-// shifting down by SVE's shifts, the other ways of writing the pass that they
-// try, and the forms without one part each, for their measurements alone.
+// Four forms are assembled from the same macros, by the bits of the number \f
+// that they take: adlplug_opl3_pass_neon, NEON alone, which every AArch64
+// processor has; adlplug_opl3_pass_neon_sha3, with the last two steps of an
+// operator one BCAX of SHA3's (F_SHA3); adlplug_opl3_pass_sve, whose two
+// lookups of each operator are each one gather under p0, a predicate of four
+// elements (ptrue vl4), and whose shifts down by a count of each lane's are
+// SVE's, which take the count as it is (F_SVE); and adlplug_opl3_pass_sve2,
+// with SVE2's BCAX for those two steps and its BSL1N for an envelope's mask of
+// its linear steps besides (F_SVE2). The rest of each is NEON's, and a NEON
+// instruction that writes a vector zeroes the bits of its SVE register above
+// it, which nothing reads: the forms for SVE work the same on SVE's vectors of
+// any length.
 //
 // The stages of operators wait for each other, through two table lookups each,
 // so each stage starts with what does not wait for the stage before, and the
 // envelopes and phases of the next stage come between stages, for the
-// processor to work on while it waits.
+// processor to work on while it waits. Within a stage the operators go two at a
+// time (OPERATOR_PAIR), their parts between the lookups interleaved, so that
+// while one waits for a lookup the other has work to give the processor.
 //
 // Registers: x0 the lanes, x1 what the pass goes by, x2 the frame; x3 and x4
 // the tables of the log-sine and of the exponent; x5 the lanes' values from
-// OUT on, for the loads and stores in pairs; x6 the scratch of the form that
-// takes the indices out through memory; x9 to x15 for the scalars and the
+// OUT on, for the loads and stores in pairs; x9 to x16 for the scalars and the
 // lookups. The vectors are v0 to v7 and v16 to v31, all of them the caller's
-// to save, and in the forms of SVE and SVE2 the whole of the z registers that
-// they take of those and the predicate p0, the caller's as well; v8 to v15,
-// whose low halves the convention has the callee keep, are not touched, nor
-// x18, nor the stack. So the functions need no frame and no unwinding
-// information on any of the systems.
+// to save: an operator takes v0 to v7 and v16, or v18 to v26, and the
+// operators' constants are in v27 to v31 for the whole pass; and in the forms
+// for SVE the whole of the z registers that they take of those, and the
+// predicate p0, the caller's as well. v8 to v15, whose low halves the
+// convention has the callee keep, are not touched, nor x18, nor the stack. So
+// the functions need no frame and no unwinding information on any of the
+// systems.
 //
 // Assembled by Clang, for Mach-O (macOS), ELF (Linux) and COFF (Windows).
 
 #include "pass.h"
 
-// The form for SVE takes its instructions, which the assembler is told it may
-// for the whole file; the form for NEON takes none of them. So with SVE2's and
-// SHA3's, which the experiments' forms with F_SVE2 and F_SHA3 alone take.
+// The forms for SVE and SVE2 take their instructions, and the form for SHA3
+// takes its, which the assembler is told it may for the whole file; the form
+// for NEON takes none of them.
         .arch_extension sve
         .arch_extension sve2
         .arch_extension sha3
@@ -95,11 +109,6 @@
         .set KEY_ON, ADLPLUG_OPL3_KEY_ON
         .set LEVEL_OFFSET, ADLPLUG_OPL3_LEVEL_OFFSET
         .set TREMOLO_DEPTH, ADLPLUG_OPL3_TREMOLO_DEPTH
-        .set FNUM, ADLPLUG_OPL3_FNUM
-        .set BLOCK, ADLPLUG_OPL3_BLOCK
-        .set MULTIPLE, ADLPLUG_OPL3_MULTIPLE
-        .set VIBRATO, ADLPLUG_OPL3_VIBRATO
-        .set VIBRATO_DEPTH, ADLPLUG_OPL3_VIBRATO_DEPTH
         .set PHASE_SHIFT, ADLPLUG_OPL3_PHASE_SHIFT
         .set TURN_BIT, ADLPLUG_OPL3_TURN_BIT
         .set MUTE_BIT, ADLPLUG_OPL3_MUTE_BIT
@@ -122,6 +131,7 @@
         .set OUT_2, ADLPLUG_OPL3_OUT_2
         .set EG_OUT, ADLPLUG_OPL3_EG_OUT
         .set PHASE_OUT, ADLPLUG_OPL3_PHASE_OUT
+        .set INCREMENT, ADLPLUG_OPL3_INCREMENT
         .set LEVEL16, ADLPLUG_OPL3_LEVEL16
         .set STATE16, ADLPLUG_OPL3_STATE16
         .set CARRY_SOFT, ADLPLUG_OPL3_CARRY_SOFT             // a, then b, 64 bits each
@@ -137,10 +147,6 @@
         .set IN_HIGH_FROM_LESS_1, ADLPLUG_OPL3_IN_HIGH_FROM_LESS_1
         .set IN_ADD, ADLPLUG_OPL3_IN_ADD
         .set IN_TREMOLO, ADLPLUG_OPL3_IN_TREMOLO
-        .set IN_VIBRATO_SHIFT, ADLPLUG_OPL3_IN_VIBRATO_SHIFT
-        .set IN_VIBRATO_MASK, ADLPLUG_OPL3_IN_VIBRATO_MASK
-        .set IN_VIBRATO_SIGN, ADLPLUG_OPL3_IN_VIBRATO_SIGN
-        .set IN_VIBRATO_WRAP, ADLPLUG_OPL3_IN_VIBRATO_WRAP
         .set IN_EG_SECOND, ADLPLUG_OPL3_IN_EG_SECOND
         .set IN_RHYTHM_13, ADLPLUG_OPL3_IN_RHYTHM_13
         .set IN_RHYTHM_16, ADLPLUG_OPL3_IN_RHYTHM_16
@@ -153,49 +159,14 @@
         .set IN_LOGSIN, ADLPLUG_OPL3_IN_LOGSIN
         .set IN_EXP, ADLPLUG_OPL3_IN_EXP
 
-// What the experiments' forms of the pass alone read and write besides: the
-// lanes' phase increments, which the core works out when what they come of
-// changes, and room for the indices that one form takes out through memory.
-        .set INCREMENT, ADLPLUG_OPL3_INCREMENT
-        .set SCRATCH, ADLPLUG_OPL3_SCRATCH
-
 // The forms of the pass, as bits of the number \f that the macros take: SVE's
-// gathers for the two tables, SVE's shifts by a vector for the shifts down by a
-// count of each lane's. Then the other ways of writing the pass that the
-// experiments try, each of which makes the samples of the form without it:
-// F_TIDY, the operators' masks by cmtst, their shape by bit, and their lookups
-// one by one (without the gathers) by the low byte of each lane, which leaves
-// out the masks of their indices; F_CONSTS, the operators' constants in v27 to
-// v31 for the whole pass; F_RATES, the rate of an envelope's state by tbl, from
-// the four bytes of each lane's rates; F_INCREMENTS, the phases moved on by the
-// increments in the lanes; F_EXTRACT, the indices of the lookups one by one
-// taken out through memory, a store and loads of a byte, and F_INSERT, their
-// values put in by loads into a lane; F_LOGIC, the envelopes' masks put
-// together by bit and bif where two of them are never both; F_SHA3 and F_SVE2,
-// with F_TIDY, the operators' last two steps one BCAX of SHA3's or of SVE2's,
-// and with F_SVE2 an envelope's mask of its linear steps by SVE2's BSL1N;
-// F_PAIRS, with F_TIDY and F_CONSTS, the operators of a stage two at a time,
-// their parts between the lookups interleaved (OPERATOR_PAIR). And,
-// for the experiments' measurements alone, not for samples, the forms that
-// leave one part out, whose time the difference from the whole pass's tells.
-        .set F_GATHER, 1
-        .set F_SHIFTS, 2
-        .set F_TIDY, 4
-        .set F_CONSTS, 8
-        .set F_RATES, 16
-        .set F_INCREMENTS, 32
-        .set F_EXTRACT, 64
-        .set F_INSERT, 128
-        .set F_NO_LOOKUPS, 256                // a move of the index for each lookup
-        .set F_NO_ENVELOPES, 512
-        .set F_NO_PHASES, 1024
-        .set F_NO_OPERATORS, 2048
-        .set F_NO_SUMS, 4096
-        .set F_NO_HISTORY, 8192               // the history and the shared queues
-        .set F_LOGIC, 16384
-        .set F_SHA3, 32768
-        .set F_SVE2, 65536
-        .set F_PAIRS, 131072
+// gathers for the two tables and its shifts by a vector for the shifts down by
+// a count of each lane's (F_SVE); an operator's last two steps one BCAX of
+// SHA3's (F_SHA3) or, with F_SVE, of SVE2's, with an envelope's mask of its
+// linear steps by SVE2's BSL1N (F_SVE2).
+        .set F_SVE, 1
+        .set F_SHA3, 2
+        .set F_SVE2, 4
 
         .text
 
@@ -212,7 +183,7 @@
 // The envelopes of the eight lanes from lane \l (ymf262::envelope() and
 // attenuation()): the state and the level for the next pass, and what the
 // operator takes of this pass's level. The rate a state goes by is taken from
-// its byte in 32 bits. Leaves dokon (keyed on from release) in 32 bits for the
+// its byte in 32 bits, by tbl. Leaves dokon (keyed on from release) in 32 bits for the
 // phases: lanes \l to \l + 3 in v3, \l + 4 to \l + 7 in v26. \second is the
 // envelope timer's second half.
 .macro ENVELOPE second, l, f
@@ -224,7 +195,6 @@
         cmeq      v3.8h, v0.8h, v16.8h
         and       v3.16b, v3.16b, v2.16b                            // dokon
         bic       v4.16b, v0.16b, v3.16b                            // the state the rate goes by
-.if \f & F_RATES
         // The byte of the state in each lane's 32 bits, by tbl from the 32
         // bytes of the eight lanes' rates: 4 * lane + state in each lane's low
         // byte, past the table in its high byte, which takes nought.
@@ -233,30 +203,6 @@
         ldr       q5, LOCAL(rate_bytes)
         add       v5.16b, v4.16b, v5.16b
         tbl       v18.16b, {v6.16b, v7.16b}, v5.16b                // its rate
-.elseif \f & F_SHIFTS
-        ushll     v5.4s, v4.4h, #3
-        ushll2    v4.4s, v4.8h, #3
-        ldr       q6, [x0, #(RATES + 4 * (\l))]
-        ldr       q7, [x0, #(RATES + 4 * (\l) + 16)]
-        lsr       z6.s, p0/m, z6.s, z5.s
-        lsr       z7.s, p0/m, z7.s, z4.s
-        xtn       v18.4h, v6.4s
-        xtn2      v18.8h, v7.4s
-.else
-        ushll     v5.4s, v4.4h, #3
-        ushll2    v4.4s, v4.8h, #3
-        neg       v5.4s, v5.4s
-        neg       v4.4s, v4.4s
-        ldr       q6, [x0, #(RATES + 4 * (\l))]
-        ldr       q7, [x0, #(RATES + 4 * (\l) + 16)]
-        ushl      v5.4s, v6.4s, v5.4s
-        ushl      v4.4s, v7.4s, v4.4s
-        xtn       v18.4h, v5.4s
-        xtn2      v18.8h, v4.4s
-.endif
-.if (\f & F_RATES) == 0
-        bic       v18.8h, #0xff, lsl #8                            // its rate
-.endif
         movi      v16.8h, #15
         and       v5.16b, v18.16b, v16.16b                          // rate_hi
         PACK      6, KEY_SCALE_LOW, \l, 17
@@ -307,24 +253,14 @@
         cmeq      v22.8h, v0.8h, v17.8h                             // decay
         // The state for the next pass: one on from attack at level 0 and from
         // decay at the sustain level, release with the key off, attack on dokon.
-.if \f & F_LOGIC
-        // A state is never both attack and decay, so the second's reach is
-        // put in by bit where it decays; and the next state is 3 at the most,
-        // so release is put in by bif where the key is off.
+        // A state is never both attack and decay, so the second's reach is put
+        // in by bit where it decays; and the next state is 3 at the most, so
+        // release is put in by bif where the key is off.
         and       v23.16b, v4.16b, v5.16b
         bit       v23.16b, v6.16b, v22.16b
         sub       v23.8h, v0.8h, v23.8h
         movi      v24.8h, #3
         bif       v23.16b, v24.16b, v2.16b
-.else
-        and       v23.16b, v22.16b, v6.16b
-        and       v24.16b, v4.16b, v5.16b
-        orr       v23.16b, v23.16b, v24.16b
-        sub       v23.8h, v0.8h, v23.8h
-        movi      v24.8h, #3
-        bic       v24.16b, v24.16b, v2.16b
-        orr       v23.16b, v23.16b, v24.16b
-.endif
         bic       v23.16b, v23.16b, v3.16b
         str       q23, [x0, #(STATE16 + 2 * (\l))]
         cmgt      v23.8h, v0.8h, v17.8h                             // sustain or release
@@ -349,27 +285,15 @@
         bic       v4.16b, v21.16b, v4.16b                           // mute
         bic       v25.16b, v1.16b, v20.16b
         mvni      v16.8h, #0xfe, lsl #8                            // 0x1ff
-.if \f & F_LOGIC
         // Muted and instant are never both, and the level is nine bits.
         bit       v25.16b, v16.16b, v4.16b                          // the level before the step
-.else
-        and       v4.16b, v4.16b, v16.16b
-        orr       v25.16b, v25.16b, v4.16b                          // the level before the step
-.endif
         ushr      v4.8h, v1.8h, #1
         movi      v17.8h, #0xff
         eor       v4.16b, v4.16b, v17.16b
-.if \f & F_LOGIC
         // The exponent's and the linear increment are never both.
         movi      v17.8h, #4
         and       v23.16b, v23.16b, v17.16b
         bif       v4.16b, v23.16b, v24.16b                          // the increment
-.else
-        and       v4.16b, v4.16b, v24.16b
-        movi      v17.8h, #4
-        and       v23.16b, v23.16b, v17.16b
-        orr       v4.16b, v4.16b, v23.16b                           // the increment
-.endif
         mov       v23.16b, v19.16b
         orr       v23.8h, #0x04, lsl #8
         ldr       q17, LOCAL(attack_bits)
@@ -406,13 +330,11 @@
         sxtl      v3.4s, v3.4h
 .endm
 
-// The phases of the four lanes from lane \l (ymf262::phase_increment(),
-// phase_out() and next_phase()): what the operator reads of this pass's phase,
-// and the phase for the next pass, from nought on dokon (v\restart). In the
-// forms with F_INCREMENTS the increments are the lanes', which the core works
-// out as the pass would.
-.macro PHASE l, restart, f
-.if \f & F_INCREMENTS
+// The phases of the four lanes from lane \l (ymf262::phase_out() and
+// next_phase()): what the operator reads of this pass's phase, and the phase
+// for the next pass, from nought on dokon (v\restart), moved on by the lanes'
+// increments.
+.macro PHASE l, restart
         ldr       q6, [x0, #(PHASE + 4 * (\l))]
         ushr      v7.4s, v6.4s, #9
         str       q7, [x0, #(PHASE_OUT + 4 * (\l))]
@@ -422,281 +344,28 @@
         movi      v7.4s, #0x07, msl #16                            // 0x7ffff
         and       v6.16b, v6.16b, v7.16b
         str       q6, [x0, #(PHASE + 4 * (\l))]
-        .exitm
-.endif
-        ldr       q4, [x0, #(VIBRATO_DEPTH + 4 * (\l))]
-        ldr       q5, [x0, #(FNUM + 4 * (\l))]
-        ushl      v6.4s, v5.4s, v4.4s
-        ldr       q7, [x1, #IN_VIBRATO_SHIFT]
-.if \f & F_SHIFTS
-        lsr       z6.s, p0/m, z6.s, z7.s                            // fnum shifted down as the depth asks
-        movi      v7.4s, #1
-        eor       v4.16b, v4.16b, v7.16b
-        ldr       q7, [x1, #IN_VIBRATO_MASK]
-        lsr       z7.s, p0/m, z7.s, z4.s                            // the depth's bits
-        and       v6.16b, v6.16b, v7.16b
-.else
-        neg       v7.4s, v7.4s
-        ushl      v6.4s, v6.4s, v7.4s                               // fnum shifted down as the depth asks
-        movi      v7.4s, #1
-        eor       v4.16b, v4.16b, v7.16b
-        neg       v4.4s, v4.4s
-        ldr       q7, [x1, #IN_VIBRATO_MASK]
-        ushl      v4.4s, v7.4s, v4.4s                               // the depth's bits
-        and       v6.16b, v6.16b, v4.16b
-.endif
-        ldr       q4, [x0, #(VIBRATO + 4 * (\l))]
-        neg       v4.4s, v4.4s
-        and       v6.16b, v6.16b, v4.16b                            // the vibrato's swing
-        ldr       q7, [x1, #IN_VIBRATO_SIGN]
-        mul       v6.4s, v6.4s, v7.4s
-        add       v5.4s, v5.4s, v6.4s
-        ldr       q7, [x1, #IN_VIBRATO_WRAP]
-        and       v5.16b, v5.16b, v7.16b                            // the frequency number
-        ldr       q7, [x0, #(BLOCK + 4 * (\l))]
-        ushl      v5.4s, v5.4s, v7.4s
-        ushr      v5.4s, v5.4s, #1
-        ldr       q7, [x0, #(MULTIPLE + 4 * (\l))]
-        mul       v5.4s, v5.4s, v7.4s
-        ushr      v5.4s, v5.4s, #1                                  // the increment
-        ldr       q6, [x0, #(PHASE + 4 * (\l))]
-        ushr      v7.4s, v6.4s, #9
-        str       q7, [x0, #(PHASE_OUT + 4 * (\l))]
-        bic       v6.16b, v6.16b, v\restart\().16b
-        add       v6.4s, v6.4s, v5.4s
-        movi      v7.4s, #0x07, msl #16                            // 0x7ffff
-        and       v6.16b, v6.16b, v7.16b
-        str       q6, [x0, #(PHASE + 4 * (\l))]
 .endm
 
 .macro ENVELOPES_AND_PHASES second, l, f
-.if \f & F_NO_ENVELOPES
-        movi      v3.2d, #0
-        movi      v26.2d, #0
-.else
         ENVELOPE  \second, \l, \f
-.endif
-.if (\f & F_NO_PHASES) == 0
-        PHASE     \l, 3, \f
-        PHASE     \l + 4, 26, \f
-.endif
+        PHASE     \l, 3
+        PHASE     \l + 4, 26
 .endm
 
-// The four lanes of v\idx looked up in the table at \table, into v\dst: in the
-// forms with SVE's gathers by a gather under p0, four elements; in the others
-// one by one, with w9 to w15, each lane's index taken out by umov, of the lane
-// or with F_TIDY of its low byte, or with F_EXTRACT by a store into the scratch
-// at x6 + \at and loads of a byte, and each value put in by a move from its
-// general register or with F_INSERT by a load into its lane; and in the form
-// that leaves the lookups out, the index moved in their place, which keeps what
-// waits on them waiting. The forms that take a lane's low byte take an index
-// whose bits above its eight are not yet cleared.
-.macro LOOKUP dst, idx, table, f, at
-.if \f & F_NO_LOOKUPS
-        mov       v\dst\().16b, v\idx\().16b
-.elseif \f & F_GATHER
-        ld1w      {z\dst\().s}, p0/z, [\table, z\idx\().s, uxtw #2]
-.else
-  .if \f & F_EXTRACT
-        str       q\idx, [x6, #(\at)]
-        ldrb      w9, [x6, #(\at)]
-        ldrb      w10, [x6, #(\at) + 4]
-        ldrb      w11, [x6, #(\at) + 8]
-        ldrb      w12, [x6, #(\at) + 12]
-  .elseif \f & F_TIDY
-        umov      w9, v\idx\().b[0]
-        umov      w10, v\idx\().b[4]
-        umov      w11, v\idx\().b[8]
-        umov      w12, v\idx\().b[12]
-  .else
-        umov      w9, v\idx\().s[0]
-        umov      w10, v\idx\().s[1]
-        umov      w11, v\idx\().s[2]
-        umov      w12, v\idx\().s[3]
-  .endif
-        ldr       s\dst, [\table, w9, uxtw #2]
-  .if \f & F_INSERT
-        add       x13, \table, x10, lsl #2
-        add       x14, \table, x11, lsl #2
-        add       x15, \table, x12, lsl #2
-        ld1       {v\dst\().s}[1], [x13]
-        ld1       {v\dst\().s}[2], [x14]
-        ld1       {v\dst\().s}[3], [x15]
-  .else
-        ldr       w13, [\table, w10, uxtw #2]
-        ldr       w14, [\table, w11, uxtw #2]
-        ldr       w15, [\table, w12, uxtw #2]
-        mov       v\dst\().s[1], w13
-        mov       v\dst\().s[2], w14
-        mov       v\dst\().s[3], w15
-  .endif
-.endif
-.endm
-
-// Whether the form's lookups take the low byte of each lane themselves, so that
-// the operator leaves the masks of their indices out.
-.macro BYTE_INDICES f
-        .set BYTES, ((\f & (F_TIDY | F_EXTRACT)) != 0) && ((\f & (F_GATHER | F_NO_LOOKUPS)) == 0)
-.endm
-
-// The operators of the four lanes from lane \l (ymf262::modulation() and
-// operator_output()), modulated, when they are by the stage before, by the
-// lanes from lane \source.
-.macro OPERATOR l, source, f
-.if \f & F_NO_OPERATORS
-        .exitm
-.endif
-        // First what does not wait for the stage before: the feedback, added to
-        // the phase as the modulation, to which the stage before's modulation is
-        // added later (no slot has both).
-        BYTE_INDICES \f
-        ldr       q0, [x0, #(MODULATED_BY + 4 * (\l))]
-.if \f & F_CONSTS
-        cmeq      v1.4s, v0.4s, v27.4s
-        and       v1.16b, v1.16b, v29.16b                           // what is taken of the stage before
-        cmeq      v0.4s, v0.4s, v28.4s
-.else
-        movi      v16.4s, #1
-        cmeq      v1.4s, v0.4s, v16.4s
-        movi      v17.4s, #0x03, msl #8                            // 1023
-        and       v1.16b, v1.16b, v17.16b                           // what is taken of the stage before
-        movi      v16.4s, #2
-        cmeq      v0.4s, v0.4s, v16.4s
-.endif
-        ldr       q2, [x0, #(OUT_1 + 4 * (\l))]
-        ldr       q16, [x0, #(OUT_2 + 4 * (\l))]
-        add       v2.4s, v2.4s, v16.4s
-        ldr       q16, [x0, #(FEEDBACK_SHIFT + 4 * (\l))]
-.if \f & F_SHIFTS
-        asr       z2.s, p0/m, z2.s, z16.s
-.else
-        neg       v16.4s, v16.4s
-        sshl      v2.4s, v2.4s, v16.4s
-.endif
-        and       v2.16b, v2.16b, v0.16b
-.if \f & F_CONSTS
-        and       v2.16b, v2.16b, v29.16b                           // the feedback
-.else
-        and       v2.16b, v2.16b, v17.16b                           // the feedback
-.endif
-        ldr       q16, [x0, #(PHASE_OUT + 4 * (\l))]
-        add       v2.4s, v2.4s, v16.4s
-        ldr       q5, [x0, #(TURN_BIT + 4 * (\l))]
-        ldr       q3, [x0, #(SQUARE + 4 * (\l))]
-        neg       v3.4s, v3.4s                                      // square: all ones
-        // From the stage before to the log-sine's index.
-        ldr       q16, [x0, #(OUT + 4 * (\source))]
-        and       v1.16b, v1.16b, v16.16b
-        add       v1.4s, v1.4s, v2.4s                               // the phase
-        ldr       q16, [x0, #(PHASE_SHIFT + 4 * (\l))]
-        ushl      v2.4s, v1.4s, v16.4s                              // shifted, with the bits above its ten
-        and       v4.16b, v2.16b, v5.16b
-        cmeq      v4.4s, v4.4s, v5.4s                               // turned back: all ones
-        eor       v4.16b, v4.16b, v2.16b                            // phase2, in its low nine bits
-        orr       v5.16b, v4.16b, v3.16b
-.if BYTES
-        LOOKUP    7, 5, x3, \f, (8 * (\l))                          // sine, by the index's low byte
-.else
-  .if \f & F_CONSTS
-        and       v5.16b, v5.16b, v31.16b                           // the log-sine's index
-  .else
-        movi      v16.4s, #255
-        and       v5.16b, v5.16b, v16.16b                           // the log-sine's index
-  .endif
-        LOOKUP    7, 5, x3, \f, (8 * (\l))                          // sine
-.endif
-        // While it loads: the ramp, the sign (bit 9 of shifted, which turning
-        // back leaves alone) and the mute.
-        ldr       q6, [x0, #(SAWTOOTH + 4 * (\l))]
-        neg       v6.4s, v6.4s                                      // sawtooth: all ones
-.if \f & F_CONSTS
-        and       v4.16b, v4.16b, v30.16b                           // 511
-.else
-        movi      v16.4s, #0x01, msl #8                            // 511
-        and       v4.16b, v4.16b, v16.16b
-.endif
-        shl       v4.4s, v4.4s, #3
-.if \f & F_TIDY
-        // The ramp, for the sawtooth: bit below puts it in where the sawtooth
-        // is, and so it is not masked here.
-        ldr       q16, [x0, #(SIGN_BIT + 4 * (\l))]
-        cmtst     v2.4s, v2.4s, v16.4s                              // negative
-        ldr       q16, [x0, #(MUTE_BIT + 4 * (\l))]
-        cmtst     v1.4s, v1.4s, v16.4s                              // muted
-        bic       v2.16b, v2.16b, v1.16b                            // heard and negative
-.else
-        and       v4.16b, v4.16b, v6.16b                            // the ramp, for the sawtooth
-        ldr       q16, [x0, #(SIGN_BIT + 4 * (\l))]
-        and       v2.16b, v2.16b, v16.16b
-        cmeq      v2.4s, v2.4s, #0                                  // positive
-        ldr       q16, [x0, #(MUTE_BIT + 4 * (\l))]
-        and       v1.16b, v1.16b, v16.16b
-        cmeq      v1.4s, v1.4s, #0                                  // heard
-        bic       v2.16b, v1.16b, v2.16b                            // heard and negative
-.endif
-        ldr       q0, [x0, #(EG_OUT + 4 * (\l))]
-        shl       v0.4s, v0.4s, #3
-        // From the sine to the exponent's index. att is not held to 4095: past
-        // it, it shifts the magnitude out all the same.
-.if \f & F_TIDY
-        bit       v7.16b, v4.16b, v6.16b                            // shape: the ramp where the sawtooth is
-.else
-        bic       v7.16b, v7.16b, v6.16b
-        orr       v7.16b, v7.16b, v4.16b                            // shape
-.endif
-        add       v7.4s, v7.4s, v0.4s                               // att
-.if BYTES
-        LOOKUP    5, 7, x4, \f, (8 * (\l) + 16)                     // by att's low byte
-.else
-  .if \f & F_CONSTS
-        and       v3.16b, v7.16b, v31.16b
-  .else
-        movi      v16.4s, #255
-        and       v3.16b, v7.16b, v16.16b
-  .endif
-        LOOKUP    5, 3, x4, \f, (8 * (\l) + 16)
-.endif
-        ushr      v7.4s, v7.4s, #8
-.if \f & F_SHIFTS
-        lsr       z5.s, p0/m, z5.s, z7.s                            // magnitude, below 4096
-.else
-        neg       v7.4s, v7.4s
-        ushl      v5.4s, v5.4s, v7.4s                               // magnitude, below 4096
-.endif
-        // The value: nought when muted, and when negative the magnitude's
-        // complement, which is the 13-bit ones' complement taken as signed.
-.if (\f & (F_SHA3 | F_SVE2)) && ((\f & F_TIDY) == 0)
-        .error "the forms with BCAX take the operators of F_TIDY, whose mask is the mute's"
-.endif
-.if \f & F_SVE2
-        bcax      z2.d, z2.d, z5.d, z1.d                            // SVE2's
-        str       q2, [x0, #(OUT + 4 * (\l))]
-.elseif \f & F_SHA3
-        bcax      v5.16b, v2.16b, v5.16b, v1.16b                    // SHA3's
-        str       q5, [x0, #(OUT + 4 * (\l))]
-.else
-  .if \f & F_TIDY
-        bic       v5.16b, v5.16b, v1.16b
-  .else
-        and       v5.16b, v5.16b, v1.16b
-  .endif
-        eor       v5.16b, v5.16b, v2.16b
-        str       q5, [x0, #(OUT + 4 * (\l))]
-.endif
-.endm
-
-// For F_PAIRS: two operators of a stage, their parts between the lookups
+// Two operators of a stage at a time, their parts between the lookups
 // interleaved, so that while one waits for a lookup the other has work to give
-// the processor. An operator is what OPERATOR works out with F_TIDY and
-// F_CONSTS, which F_PAIRS takes, in three parts, OPS1 to OPS3, around its two
-// lookups, LOOKUP_P: in v\r0 to v\r7 and v\t, as OPERATOR has them in v0 to v7
-// and v16, and for its lookups one by one in w\g0 to w\g3. The first operator
-// of a pair takes those registers, and the second v18 to v26 and w13 to w16,
-// which the envelopes alone take besides.
+// the processor. An operator is worked out in three parts, OPS1 to OPS3, around
+// its two lookups, LOOKUP_P: in v\r0 to v\r7 and v\t, and for its lookups one
+// by one in w\g0 to w\g3; the first operator of a pair takes v0 to v7, v16 and
+// w9 to w12, and the second v18 to v26, which the envelopes alone take
+// besides, and w13 to w16. The constants are those of PASS_FUNCTION.
 
 // The first part of the operator of the four lanes from lane \l, modulated by
-// the lanes from lane \source: to the log-sine's index, in v\r5, masked for
-// the gathers.
+// the lanes from lane \source (ymf262::modulation() and operator_output()),
+// when they are by the stage before: first what does not wait for the stage
+// before, the feedback, added to the phase as the modulation, to which the
+// stage before's modulation is added later (no slot has both); then from the
+// stage before to the log-sine's index, in v\r5, masked for the gathers.
 .macro OPS1 l, source, f, r0, r1, r2, r3, r4, r5, r6, r7, t
         ldr       q\r0, [x0, #(MODULATED_BY + 4 * (\l))]
         cmeq      v\r1\().4s, v\r0\().4s, v27.4s
@@ -706,7 +375,7 @@
         ldr       q\t, [x0, #(OUT_2 + 4 * (\l))]
         add       v\r2\().4s, v\r2\().4s, v\t\().4s
         ldr       q\t, [x0, #(FEEDBACK_SHIFT + 4 * (\l))]
-.if \f & F_SHIFTS
+.if \f & F_SVE
         asr       z\r2\().s, p0/m, z\r2\().s, z\t\().s
 .else
         neg       v\t\().4s, v\t\().4s
@@ -723,23 +392,25 @@
         and       v\r1\().16b, v\r1\().16b, v\t\().16b
         add       v\r1\().4s, v\r1\().4s, v\r2\().4s                // the phase
         ldr       q\t, [x0, #(PHASE_SHIFT + 4 * (\l))]
-        ushl      v\r2\().4s, v\r1\().4s, v\t\().4s                 // shifted
+        ushl      v\r2\().4s, v\r1\().4s, v\t\().4s                 // shifted, with the bits above its ten
         and       v\r4\().16b, v\r2\().16b, v\r5\().16b
-        cmeq      v\r4\().4s, v\r4\().4s, v\r5\().4s                // turned back
-        eor       v\r4\().16b, v\r4\().16b, v\r2\().16b             // phase2
+        cmeq      v\r4\().4s, v\r4\().4s, v\r5\().4s                // turned back: all ones
+        eor       v\r4\().16b, v\r4\().16b, v\r2\().16b             // phase2, in its low nine bits
         orr       v\r5\().16b, v\r4\().16b, v\r3\().16b
-.if \f & F_GATHER
+.if \f & F_SVE
         and       v\r5\().16b, v\r5\().16b, v31.16b                 // the log-sine's index
 .endif
 .endm
 
-// The second part: from the sine, in v\r7, to att, in v\r7, and the
-// exponent's index, in v\r3, masked for the gathers.
+// The second part: while the sine loads, the ramp, the sign (bit 9 of shifted,
+// which turning back leaves alone) and the mute; then from the sine, in v\r7,
+// to the exponent's index, att in v\r7, masked into v\r3 for the gathers. att
+// is not held to 4095: past it, it shifts the magnitude out all the same.
 .macro OPS2 l, f, r0, r1, r2, r3, r4, r5, r6, r7, t
         ldr       q\r6, [x0, #(SAWTOOTH + 4 * (\l))]
         neg       v\r6\().4s, v\r6\().4s                            // sawtooth: all ones
         and       v\r4\().16b, v\r4\().16b, v30.16b                 // 511
-        shl       v\r4\().4s, v\r4\().4s, #3                        // the ramp
+        shl       v\r4\().4s, v\r4\().4s, #3                        // the ramp, which bit puts in for the sawtooth
         ldr       q\t, [x0, #(SIGN_BIT + 4 * (\l))]
         cmtst     v\r2\().4s, v\r2\().4s, v\t\().4s                 // negative
         ldr       q\t, [x0, #(MUTE_BIT + 4 * (\l))]
@@ -749,26 +420,27 @@
         shl       v\r0\().4s, v\r0\().4s, #3
         bit       v\r7\().16b, v\r4\().16b, v\r6\().16b             // shape
         add       v\r7\().4s, v\r7\().4s, v\r0\().4s                // att
-.if \f & F_GATHER
+.if \f & F_SVE
         and       v\r3\().16b, v\r7\().16b, v31.16b
 .endif
 .endm
 
 // The third part: from the exponent's value, in v\r5, to the operator's value,
-// stored.
+// stored: nought when muted, and when negative the magnitude's complement,
+// which is the 13-bit ones' complement taken as signed.
 .macro OPS3 l, f, r0, r1, r2, r3, r4, r5, r6, r7, t
         ushr      v\r7\().4s, v\r7\().4s, #8
-.if \f & F_SHIFTS
+.if \f & F_SVE
         lsr       z\r5\().s, p0/m, z\r5\().s, z\r7\().s             // magnitude, below 4096
 .else
         neg       v\r7\().4s, v\r7\().4s
         ushl      v\r5\().4s, v\r5\().4s, v\r7\().4s                // magnitude, below 4096
 .endif
 .if \f & F_SVE2
-        bcax      z\r2\().d, z\r2\().d, z\r5\().d, z\r1\().d
+        bcax      z\r2\().d, z\r2\().d, z\r5\().d, z\r1\().d        // SVE2's
         str       q\r2, [x0, #(OUT + 4 * (\l))]
 .elseif \f & F_SHA3
-        bcax      v\r5\().16b, v\r2\().16b, v\r5\().16b, v\r1\().16b
+        bcax      v\r5\().16b, v\r2\().16b, v\r5\().16b, v\r1\().16b // SHA3's
         str       q\r5, [x0, #(OUT + 4 * (\l))]
 .else
         bic       v\r5\().16b, v\r5\().16b, v\r1\().16b
@@ -777,12 +449,13 @@
 .endif
 .endm
 
-// The four lanes of v\idx looked up in the table at \table, into v\dst: by a
-// gather in the forms with SVE's, and else one by one by the low byte of each
-// lane, with w\g0 to w\g3, each index's register taking its value or its
-// address.
+// The four lanes of v\idx looked up in the table at \table, into v\dst: in the
+// forms for SVE by a gather under p0, four elements; in the others one by one,
+// by the low byte of each lane, which is the index, with w\g0 to w\g3, each
+// index's register then taking its value's address, and the values loaded into
+// their lanes.
 .macro LOOKUP_P dst, idx, table, f, g0, g1, g2, g3
-.if \f & F_GATHER
+.if \f & F_SVE
         ld1w      {z\dst\().s}, p0/z, [\table, z\idx\().s, uxtw #2]
 .else
         umov      w\g0, v\idx\().b[0]
@@ -790,40 +463,25 @@
         umov      w\g2, v\idx\().b[8]
         umov      w\g3, v\idx\().b[12]
         ldr       s\dst, [\table, w\g0, uxtw #2]
-  .if \f & F_INSERT
         add       x\g1, \table, x\g1, lsl #2
         add       x\g2, \table, x\g2, lsl #2
         add       x\g3, \table, x\g3, lsl #2
         ld1       {v\dst\().s}[1], [x\g1]
         ld1       {v\dst\().s}[2], [x\g2]
         ld1       {v\dst\().s}[3], [x\g3]
-  .else
-        ldr       w\g1, [\table, w\g1, uxtw #2]
-        ldr       w\g2, [\table, w\g2, uxtw #2]
-        ldr       w\g3, [\table, w\g3, uxtw #2]
-        mov       v\dst\().s[1], w\g1
-        mov       v\dst\().s[2], w\g2
-        mov       v\dst\().s[3], w\g3
-  .endif
 .endif
 .endm
 
-// The operators of the four lanes from lane \la, modulated by those from
-// \sa, and of the four from \lb, modulated by those from \sb, interleaved.
+// The operators of the four lanes from lane \la, modulated by those from \sa,
+// and of the four from \lb, modulated by those from \sb, interleaved.
 .macro OPERATOR_PAIR la, sa, lb, sb, f
-.if (\f & (F_TIDY | F_CONSTS)) != (F_TIDY | F_CONSTS)
-        .error "F_PAIRS takes the operators of F_TIDY and F_CONSTS"
-.endif
-.if \f & F_NO_OPERATORS
-        .exitm
-.endif
         OPS1      \la, \sa, \f, 0, 1, 2, 3, 4, 5, 6, 7, 16
         OPS1      \lb, \sb, \f, 18, 19, 20, 21, 22, 23, 24, 25, 26
         LOOKUP_P  7, 5, x3, \f, 9, 10, 11, 12                       // sines
         LOOKUP_P  25, 23, x3, \f, 13, 14, 15, 16
         OPS2      \la, \f, 0, 1, 2, 3, 4, 5, 6, 7, 16
         OPS2      \lb, \f, 18, 19, 20, 21, 22, 23, 24, 25, 26
-.if \f & F_GATHER
+.if \f & F_SVE
         LOOKUP_P  5, 3, x4, \f, 9, 10, 11, 12                       // exponents
         LOOKUP_P  23, 21, x4, \f, 13, 14, 15, 16
 .else
@@ -1015,38 +673,17 @@
         ENVELOPES_AND_PHASES \second, 0, \f
         ENVELOPES_AND_PHASES \second, 8, \f
         HI_HAT
-.if \f & F_PAIRS
         OPERATOR_PAIR 0, 0, 4, 4, \f
         OPERATOR_PAIR 8, 8, 12, 12, \f
-.else
-        OPERATOR  0, 0, \f
-        OPERATOR  4, 4, \f
-        OPERATOR  8, 8, \f
-        OPERATOR  12, 12, \f
-.endif
         ENVELOPES_AND_PHASES \second, 16, \f
         ENVELOPES_AND_PHASES \second, 24, \f
         SNARE_AND_TOP_CYMBAL
-.if \f & F_PAIRS
         OPERATOR_PAIR 16, 0, 20, 4, \f
         OPERATOR_PAIR 24, 8, 28, 12, \f
-.else
-        OPERATOR  16, 0, \f
-        OPERATOR  20, 4, \f
-        OPERATOR  24, 8, \f
-        OPERATOR  28, 12, \f
-.endif
         ENVELOPES_AND_PHASES \second, 32, \f
         ENVELOPES_AND_PHASES \second, 40, \f
-.if \f & F_PAIRS
         OPERATOR_PAIR 32, 16, 36, 20, \f
         OPERATOR_PAIR 40, 32, 44, 36, \f
-.else
-        OPERATOR  32, 16, \f
-        OPERATOR  36, 20, \f
-        OPERATOR  40, 32, \f
-        OPERATOR  44, 36, \f
-.endif
 .endm
 
 // The pass \name, in the form \f. Its labels are 7 to 9, which none of the
@@ -1070,24 +707,17 @@ _\name:
         .type     \name, %function
 \name:
 #endif
-.if \f & (F_GATHER | F_SHIFTS)
+.if \f & F_SVE
         ptrue     p0.s, vl4
 .endif
-.if \f & F_CONSTS
+        // The operators' constants.
         movi      v27.4s, #1
         movi      v28.4s, #2
         movi      v29.4s, #0x03, msl #8                            // 1023
         movi      v30.4s, #0x01, msl #8                            // 511
         movi      v31.4s, #255
-.endif
-.if \f & F_EXTRACT
-        add       x6, x0, #(SCRATCH & 0xfff)
-        add       x6, x6, #(SCRATCH >> 12), lsl #12
-.endif
-.if (\f & F_NO_HISTORY) == 0
         SHARED_READ 0, 7, 10, IN_HOLD_13
         SHARED_READ 1, 8, 11, IN_HOLD_14
-.endif
         ldr       x3, [x1, #IN_LOGSIN]
         ldr       x4, [x1, #IN_EXP]
         ldr       w9, [x1, #IN_EG_SECOND]
@@ -1097,7 +727,6 @@ _\name:
 7:
         PASS      1, \f
 8:
-.if (\f & F_NO_HISTORY) == 0
         add       x5, x0, #(OUT & 0xfff)
         add       x5, x5, #(OUT >> 12), lsl #12
         HISTORY   0
@@ -1108,7 +737,6 @@ _\name:
         HISTORY   40
         SHARED_STORE 0, 7, 10, IN_HOLD_13
         SHARED_STORE 1, 8, 11, IN_HOLD_14
-.endif
         movi      v16.2d, #0
         movi      v17.2d, #0
         movi      v18.2d, #0
@@ -1116,7 +744,6 @@ _\name:
         ldr       w9, [x1, #IN_SOFT_PAN]
         cbnz      w9, 9f
         // Core::accumulate() without soft panning.
-.if (\f & F_NO_SUMS) == 0
         HEARD     0
         HEARD     4
         HEARD     8
@@ -1129,7 +756,6 @@ _\name:
         HEARD     36
         HEARD     40
         HEARD     44
-.endif
         addv      s16, v16.4s
         addv      s17, v17.4s
         addv      s18, v18.4s
@@ -1160,7 +786,6 @@ _\name:
         movi      v21.2d, #0
         movi      v22.2d, #0
         movi      v23.2d, #0
-.if (\f & F_NO_SUMS) == 0
         HEARD_SOFT 0
         HEARD_SOFT 4
         HEARD_SOFT 8
@@ -1173,7 +798,6 @@ _\name:
         HEARD_SOFT 36
         HEARD_SOFT 40
         HEARD_SOFT 44
-.endif
         add       v16.2d, v16.2d, v17.2d
         add       v18.2d, v18.2d, v19.2d
         add       v20.2d, v20.2d, v21.2d
@@ -1209,61 +833,9 @@ _\name:
 .endm
 
         PASS_FUNCTION adlplug_opl3_pass_neon, 0
-        PASS_FUNCTION adlplug_opl3_pass_sve, F_GATHER
-        PASS_FUNCTION adlplug_opl3_pass_sve_shifts, F_GATHER|F_SHIFTS
-
-// The experiments' other ways of writing the forms for NEON and SVE, each alone
-// and those that the processors may take together.
-        .set F_ALL, F_TIDY|F_CONSTS|F_RATES|F_INCREMENTS
-        PASS_FUNCTION adlplug_opl3_pass_neon_tidy, F_TIDY
-        PASS_FUNCTION adlplug_opl3_pass_neon_consts, F_CONSTS
-        PASS_FUNCTION adlplug_opl3_pass_neon_rates, F_RATES
-        PASS_FUNCTION adlplug_opl3_pass_neon_increments, F_INCREMENTS
-        PASS_FUNCTION adlplug_opl3_pass_neon_extract, F_EXTRACT
-        PASS_FUNCTION adlplug_opl3_pass_neon_insert, F_INSERT
-        PASS_FUNCTION adlplug_opl3_pass_neon_extract_insert, F_EXTRACT|F_INSERT
-        PASS_FUNCTION adlplug_opl3_pass_neon_all, F_ALL
-        PASS_FUNCTION adlplug_opl3_pass_neon_all_extract, F_ALL|F_EXTRACT
-        PASS_FUNCTION adlplug_opl3_pass_neon_all_insert, F_ALL|F_INSERT
-        PASS_FUNCTION adlplug_opl3_pass_neon_logic, F_LOGIC
-        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic, F_ALL|F_LOGIC
-        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_extract, F_ALL|F_LOGIC|F_EXTRACT
-        PASS_FUNCTION adlplug_opl3_pass_neon_tidy_sha3, F_TIDY|F_SHA3
-        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_extract_sha3, F_ALL|F_LOGIC|F_EXTRACT|F_SHA3
-        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_insert, F_ALL|F_LOGIC|F_INSERT
-        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_pairs, F_ALL|F_LOGIC|F_PAIRS
-        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_insert_pairs, F_ALL|F_LOGIC|F_INSERT|F_PAIRS
-        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_insert_sha3, F_ALL|F_LOGIC|F_INSERT|F_SHA3
-        PASS_FUNCTION adlplug_opl3_pass_neon_all_logic_insert_pairs_sha3, F_ALL|F_LOGIC|F_INSERT|F_PAIRS|F_SHA3
-        PASS_FUNCTION adlplug_opl3_pass_sve_tidy, F_GATHER|F_TIDY
-        PASS_FUNCTION adlplug_opl3_pass_sve_consts, F_GATHER|F_CONSTS
-        PASS_FUNCTION adlplug_opl3_pass_sve_rates, F_GATHER|F_RATES
-        PASS_FUNCTION adlplug_opl3_pass_sve_increments, F_GATHER|F_INCREMENTS
-        PASS_FUNCTION adlplug_opl3_pass_sve_all, F_GATHER|F_ALL
-        PASS_FUNCTION adlplug_opl3_pass_sve_logic, F_GATHER|F_LOGIC
-        PASS_FUNCTION adlplug_opl3_pass_sve_all_logic, F_GATHER|F_ALL|F_LOGIC
-        PASS_FUNCTION adlplug_opl3_pass_sve_tidy_sve2, F_GATHER|F_TIDY|F_SVE2
-        PASS_FUNCTION adlplug_opl3_pass_sve_all_logic_sve2, F_GATHER|F_ALL|F_LOGIC|F_SVE2
-        PASS_FUNCTION adlplug_opl3_pass_sve_shifts_all_logic, F_GATHER|F_SHIFTS|F_ALL|F_LOGIC
-        PASS_FUNCTION adlplug_opl3_pass_sve_shifts_all_logic_pairs, F_GATHER|F_SHIFTS|F_ALL|F_LOGIC|F_PAIRS
-        PASS_FUNCTION adlplug_opl3_pass_sve_shifts_all_logic_sve2_pairs, F_GATHER|F_SHIFTS|F_ALL|F_LOGIC|F_SVE2|F_PAIRS
-        PASS_FUNCTION adlplug_opl3_pass_sve_shifts_all, F_GATHER|F_SHIFTS|F_ALL
-        PASS_FUNCTION adlplug_opl3_pass_sve_shifts_all_logic_sve2, F_GATHER|F_SHIFTS|F_ALL|F_LOGIC|F_SVE2
-
-// For the experiments' measurements alone: the forms for NEON and SVE, each
-// without one of its parts.
-        PASS_FUNCTION adlplug_opl3_pass_neon_no_lookups, F_NO_LOOKUPS
-        PASS_FUNCTION adlplug_opl3_pass_neon_no_envelopes, F_NO_ENVELOPES
-        PASS_FUNCTION adlplug_opl3_pass_neon_no_phases, F_NO_PHASES
-        PASS_FUNCTION adlplug_opl3_pass_neon_no_operators, F_NO_OPERATORS
-        PASS_FUNCTION adlplug_opl3_pass_neon_no_sums, F_NO_SUMS
-        PASS_FUNCTION adlplug_opl3_pass_neon_no_history, F_NO_HISTORY
-        PASS_FUNCTION adlplug_opl3_pass_sve_no_lookups, F_GATHER|F_NO_LOOKUPS
-        PASS_FUNCTION adlplug_opl3_pass_sve_no_envelopes, F_GATHER|F_NO_ENVELOPES
-        PASS_FUNCTION adlplug_opl3_pass_sve_no_phases, F_GATHER|F_NO_PHASES
-        PASS_FUNCTION adlplug_opl3_pass_sve_no_operators, F_GATHER|F_NO_OPERATORS
-        PASS_FUNCTION adlplug_opl3_pass_sve_no_sums, F_GATHER|F_NO_SUMS
-        PASS_FUNCTION adlplug_opl3_pass_sve_no_history, F_GATHER|F_NO_HISTORY
+        PASS_FUNCTION adlplug_opl3_pass_neon_sha3, F_SHA3
+        PASS_FUNCTION adlplug_opl3_pass_sve, F_SVE
+        PASS_FUNCTION adlplug_opl3_pass_sve2, F_SVE|F_SVE2
 
 // The tables of tbl, sixteen bytes each, beside the code, which loads them by
 // their addresses from its own (ldr of a literal): no relocation, in any of
@@ -1280,8 +852,8 @@ LOCAL(attack_bits):
 // By 0 to 3: 1 shifted up by it.
 LOCAL(pow2):
         .byte     1, 2, 4, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-// For the forms with F_RATES: in each 16-bit lane's low byte the first byte of
-// its rates in 32 bytes of eight lanes', and past the 32 in its high byte.
+// By the lane: in each 16-bit lane's low byte the first byte of its rates in
+// the 32 bytes of eight lanes', and past the 32 in its high byte.
 LOCAL(rate_bytes):
         .byte     0, 0x80, 4, 0x80, 8, 0x80, 12, 0x80, 16, 0x80, 20, 0x80, 24, 0x80, 28, 0x80
 // Eight 16-bit lanes of 0x1f7, the level past which the envelope is silent.
