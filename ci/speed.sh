@@ -17,7 +17,7 @@
 # detects, which the timing program prints. Then what the parts of a sample
 # take at every level, twice as well (crates/adlplug-opl3/examples/profile.rs,
 # built with the feature experiment): the pass alone, a whole sample with no
-# write to take, and the writes' handling and its parts alone, and whole
+# write to take, and the parts of the writes' handling alone, and whole
 # samples with their writes, by the core's own code and by the other ways of
 # writing it that this branch tries, each checked to make the samples of the
 # core without it. On Linux the runs are pinned to one processor (taskset),

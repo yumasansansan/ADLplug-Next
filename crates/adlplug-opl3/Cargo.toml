@@ -25,8 +25,9 @@ adlplug-cpu = { path = "../adlplug-cpu" }
 
 # The measurements of the parts of a sample and of the other ways of writing
 # the core's own code, for rust-speed's experiments (src/core/experiment.rs,
-# examples/profile.rs), with what those ways take of the core besides: the
-# groups of registers written since the slots last read every write.
+# examples/profile.rs), with what those ways take of the core besides: what the
+# narrow routing takes of each lane's slot, and the passes' forms that return
+# the two samples (asm/, which are assembled whatever the features).
 [features]
 experiment = []
 

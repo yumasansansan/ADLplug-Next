@@ -163,10 +163,13 @@
 // gathers for the two tables and its shifts by a vector for the shifts down by
 // a count of each lane's (F_SVE); an operator's last two steps one BCAX of
 // SHA3's (F_SHA3) or, with F_SVE, of SVE2's, with an envelope's mask of its
-// linear steps by SVE2's BSL1N (F_SVE2).
+// linear steps by SVE2's BSL1N (F_SVE2); and for rust-speed's experiments, the
+// two samples returned in x0, output A's in its low half, with no frame written
+// (F_RET).
         .set F_SVE, 1
         .set F_SHA3, 2
         .set F_SVE2, 4
+        .set F_RET, 8
 
         .text
 
@@ -770,14 +773,21 @@ _\name:
         add       w11, w11, w13
         CLIP      w9, w13
         CLIP      w11, w13
+.if ((\f) & F_RET) == 0
         str       w9, [x2]
+.endif
+.if ((\f) & F_RET) == 0
         str       w11, [x2, #4]
+.endif
         str       w10, [x0, #CARRY]
         str       w12, [x0, #(CARRY + 4)]
         sbfiz     x10, x10, #16, #32
         sbfiz     x12, x12, #16, #32
         str       x10, [x0, #CARRY_SOFT]
         str       x12, [x0, #(CARRY_SOFT + 8)]
+.if (\f) & F_RET
+        orr       x0, x9, x11, lsl #32                            // a, and b above it
+.endif
         ret
 9:
         // With soft panning: the sums exact in 64 bits, and one rounding at
@@ -815,7 +825,9 @@ _\name:
         str       x10, [x0, #CARRY_SOFT]
         ROUND16   x9
         CLIP      w9, w13
+.if ((\f) & F_RET) == 0
         str       w9, [x2]
+.endif
         ROUND16   x10
         str       w10, [x0, #CARRY]
         ldr       x13, [x0, #(CARRY_SOFT + 8)]
@@ -823,9 +835,14 @@ _\name:
         str       x12, [x0, #(CARRY_SOFT + 8)]
         ROUND16   x11
         CLIP      w11, w13
+.if ((\f) & F_RET) == 0
         str       w11, [x2, #4]
+.endif
         ROUND16   x12
         str       w12, [x0, #(CARRY + 4)]
+.if (\f) & F_RET
+        orr       x0, x9, x11, lsl #32                            // a, and b above it
+.endif
         ret
 #if defined(__ELF__)
         .size     \name, . - \name
@@ -836,6 +853,10 @@ _\name:
         PASS_FUNCTION adlplug_opl3_pass_neon_sha3, F_SHA3
         PASS_FUNCTION adlplug_opl3_pass_sve, F_SVE
         PASS_FUNCTION adlplug_opl3_pass_sve2, F_SVE|F_SVE2
+        PASS_FUNCTION adlplug_opl3_pass_neon_ret, F_RET
+        PASS_FUNCTION adlplug_opl3_pass_neon_sha3_ret, F_SHA3|F_RET
+        PASS_FUNCTION adlplug_opl3_pass_sve_ret, F_SVE|F_RET
+        PASS_FUNCTION adlplug_opl3_pass_sve2_ret, F_SVE|F_SVE2|F_RET
 
 // The tables of tbl, sixteen bytes each, beside the code, which loads them by
 // their addresses from its own (ldr of a literal): no relocation, in any of

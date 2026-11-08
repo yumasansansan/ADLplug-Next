@@ -457,6 +457,43 @@ impl DerivedFrom {
     }
 }
 
+/// A group of the registers that the slots read ([`Core::written`]): those of
+/// the slots, from 0x20, 0x40, 0x60, 0x80 and 0xe0 (`l20` to `le0`).
+const GROUP_SLOT: u8 = 1;
+/// The channels' frequencies, blocks and keys, from 0xa0 and 0xb0 (`lfnum`,
+/// `lblock`, `lkey`).
+const GROUP_FREQUENCY: u8 = 2;
+/// The channels' outputs, connections and feedbacks, from 0xc0 (`lpan`,
+/// `lcon`, `lfirst_con`, `lsecond_con`, `lfb`).
+const GROUP_CHANNEL: u8 = 4;
+/// The registers of the whole chip that the slots read, from 0x08 and 0xbd
+/// (`lnts`, `ldrum_keys`, `ldam`, `ldvb`, `lrhythm` and the readings of the
+/// rhythm before and after).
+const GROUP_CHIP: u8 = 8;
+/// The register of the chains of four, 0x104 (`lfour_op`).
+const GROUP_CHAINS: u8 = 16;
+/// Every group.
+const ALL_GROUPS: u8 = GROUP_SLOT | GROUP_FREQUENCY | GROUP_CHANNEL | GROUP_CHIP | GROUP_CHAINS;
+/// The groups that the routing reads: the connections, the rhythm and the
+/// chains.
+const ROUTING_GROUPS: u8 = GROUP_CHANNEL | GROUP_CHIP | GROUP_CHAINS;
+
+/// The groups of registers that a write to an address may change, as
+/// [`Core::apply`] decodes it, more of them rather than fewer: a write below
+/// 0x20, to the registers of the whole chip, may change any, as the chip then
+/// writes the last data written from 0x20 on once more, and the register of
+/// the chains spreads every channel; 0xd0 to 0xdf are none.
+const fn groups_of(address: u16) -> u8 {
+    match address.to_le_bytes()[0] {
+        0x00..=0x1f => ALL_GROUPS,
+        0xbd => GROUP_CHIP,
+        0xa0..=0xbf => GROUP_FREQUENCY,
+        0xc0..=0xcf => GROUP_CHANNEL,
+        0xd0..=0xdf => 0,
+        _ => GROUP_SLOT,
+    }
+}
+
 /// ADLplug-Next OPL3, the project's own emulator core of the YMF262 (OPL3),
 /// which makes what the low-level core drawn from a die shot of the chip
 /// (YMF262-LLE) makes as libADLMIDI drives it, sample for sample.
@@ -558,6 +595,11 @@ pub struct Core {
     derived: DerivedFrom,
     /// The next derive works every lane out, as after a reset.
     derive_all: bool,
+    /// The groups of registers written since the slots last read every write
+    /// (`GROUP_SLOT` and the others), so that [`Core::relatch`], the routing
+    /// and derive take those alone: the registers of a group that no write
+    /// has changed since are what the slots read of them already.
+    written: u8,
     /// For rust-speed's experiments: the other ways of writing the core's own
     /// code that it takes in place of its own (`Core::experiment_take`).
     #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
@@ -750,6 +792,7 @@ impl Core {
             split_derive: false,
             derived: DerivedFrom::new(),
             derive_all: true,
+            written: ALL_GROUPS,
             #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
             experiment: experiment::Experiment::default(),
             ch_fnum: [0; LANES],
@@ -798,8 +841,6 @@ impl Core {
     /// The chip as libADLMIDI's wrapper of the low-level core leaves it when it
     /// resets it.
     pub fn reset(&mut self) {
-        #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
-        self.experiment.latch_all();
         self.queue_head = 0;
         self.queue_count = 0;
         self.queue_wait = 0;
@@ -858,13 +899,13 @@ impl Core {
         self.soft_pan = false;
         self.landed_age = 0;
         self.landed_slot_time = -4; // everything read afresh
+        self.written = ALL_GROUPS;
         self.relatch();
         self.refresh_routing();
         self.derive_all = true;
         self.derive();
         self.landed_age = -1;
-        #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
-        self.experiment.all_read();
+        self.written = 0;
     }
 
     /// Queues a register write: the address of the register, the second bank's
@@ -995,9 +1036,9 @@ impl Core {
             self.refresh_routing();
             self.derive();
         }
-        #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
+        // Every write read: the registers are what the slots read of them.
         if self.landed_age < 0 {
-            self.experiment.all_read();
+            self.written = 0;
         }
         self.refresh_increments();
     }
@@ -1089,8 +1130,7 @@ impl Core {
 
     /// A write as it reaches the chip's registers.
     fn apply(&mut self, address: u16, value: u8) {
-        #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
-        self.experiment.written(address);
+        self.written |= groups_of(address);
         let [reg, high] = address.to_le_bytes();
         // The second bank is there only in the OPL3's own mode, but for the
         // register that turns that mode on; before it, its addresses are the
@@ -1217,63 +1257,97 @@ impl Core {
 
     /// What each slot reads for the pass worked out now: the registers as they
     /// stand if it reads them after the last write took effect, or else what it
-    /// read before. The routing and what the passes go by follow from it
-    /// (`refresh_routing()`, `derive()`).
+    /// read before, for the groups of registers written since the slots last
+    /// read every write alone ([`Core::written`]), each in a loop of its own.
+    /// The routing and what the passes go by follow from it
+    /// (`refresh_routing()`, `derive()`). Most writes change one group, the
+    /// registers of a slot or a channel's frequency, block and key, of three
+    /// to eight of the 22 readings of every lane; on GitHub's runners a
+    /// reading of every group took 14 to 24 ns at x86-64-v4, 41 to 77 at v3,
+    /// 74 to 111 at the baseline and 54 to 63 on the Neoverse N2 and the
+    /// Cobalt 100.
     #[inline(always)]
     #[expect(
         clippy::inline_always,
-        reason = "its loop over the lanes belongs in each tier's form of a sample, where it is vector code of the tier's width"
+        reason = "its loops over the lanes belong in each tier's form of a sample, where they are vector code of the tier's width"
     )]
     fn relatch(&mut self) {
         #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
-        if self.experiment.latch_groups {
-            self.relatch_groups();
+        if self.experiment.narrow_latch {
+            self.relatch_narrow();
             return;
         }
+        let written = self.written;
         // Slot times from the write to this pass.
         let since = SLOT_TIMES * self.landed_age - self.landed_slot_time;
-        for i in 0..LANES {
-            let s = SLOT_TIME[i];
-            let own = since + s + READS_OWN >= 0;
-            let chip = since + s + READS_CHIP >= 0;
-            let channel_first = since + CHANNEL_FIRST_TIME[i] + READS_OWN >= 0;
-            let chain_first = since + CHAIN_FIRST_TIME[i] + READS_OWN >= 0;
-            self.l20[i] = latch(own, self.r20[i], self.l20[i]);
-            self.l40[i] = latch(own, self.r40[i], self.l40[i]);
-            self.l60[i] = latch(own, self.r60[i], self.l60[i]);
-            self.l80[i] = latch(own, self.r80[i], self.l80[i]);
-            self.le0[i] = latch(own, self.re0[i], self.le0[i]);
-            self.lfnum[i] = latch(own, self.ch_fnum[i], self.lfnum[i]);
-            self.lblock[i] = latch(own, self.ch_block[i], self.lblock[i]);
-            self.lkey[i] = latch(own, self.ch_key[i], self.lkey[i]);
-            self.lpan[i] = latch(own, self.ch_pan[i], self.lpan[i]);
-            self.lcon[i] = latch(channel_first, self.ch_con[i], self.lcon[i]);
-            self.lfirst_con[i] = latch(chain_first, self.first_con[i], self.lfirst_con[i]);
-            self.lsecond_con[i] = latch(chain_first, self.second_con[i], self.lsecond_con[i]);
-            self.lfb[i] = latch(since + s + READS_FEEDBACK >= 0, self.ch_fb[i], self.lfb[i]);
-            self.lnts[i] = latch(chip, self.nts, self.lnts[i]);
-            self.ldrum_keys[i] = latch(chip, self.drum_keys, self.ldrum_keys[i]);
-            self.ldam[i] = latch(chip, self.dam, self.ldam[i]);
-            self.ldvb[i] = latch(chip, self.dvb, self.ldvb[i]);
-            self.lrhythm[i] = latch(chip, self.rhythm, self.lrhythm[i]);
-            self.lrhythm_keys[i] = latch(since + RHYTHM_KEYS_TIME >= 0, self.rhythm, self.lrhythm_keys[i]);
-            self.lrhythm_before[i] = latch(since + s + RHYTHM_BEFORE >= 0, self.rhythm, self.lrhythm_before[i]);
-            self.lrhythm_after[i] = latch(since + s + RHYTHM_AFTER >= 0, self.rhythm, self.lrhythm_after[i]);
-            self.lfour_op[i] = latch(since + CHAIN_READ_TIME[i] >= 0, self.four_op, self.lfour_op[i]);
+        if (written & GROUP_SLOT) != 0 {
+            for (i, &s) in SLOT_TIME.iter().enumerate() {
+                let own = since + s + READS_OWN >= 0;
+                self.l20[i] = latch(own, self.r20[i], self.l20[i]);
+                self.l40[i] = latch(own, self.r40[i], self.l40[i]);
+                self.l60[i] = latch(own, self.r60[i], self.l60[i]);
+                self.l80[i] = latch(own, self.r80[i], self.l80[i]);
+                self.le0[i] = latch(own, self.re0[i], self.le0[i]);
+            }
+        }
+        if (written & GROUP_FREQUENCY) != 0 {
+            for (i, &s) in SLOT_TIME.iter().enumerate() {
+                let own = since + s + READS_OWN >= 0;
+                self.lfnum[i] = latch(own, self.ch_fnum[i], self.lfnum[i]);
+                self.lblock[i] = latch(own, self.ch_block[i], self.lblock[i]);
+                self.lkey[i] = latch(own, self.ch_key[i], self.lkey[i]);
+            }
+        }
+        if (written & GROUP_CHANNEL) != 0 {
+            for i in 0..LANES {
+                let s = SLOT_TIME[i];
+                let own = since + s + READS_OWN >= 0;
+                let channel_first = since + CHANNEL_FIRST_TIME[i] + READS_OWN >= 0;
+                let chain_first = since + CHAIN_FIRST_TIME[i] + READS_OWN >= 0;
+                self.lpan[i] = latch(own, self.ch_pan[i], self.lpan[i]);
+                self.lcon[i] = latch(channel_first, self.ch_con[i], self.lcon[i]);
+                self.lfirst_con[i] = latch(chain_first, self.first_con[i], self.lfirst_con[i]);
+                self.lsecond_con[i] = latch(chain_first, self.second_con[i], self.lsecond_con[i]);
+                self.lfb[i] = latch(since + s + READS_FEEDBACK >= 0, self.ch_fb[i], self.lfb[i]);
+            }
+        }
+        if (written & GROUP_CHIP) != 0 {
+            for (i, &s) in SLOT_TIME.iter().enumerate() {
+                let chip = since + s + READS_CHIP >= 0;
+                self.lnts[i] = latch(chip, self.nts, self.lnts[i]);
+                self.ldrum_keys[i] = latch(chip, self.drum_keys, self.ldrum_keys[i]);
+                self.ldam[i] = latch(chip, self.dam, self.ldam[i]);
+                self.ldvb[i] = latch(chip, self.dvb, self.ldvb[i]);
+                self.lrhythm[i] = latch(chip, self.rhythm, self.lrhythm[i]);
+                self.lrhythm_keys[i] = latch(since + RHYTHM_KEYS_TIME >= 0, self.rhythm, self.lrhythm_keys[i]);
+                self.lrhythm_before[i] = latch(since + s + RHYTHM_BEFORE >= 0, self.rhythm, self.lrhythm_before[i]);
+                self.lrhythm_after[i] = latch(since + s + RHYTHM_AFTER >= 0, self.rhythm, self.lrhythm_after[i]);
+            }
+        }
+        if (written & GROUP_CHAINS) != 0 {
+            for (i, &t) in CHAIN_READ_TIME.iter().enumerate() {
+                self.lfour_op[i] = latch(since + t >= 0, self.four_op, self.lfour_op[i]);
+            }
         }
     }
 
     /// What the routing makes of what the slots read: what each is modulated
     /// by, how loud it is heard, the drum's phase it takes, and whether its
-    /// value is stored for feedback.
+    /// value is stored for feedback. It reads the connections, the rhythm and
+    /// the chains alone, so it is left as it is after a write to none of those
+    /// ([`Core::written`]).
     #[inline(always)]
     #[expect(
         clippy::inline_always,
         reason = "its loop over the lanes belongs in each tier's form of a sample, where it is vector code of the tier's width"
     )]
     fn refresh_routing(&mut self) {
+        if (self.written & ROUTING_GROUPS) == 0 {
+            return;
+        }
         #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
-        if self.experiment.routing_unchanged() {
+        if self.experiment.narrow_routing {
+            self.refresh_routing_narrow();
             return;
         }
         let lanes = &*self.lanes;
@@ -1346,9 +1420,9 @@ impl Core {
     /// 27% less by the changed lanes alone than by working every lane out on
     /// AArch64 (the Neoverse N2, the Cobalt 100 and the Apple M1), and 2.6 to
     /// 6.6% less at x86-64's baseline and v3 (AMD's EPYC 7763, 9V74 and 9V45,
-    /// and Intel's Xeon Platinum 8370C). The soft panning is worked out for
-    /// every lane, and the phase increments are marked only when a lane has
-    /// changed.
+    /// and Intel's Xeon Platinum 8370C). When a lane has changed, the soft
+    /// panning is worked out for every lane and the phase increments are
+    /// marked; when none has, both stand as they are.
     #[inline(always)]
     #[expect(
         clippy::inline_always,
@@ -1443,58 +1517,72 @@ impl Core {
             was.modulation[lane] = self.modulation[lane];
             was.weight[lane] = self.weight[lane];
         }
-        #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
-        let soft_pan = any || !self.experiment.derive_groups;
-        #[cfg(not(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64"))))]
-        let soft_pan = true;
-        if soft_pan {
-            self.derive_soft_pan();
-        }
         if any {
+            self.derive_soft_pan();
             self.lanes.increments_for = u8::MAX;
         }
     }
 
     /// The lanes whose inputs have changed since derive last read them
-    /// ([`DerivedFrom`]), or every lane after a reset: compared in a loop of
-    /// their own, without short-circuits, which is vector code.
+    /// ([`DerivedFrom`]), or every lane after a reset: compared for the groups
+    /// of registers written since the slots last read every write alone
+    /// ([`Core::written`]), since what derive reads of a group that no write
+    /// has changed is what it read before, and what the routing makes
+    /// (`modulation`, `weight`) only when it has been worked out again. Each
+    /// group's comparisons are a loop of their own, without short-circuits,
+    /// which is vector code.
     #[inline(always)]
     #[expect(
         clippy::inline_always,
-        reason = "it belongs in each tier's form of a sample, where its loop is vector code of the tier's width"
+        reason = "it belongs in each tier's form of a sample, where its loops are vector code of the tier's width"
     )]
     #[expect(
         clippy::needless_bitwise_bool,
-        reason = "the comparisons without short-circuits are a loop that vectorizes"
+        reason = "the comparisons without short-circuits are loops that vectorize"
     )]
     fn changed_lanes(&mut self) -> [bool; LANES] {
-        #[cfg(all(feature = "experiment", any(target_arch = "x86_64", target_arch = "aarch64")))]
-        if self.experiment.derive_groups {
-            return self.changed_lanes_by_groups();
-        }
         let all = self.derive_all;
         self.derive_all = false;
+        if all {
+            return [true; LANES];
+        }
+        let written = self.written;
         let was = &self.derived;
         let mut changed = [false; LANES];
-        for (lane, changed) in changed.iter_mut().enumerate() {
-            *changed = all
-                | (self.l20[lane] != was.l20[lane])
-                | (self.l40[lane] != was.l40[lane])
-                | (self.l60[lane] != was.l60[lane])
-                | (self.l80[lane] != was.l80[lane])
-                | (self.le0[lane] != was.le0[lane])
-                | (self.lfnum[lane] != was.lfnum[lane])
-                | (self.lblock[lane] != was.lblock[lane])
-                | (self.lkey[lane] != was.lkey[lane])
-                | (self.lpan[lane] != was.lpan[lane])
-                | (self.lfb[lane] != was.lfb[lane])
-                | (self.lnts[lane] != was.lnts[lane])
-                | (self.ldrum_keys[lane] != was.ldrum_keys[lane])
-                | (self.ldam[lane] != was.ldam[lane])
-                | (self.ldvb[lane] != was.ldvb[lane])
-                | (self.lrhythm_keys[lane] != was.lrhythm_keys[lane])
-                | (self.modulation[lane] != was.modulation[lane])
-                | (self.weight[lane] != was.weight[lane]);
+        if (written & GROUP_SLOT) != 0 {
+            for (lane, changed) in changed.iter_mut().enumerate() {
+                *changed |= (self.l20[lane] != was.l20[lane])
+                    | (self.l40[lane] != was.l40[lane])
+                    | (self.l60[lane] != was.l60[lane])
+                    | (self.l80[lane] != was.l80[lane])
+                    | (self.le0[lane] != was.le0[lane]);
+            }
+        }
+        if (written & GROUP_FREQUENCY) != 0 {
+            for (lane, changed) in changed.iter_mut().enumerate() {
+                *changed |= (self.lfnum[lane] != was.lfnum[lane])
+                    | (self.lblock[lane] != was.lblock[lane])
+                    | (self.lkey[lane] != was.lkey[lane]);
+            }
+        }
+        if (written & GROUP_CHANNEL) != 0 {
+            for (lane, changed) in changed.iter_mut().enumerate() {
+                *changed |= (self.lpan[lane] != was.lpan[lane]) | (self.lfb[lane] != was.lfb[lane]);
+            }
+        }
+        if (written & GROUP_CHIP) != 0 {
+            for (lane, changed) in changed.iter_mut().enumerate() {
+                *changed |= (self.lnts[lane] != was.lnts[lane])
+                    | (self.ldrum_keys[lane] != was.ldrum_keys[lane])
+                    | (self.ldam[lane] != was.ldam[lane])
+                    | (self.ldvb[lane] != was.ldvb[lane])
+                    | (self.lrhythm_keys[lane] != was.lrhythm_keys[lane]);
+            }
+        }
+        if (written & ROUTING_GROUPS) != 0 {
+            for (lane, changed) in changed.iter_mut().enumerate() {
+                *changed |= (self.modulation[lane] != was.modulation[lane]) | (self.weight[lane] != was.weight[lane]);
+            }
         }
         changed
     }

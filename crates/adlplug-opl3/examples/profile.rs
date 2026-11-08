@@ -20,9 +20,10 @@
 //! with the soft panning of those tests (the levels marked `soft`), and then
 //! measured as it stands, the best of five rounds of 20000 of each part
 //! (`Core::experiment_parts`): the pass alone, a whole sample with no write to
-//! take, and the writes' handling and its parts, what the slots read, the
-//! routing and derive for every lane, by each way of writing derive on
-//! x86-64. Last, whole samples with their writes, by the core's own code and
+//! take, and the parts of the writes' handling, what the slots read of every
+//! group and of the slots' registers, and the routing, by the core's code and
+//! by the narrow forms, and derive for every lane. Last, whole samples with
+//! their writes, by the core's own code and
 //! by each variant, as the timing program measures them: the writes of the
 //! eight seeds and their soft panning, the best of five runs.
 //!

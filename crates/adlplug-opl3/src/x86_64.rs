@@ -86,6 +86,27 @@ unsafe extern "C" {
     fn adlplug_opl3_pass_avx512_vbmi_vnni(lanes: *mut Lanes, inputs: *const PassInputs, frame: *mut i32);
 }
 
+/// A pass written by hand that returns the two samples in rax, output A's in
+/// its low half, and writes no frame, for rust-speed's experiments.
+#[cfg(feature = "experiment")]
+type Returning = unsafe extern "C" fn(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
+
+#[cfg(feature = "experiment")]
+unsafe extern "C" {
+    /// `adlplug_opl3_pass_avx2`, returning the two samples.
+    fn adlplug_opl3_pass_avx2_ret(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
+    /// `adlplug_opl3_pass_avx2_vnni`, returning the two samples.
+    fn adlplug_opl3_pass_avx2_vnni_ret(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
+    /// `adlplug_opl3_pass_avx512`, returning the two samples.
+    fn adlplug_opl3_pass_avx512_ret(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
+    /// `adlplug_opl3_pass_avx512_vnni`, returning the two samples.
+    fn adlplug_opl3_pass_avx512_vnni_ret(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
+    /// `adlplug_opl3_pass_avx512_vbmi`, returning the two samples.
+    fn adlplug_opl3_pass_avx512_vbmi_ret(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
+    /// `adlplug_opl3_pass_avx512_vbmi_vnni`, returning the two samples.
+    fn adlplug_opl3_pass_avx512_vbmi_vnni_ret(lanes: *mut Lanes, inputs: *const PassInputs) -> u64;
+}
+
 /// The pass written by hand for a level that the processor has, and the tier of
 /// the code around it, one the processor has: made by [`Hand::new`] alone,
 /// which asks the processor, so that one that exists runs.
@@ -95,6 +116,13 @@ pub(crate) struct Hand {
     function: Function,
     /// The tier of the code around it.
     tier: Tier,
+    /// The level, for rust-speed's experiments.
+    #[cfg(feature = "experiment")]
+    level: Level,
+    /// The level's pass that returns the two samples, which the experiments'
+    /// variant `frame ret` takes in place of `function`.
+    #[cfg(feature = "experiment")]
+    returning: Option<Returning>,
 }
 
 impl Hand {
@@ -117,7 +145,32 @@ impl Hand {
         features.has(level).then(|| Self {
             function,
             tier: features.tier(level),
+            #[cfg(feature = "experiment")]
+            level,
+            #[cfg(feature = "experiment")]
+            returning: None,
         })
+    }
+
+    /// The same pass, in the form that returns the two samples
+    /// (`Hand::returning`), for rust-speed's experiments.
+    #[cfg(feature = "experiment")]
+    pub(crate) fn returning(self) -> Self {
+        let returning: Returning = match self.level {
+            Level::Avx2 => adlplug_opl3_pass_avx2_ret,
+            Level::Avx2Vnni => adlplug_opl3_pass_avx2_vnni_ret,
+            Level::Avx512 => adlplug_opl3_pass_avx512_ret,
+            Level::Avx512Vnni => adlplug_opl3_pass_avx512_vnni_ret,
+            Level::Avx512Vbmi => adlplug_opl3_pass_avx512_vbmi_ret,
+            Level::Avx512VbmiVnni => adlplug_opl3_pass_avx512_vbmi_vnni_ret,
+            Level::V2 | Level::Neon | Level::NeonSha3 | Level::Sve | Level::Sve2 => {
+                unreachable!("a Hand is made for the levels of x86-64 above v2 alone")
+            }
+        };
+        Self {
+            returning: Some(returning),
+            ..self
+        }
     }
 
     /// The tier of the code around the pass.
@@ -172,6 +225,18 @@ impl Hand {
         reason = "the call into the assembly belongs in each tier's form of a sample"
     )]
     pub(crate) fn run(self, lanes: &mut Lanes, inputs: &PassInputs) -> [i32; 2] {
+        #[cfg(feature = "experiment")]
+        if let Some(returning) = self.returning {
+            // SAFETY: as below, for the forms of the passes that return the two
+            // samples in the register of a return value, output A's in its low
+            // half, and write no frame (`PASS_FUNCTION`'s `RET`), declared so.
+            let both = unsafe { returning(lanes, inputs) };
+            let [a0, a1, a2, a3, b0, b1, b2, b3] = both.to_le_bytes();
+            return [
+                i32::from_le_bytes([a0, a1, a2, a3]),
+                i32::from_le_bytes([b0, b1, b2, b3]),
+            ];
+        }
         let mut frame = [0; 2];
         // SAFETY: a `Hand` is made only where the processor has the extensions
         // of its level, as adlplug-cpu reports them, with the system saving the

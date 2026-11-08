@@ -728,8 +728,10 @@
 .endm
 
 // The pass \name, adding up with AVX-512 VNNI with \vnni 1 and looking the
-// tables up by VBMI with \vbmi 1. Its labels end in \vnni\vbmi.
-.macro PASS_FUNCTION name, vnni, vbmi
+// tables up by VBMI with \vbmi 1; with \ret 1, for rust-speed's experiments,
+// it returns the two samples in rax, output A's in its low half, and writes no
+// frame. Its labels end in \vnni\vbmi\ret.
+.macro PASS_FUNCTION name, vnni, vbmi, ret=0
         .globl    \name
 #if defined(_WIN32)
         .def      \name
@@ -810,12 +812,12 @@
         SHARED_READ 0, 7, 10, IN_HOLD_13
         SHARED_READ 1, 8, 11, IN_HOLD_14
         cmp       dword ptr [r9 + IN_EG_SECOND], 0
-        jne       .Lsecond\vnni\vbmi
+        jne       .Lsecond\vnni\vbmi\ret
         PASS      0, \vbmi
-        jmp       .Lsums\vnni\vbmi
-.Lsecond\vnni\vbmi:
+        jmp       .Lsums\vnni\vbmi\ret
+.Lsecond\vnni\vbmi\ret:
         PASS      1, \vbmi
-.Lsums\vnni\vbmi:
+.Lsums\vnni\vbmi\ret:
         HISTORY   0
         HISTORY   64
         HISTORY   128
@@ -826,7 +828,7 @@
         vpxord    xmm10, xmm10, xmm10
         vpxord    xmm11, xmm11, xmm11
         cmp       dword ptr [r9 + IN_SOFT_PAN], 0
-        jne       .Lsoft\vnni\vbmi
+        jne       .Lsoft\vnni\vbmi\ret
         // Core::accumulate() without soft panning.
         HEARD     0, \vnni
         HEARD     64, \vnni
@@ -847,14 +849,18 @@
         vpsrad    xmm2, xmm2, 13
         vpminsd   xmm2, xmm2, xmmword ptr [rip + .Lc_32767]
         vpmaxsd   xmm2, xmm2, xmmword ptr [rip + .Lc_minus_32768]
+.if \ret
+        vmovq     rax, xmm2
+.else
         vmovq     qword ptr [r10], xmm2
+.endif
         vpshufd   xmm3, xmm8, 0x0d                                    // a late, b late
         vmovq     qword ptr [r8 + CARRY], xmm3
         vpmovsxdq xmm4, xmm3
         vpsllq    xmm4, xmm4, 16
         vmovdqu   xmmword ptr [r8 + CARRY_SOFT], xmm4
-        jmp       .Ldone\vnni\vbmi
-.Lsoft\vnni\vbmi:
+        jmp       .Ldone\vnni\vbmi\ret
+.Lsoft\vnni\vbmi\ret:
         // With soft panning: the sums exact in 64 bits, and one rounding at
         // the end.
         vpxord    xmm12, xmm12, xmm12
@@ -893,7 +899,11 @@
         mov       qword ptr [r8 + CARRY_SOFT], r11
         ROUND16   rax, rcx
         CLIP      eax, ecx
+.if \ret
+        mov       r10d, eax                                           // a, for rax's low half
+.else
         mov       dword ptr [r10], eax
+.endif
         ROUND16   r11, rcx
         mov       dword ptr [r8 + CARRY], r11d
         vextracti128 xmm12, ymm12, 1
@@ -907,10 +917,15 @@
         mov       qword ptr [r8 + CARRY_SOFT + 8], r11
         ROUND16   rax, rcx
         CLIP      eax, ecx
+.if \ret
+        shl       rax, 32
+        or        rax, r10
+.else
         mov       dword ptr [r10 + 4], eax
+.endif
         ROUND16   r11, rcx
         mov       dword ptr [r8 + CARRY + 4], r11d
-.Ldone\vnni\vbmi:
+.Ldone\vnni\vbmi\ret:
         vzeroupper
 #if defined(_WIN32)
         vmovaps   xmm6, xmmword ptr [rsp]
@@ -936,6 +951,10 @@
         PASS_FUNCTION adlplug_opl3_pass_avx512_vnni, 1, 0
         PASS_FUNCTION adlplug_opl3_pass_avx512_vbmi, 0, 1
         PASS_FUNCTION adlplug_opl3_pass_avx512_vbmi_vnni, 1, 1
+        PASS_FUNCTION adlplug_opl3_pass_avx512_ret, 0, 0, 1
+        PASS_FUNCTION adlplug_opl3_pass_avx512_vnni_ret, 1, 0, 1
+        PASS_FUNCTION adlplug_opl3_pass_avx512_vbmi_ret, 0, 1, 1
+        PASS_FUNCTION adlplug_opl3_pass_avx512_vbmi_vnni_ret, 1, 1, 1
 
 #if !defined(_WIN32)
         .section  .note.GNU-stack, "", @progbits
