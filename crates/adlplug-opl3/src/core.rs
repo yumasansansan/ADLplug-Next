@@ -392,6 +392,71 @@ enum Pass {
     Hand(Hand),
 }
 
+/// What derive reads for each lane, besides the constants of the lanes, as it
+/// last read it: the fields of the core that it reads by the lane, of the same
+/// names.
+struct DerivedFrom {
+    /// `Core::l20`.
+    l20: [u8; LANES],
+    /// `Core::l40`.
+    l40: [u8; LANES],
+    /// `Core::l60`.
+    l60: [u8; LANES],
+    /// `Core::l80`.
+    l80: [u8; LANES],
+    /// `Core::le0`.
+    le0: [u8; LANES],
+    /// `Core::lfnum`.
+    lfnum: [u16; LANES],
+    /// `Core::lblock`.
+    lblock: [u8; LANES],
+    /// `Core::lkey`.
+    lkey: [u8; LANES],
+    /// `Core::lpan`.
+    lpan: [u8; LANES],
+    /// `Core::lfb`.
+    lfb: [u8; LANES],
+    /// `Core::lnts`.
+    lnts: [u8; LANES],
+    /// `Core::ldrum_keys`.
+    ldrum_keys: [u8; LANES],
+    /// `Core::ldam`.
+    ldam: [u8; LANES],
+    /// `Core::ldvb`.
+    ldvb: [u8; LANES],
+    /// `Core::lrhythm_keys`.
+    lrhythm_keys: [u8; LANES],
+    /// `Core::modulation`.
+    modulation: [u8; LANES],
+    /// `Core::weight`.
+    weight: [u8; LANES],
+}
+
+impl DerivedFrom {
+    /// Noughts, which the first derive after a reset does not go by.
+    const fn new() -> Self {
+        Self {
+            l20: [0; LANES],
+            l40: [0; LANES],
+            l60: [0; LANES],
+            l80: [0; LANES],
+            le0: [0; LANES],
+            lfnum: [0; LANES],
+            lblock: [0; LANES],
+            lkey: [0; LANES],
+            lpan: [0; LANES],
+            lfb: [0; LANES],
+            lnts: [0; LANES],
+            ldrum_keys: [0; LANES],
+            ldam: [0; LANES],
+            ldvb: [0; LANES],
+            lrhythm_keys: [0; LANES],
+            modulation: [0; LANES],
+            weight: [0; LANES],
+        }
+    }
+}
+
 /// ADLplug-Next OPL3, the project's own emulator core of the YMF262 (OPL3),
 /// which makes what the low-level core drawn from a die shot of the chip
 /// (YMF262-LLE) makes as libADLMIDI drives it, sample for sample.
@@ -479,14 +544,20 @@ pub struct Core {
     level: Option<Level>,
     /// That pass.
     pass: Pass,
-    /// Whether what the passes go by is worked out by [`Core::derive_split`],
-    /// as on AMD's processors, where it takes less time than [`Core::derive`]
-    /// at every tier: on the EPYC 7763, 9V74 and 9V45 of GitHub's runners the
-    /// writes' handling took 1 to 6% less at x86-64-v2, 10 to 12% at v3 (but
-    /// on the 9V45, 1% more) and 17 to 22% at v4, where on an Intel Core
-    /// i7-1360P it took 1 to 8% more at v3. Asked once, as the core is made.
+    /// Whether what the passes go by is worked out for every lane at once by
+    /// [`Core::derive_split`], at the tier x86-64-v4, where its loop is vector
+    /// code of AVX-512's width: on GitHub's runners, the EPYC 9V45 and the Xeon
+    /// Platinum 8370C, a whole sample with its writes took 0.4 to 1.5% less by
+    /// it there than by derive for the changed lanes alone, and 2.9 to 3.2%
+    /// less than by working every lane out in derive's loop, which takes
+    /// branches and lookups. Set once, as the core is made, by its tier.
     #[cfg(target_arch = "x86_64")]
     split_derive: bool,
+    /// What derive last read for each lane, by which it tells the lanes whose
+    /// inputs have changed since ([`Core::changed_lanes`]).
+    derived: DerivedFrom,
+    /// The next derive works every lane out, as after a reset.
+    derive_all: bool,
 
     // By lane: the channels' registers as they stand, for the slots that read
     // them (spread()), so that no loop over the lanes reads another lane's:
@@ -672,7 +743,9 @@ impl Core {
             level,
             pass,
             #[cfg(target_arch = "x86_64")]
-            split_derive: Features::detect().amd,
+            split_derive: false,
+            derived: DerivedFrom::new(),
+            derive_all: true,
             ch_fnum: [0; LANES],
             ch_block: [0; LANES],
             ch_key: [0; LANES],
@@ -708,6 +781,10 @@ impl Core {
             rhythm_phase: [0; LANES],
             hold_history: [0; LANES],
         };
+        #[cfg(target_arch = "x86_64")]
+        {
+            core.split_derive = core.tier() == Tier::V4;
+        }
         core.reset();
         core
     }
@@ -775,6 +852,7 @@ impl Core {
         self.landed_slot_time = -4; // everything read afresh
         self.relatch();
         self.refresh_routing();
+        self.derive_all = true;
         self.derive();
         self.landed_age = -1;
     }
@@ -1232,11 +1310,24 @@ impl Core {
         }
     }
 
-    /// What the passes go by, from what the slots read and the routing.
+    /// What the passes go by, from what the slots read and the routing: for
+    /// the lanes alone whose inputs have changed since derive last read them
+    /// ([`Core::changed_lanes`]), every lane after a reset, and at x86-64-v4
+    /// for every lane at once ([`Core::split_derive`]). A write changes what
+    /// one lane reads, or a channel's lanes, or by the registers of the whole
+    /// chip every lane: over the writes of the tests' eight seeds, a derive
+    /// found 1.2 of the 48 lanes changed on average, and none in half of the
+    /// derives. On GitHub's runners a whole sample with its writes took 10 to
+    /// 27% less by the changed lanes alone than by working every lane out on
+    /// AArch64 (the Neoverse N2, the Cobalt 100 and the Apple M1), and 2.6 to
+    /// 6.6% less at x86-64's baseline and v3 (AMD's EPYC 7763, 9V74 and 9V45,
+    /// and Intel's Xeon Platinum 8370C). The soft panning is worked out for
+    /// every lane, and the phase increments are marked only when a lane has
+    /// changed.
     #[inline(always)]
     #[expect(
         clippy::inline_always,
-        reason = "its loop over the lanes belongs in each tier's form of a sample, where it is vector code of the tier's width"
+        reason = "it belongs in each tier's form of a sample, where its comparisons of the lanes are vector code of the tier's width"
     )]
     fn derive(&mut self) {
         #[cfg(target_arch = "x86_64")]
@@ -1244,8 +1335,15 @@ impl Core {
             self.derive_split();
             return;
         }
+        let changed = self.changed_lanes();
+        let mut any = false;
         let lanes = &mut *self.lanes;
+        let was = &mut self.derived;
         for (lane, &drum_key_bit) in DRUM_KEY_BIT.iter().enumerate() {
+            if !changed[lane] {
+                continue;
+            }
+            any = true;
             let s = lanes.lane_slot[lane];
             let r20 = u32::from(self.l20[lane]);
             let r40 = u32::from(self.l40[lane]);
@@ -1302,15 +1400,75 @@ impl Core {
             lanes.a_late[lane] = if on_a && s >= FIRST_LATE_ON_A { w } else { 0 };
             lanes.b_now[lane] = if on_b && s < FIRST_LATE_ON_B { w } else { 0 };
             lanes.b_late[lane] = if on_b && s >= FIRST_LATE_ON_B { w } else { 0 };
+            was.l20[lane] = self.l20[lane];
+            was.l40[lane] = self.l40[lane];
+            was.l60[lane] = self.l60[lane];
+            was.l80[lane] = self.l80[lane];
+            was.le0[lane] = self.le0[lane];
+            was.lfnum[lane] = self.lfnum[lane];
+            was.lblock[lane] = self.lblock[lane];
+            was.lkey[lane] = self.lkey[lane];
+            was.lpan[lane] = self.lpan[lane];
+            was.lfb[lane] = self.lfb[lane];
+            was.lnts[lane] = self.lnts[lane];
+            was.ldrum_keys[lane] = self.ldrum_keys[lane];
+            was.ldam[lane] = self.ldam[lane];
+            was.ldvb[lane] = self.ldvb[lane];
+            was.lrhythm_keys[lane] = self.lrhythm_keys[lane];
+            was.modulation[lane] = self.modulation[lane];
+            was.weight[lane] = self.weight[lane];
         }
         self.derive_soft_pan();
-        self.lanes.increments_for = u8::MAX;
+        if any {
+            self.lanes.increments_for = u8::MAX;
+        }
     }
 
-    /// [`Core::derive`] for AMD's processors ([`Core::split_derive`]): with the
-    /// one table that no expression takes the place of, the key scale level's
-    /// ROM, looked up lane by lane first, and the rest worked out in a loop of
-    /// its own, without lookups and without short-circuits. The multiples and
+    /// The lanes whose inputs have changed since derive last read them
+    /// ([`DerivedFrom`]), or every lane after a reset: compared in a loop of
+    /// their own, without short-circuits, which is vector code.
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "it belongs in each tier's form of a sample, where its loop is vector code of the tier's width"
+    )]
+    #[expect(
+        clippy::needless_bitwise_bool,
+        reason = "the comparisons without short-circuits are a loop that vectorizes"
+    )]
+    fn changed_lanes(&mut self) -> [bool; LANES] {
+        let all = self.derive_all;
+        self.derive_all = false;
+        let was = &self.derived;
+        let mut changed = [false; LANES];
+        for (lane, changed) in changed.iter_mut().enumerate() {
+            *changed = all
+                | (self.l20[lane] != was.l20[lane])
+                | (self.l40[lane] != was.l40[lane])
+                | (self.l60[lane] != was.l60[lane])
+                | (self.l80[lane] != was.l80[lane])
+                | (self.le0[lane] != was.le0[lane])
+                | (self.lfnum[lane] != was.lfnum[lane])
+                | (self.lblock[lane] != was.lblock[lane])
+                | (self.lkey[lane] != was.lkey[lane])
+                | (self.lpan[lane] != was.lpan[lane])
+                | (self.lfb[lane] != was.lfb[lane])
+                | (self.lnts[lane] != was.lnts[lane])
+                | (self.ldrum_keys[lane] != was.ldrum_keys[lane])
+                | (self.ldam[lane] != was.ldam[lane])
+                | (self.ldvb[lane] != was.ldvb[lane])
+                | (self.lrhythm_keys[lane] != was.lrhythm_keys[lane])
+                | (self.modulation[lane] != was.modulation[lane])
+                | (self.weight[lane] != was.weight[lane]);
+        }
+        changed
+    }
+
+    /// [`Core::derive`] for every lane at once, at x86-64-v4
+    /// ([`Core::split_derive`]): with the one table that no expression takes
+    /// the place of, the key scale level's ROM, looked up lane by lane first,
+    /// and the rest worked out in a loop of its own, without lookups and
+    /// without short-circuits. The multiples and
     /// the shifts of the key scale level are expressions
     /// (`ymf262::multiple_of`, `ymf262::ksl_shift_of`), and the conditions are
     /// `&` and `|` in place of `&&` and `||`, which say the same of booleans:
